@@ -50,9 +50,6 @@
         <div id="killText" class="kills">☠ 0</div>
         <div id="weaponList" class="weapon-list"></div>
         <button id="btnPause" class="hud-btn" data-act="pause" title="暂停 (P)">❚❚</button>
-        <button id="btnAuto" class="hud-btn" title="全自动 (O)">🤖</button>
-        <button id="btnSound" class="hud-btn" data-act="toggleSound" title="静音 (M)">🔊</button>
-        <button id="btnFx" class="hud-btn" data-act="toggleFx" title="省电模式">⚡</button>
       </div>
     </div>
 
@@ -144,19 +141,24 @@
     </div>
   </div>
 
-  <!-- 暂停界面(装备 + 基础数值) -->
+  <!-- 暂停界面(左:装备/数值,右:设置/动作) -->
   <div id="pauseScreen" class="screen hidden">
-    <div class="screen-card wide">
+    <div class="screen-card pause-card">
       <h2>已暂停</h2>
-      <div id="pauseArsenal" class="arsenal"></div>
-      <div class="pause-actions">
-        <button class="big-btn" data-act="resume">▶ 继续</button>
-        <button class="mini-btn" data-act="restart">↻ 重新开始</button>
-        <button class="mini-btn" data-act="menu">⌂ 返回标题</button>
-      </div>
-      <div class="vol-row">
-        <label class="vol-cell">🎵 音乐<input type="range" class="vol-slider vol-music" min="0" max="100" value="100"></label>
-        <label class="vol-cell">🔊 音效<input type="range" class="vol-slider vol-sfx" min="0" max="100" value="100"></label>
+      <div class="pause-body">
+        <div id="pauseArsenal" class="arsenal"></div>
+        <div class="pause-side">
+          <button class="big-btn" data-act="resume">▶ 继续</button>
+          <button class="mini-btn" data-act="restart">↻ 重新开始</button>
+          <button class="mini-btn" data-act="menu">⌂ 返回标题</button>
+          <div class="side-divider"></div>
+          <button class="mini-btn btn-sound-toggle" data-act="toggleSound">🔊 音效:开</button>
+          <button class="mini-btn btn-fx-toggle" data-act="toggleFx">⚡ 省电:关</button>
+          <button class="mini-btn auto-toggle" data-act="toggleAuto">🤖 全自动:关</button>
+          <div class="side-divider"></div>
+          <label class="vol-cell">🎵 音乐<input type="range" class="vol-slider vol-music" min="0" max="100" value="100"></label>
+          <label class="vol-cell">🔊 音效<input type="range" class="vol-slider vol-sfx" min="0" max="100" value="100"></label>
+        </div>
       </div>
     </div>
   </div>

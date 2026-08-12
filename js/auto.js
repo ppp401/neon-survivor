@@ -348,8 +348,13 @@
 
   // ── 开关 / 持久化 / UI
   function syncButton() {
+    // 旧 #btnAuto(已从 HUD 移除,此处保留兼容)+ 新 .auto-toggle(标题屏 / 暂停屏)
     const btn = document.getElementById("btnAuto");
     if (btn) btn.classList.toggle("on", Auto.enabled);
+    const btns = document.querySelectorAll(".auto-toggle");
+    for (let i = 0; i < btns.length; i++) btns[i].classList.toggle("on", Auto.enabled);
+    // 同步文案(由 Menus.setAutoToggle 负责,但为防 Menus 未就绪也兜底)
+    if (SV.Menus && SV.Menus.setAutoToggle) SV.Menus.setAutoToggle(Auto.enabled);
   }
   function setEnabled(b) {
     Auto.enabled = !!b;

@@ -209,16 +209,30 @@
 
     setSoundToggle: function (muted) {
       const on = !muted;
-      const hud = document.getElementById("btnSound");
-      if (hud) { hud.textContent = muted ? "🔇" : "🔊"; hud.classList.toggle("on", on); }
+      // 标题屏(旧 #titleSound)+ 暂停屏(.btn-sound-toggle)统一用 class 同步
       const t = document.getElementById("titleSound");
       if (t) { t.textContent = muted ? "🔇 音效:关" : "🔊 音效:开"; t.classList.toggle("on", on); }
+      const btns = document.querySelectorAll(".btn-sound-toggle");
+      for (let i = 0; i < btns.length; i++) {
+        btns[i].textContent = muted ? "🔇 音效:关" : "🔊 音效:开";
+        btns[i].classList.toggle("on", on);
+      }
     },
     setFxToggle: function (reduced) {
-      const hud = document.getElementById("btnFx");
-      if (hud) { hud.textContent = reduced ? "🔋" : "⚡"; hud.classList.toggle("on", reduced); }
       const t = document.getElementById("titleFx");
       if (t) { t.textContent = reduced ? "🔋 省电:开" : "⚡ 省电:关"; t.classList.toggle("on", reduced); }
+      const btns = document.querySelectorAll(".btn-fx-toggle");
+      for (let i = 0; i < btns.length; i++) {
+        btns[i].textContent = reduced ? "🔋 省电:开" : "⚡ 省电:关";
+        btns[i].classList.toggle("on", reduced);
+      }
+    },
+    setAutoToggle: function (enabled) {
+      const btns = document.querySelectorAll(".auto-toggle");
+      for (let i = 0; i < btns.length; i++) {
+        btns[i].textContent = enabled ? "🤖 全自动:开" : "🤖 全自动:关";
+        btns[i].classList.toggle("on", !!enabled);
+      }
     },
     // 把存档音量回填到所有音量滑块(标题屏 + 暂停屏)
     setVolUI: function (music, sfx) {
@@ -232,6 +246,11 @@
     populatePause: function (state) {
       const wrap = document.getElementById("pauseArsenal");
       if (!wrap) return;
+      // 同步右侧设置开关的当前状态(打开暂停屏的瞬间)
+      if (SV.Audio) this.setSoundToggle(SV.Audio.isMuted());
+      if (SV.Effects) this.setFxToggle(SV.Effects.isReduced());
+      if (SV.Auto) this.setAutoToggle(!!SV.Auto.enabled);
+      if (SV.Audio) this.setVolUI(SV.Audio.getMusicVol(), SV.Audio.getSfxVol());
       let html = "";
       // 角色(被动技能说明)
       const ch = SV.Config.CHARACTERS[state.charId];

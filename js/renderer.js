@@ -97,12 +97,16 @@
     },
     resize: function () {
       if (!canvas) return;
+      // 关键:用 window.innerWidth/Height(iOS Safari 视觉视口,排除 Safari UI 占位)
+      // 而非 canvas.clientWidth/Height(布局视口,会包含 Safari 工具栏后面的区域,导致 buffer 比例
+      // ≠ 显示比例 → 浏览器非等比拉伸 → 圆变椭圆)。
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      cssW = canvas.clientWidth || window.innerWidth;
-      cssH = canvas.clientHeight || window.innerHeight;
+      cssW = window.innerWidth || canvas.clientWidth;
+      cssH = window.innerHeight || canvas.clientHeight;
       canvas.width = Math.round(cssW * dpr);
       canvas.height = Math.round(cssH * dpr);
-      cam.zoom = U.clamp(cssH / 560, 0.75, 1.4);
+      // zoom 基于 min(短边):横竖屏一致;下限 0.62 让短边屏(手机)看到更多世界
+      cam.zoom = U.clamp(Math.min(cssW, cssH) / 560, 0.62, 1.4);
       gridPattern = makeGrid();
     },
     cssSize: function () { return { w: cssW, h: cssH }; },
@@ -121,7 +125,10 @@
       const p = state.player;
       const k = 1 - Math.exp(-9 * dt);
       let tx = cam.x + (p.x - cam.x) * k;
-      let ty = cam.y + (p.y - cam.y) * k;
+      // 横屏 Y 偏移:玩家显示在屏幕 60% 位置(下方),上方留更多视野预警来袭敌人
+      const landscape = cssW > cssH * 1.2;
+      const biasY = landscape ? cssH * 0.10 / cam.zoom : 0;
+      let ty = cam.y + ((p.y - biasY) - cam.y) * k;
       // 竞技场边界夹取(竞技场大于视口时)
       const half = (state.stage && state.stage.half) || 2000;
       const hw = cssW / 2 / cam.zoom, hh = cssH / 2 / cam.zoom;

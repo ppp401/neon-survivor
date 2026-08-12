@@ -178,6 +178,7 @@
       SV.Menus.setFxToggle(v);
       SV.HUD.toast(v ? "已开启省电模式" : "已关闭省电模式");
     }
+    else if (act === "toggleAuto") { if (SV.Auto && SV.Auto.toggle) SV.Auto.toggle(); }
   }
 
   function refreshTitleBest() {
@@ -261,6 +262,7 @@
     SV.Menus.setSoundToggle(SV.Audio.isMuted());
     SV.Menus.setFxToggle(SV.Effects.isReduced());
     SV.Menus.setVolUI(SV.Audio.getMusicVol(), SV.Audio.getSfxVol());
+    if (SV.Menus && SV.Menus.setAutoToggle && SV.Auto) SV.Menus.setAutoToggle(!!SV.Storage.get("autoMode"));
     SV.Menus.onAct(handleAct);
     if (SV.Auto && SV.Auto.init) SV.Auto.init();   // 全自动模式:包装升级入口、绑定开关、还原偏好
 
@@ -271,6 +273,17 @@
     SV.Menus.show("title");
 
     window.addEventListener("resize", function () { SV.Renderer.resize(); });
+    // iOS Safari 旋转:orientationchange 比 resize 早派发且带新尺寸,但有时 resize 仍拿到旧值 → 加 100ms 延迟兜底
+    window.addEventListener("orientationchange", function () { setTimeout(function () { SV.Renderer.resize(); }, 120); });
+    // Safari URL 栏自动隐藏/出现会改变视觉视口,ResizeObserver 比 resize 更可靠捕捉
+    try {
+      if (window.ResizeObserver) {
+        const ro = new ResizeObserver(function () { SV.Renderer.resize(); });
+        ro.observe(canvas);
+      }
+    } catch (e) {}
+    // 从后台返回时重测(可能切应用期间旋转过)
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) SV.Renderer.resize(); });
 
     // 移动端:切后台/锁屏/通知中心时自动暂停(rAF 被节流会导致固定步长大 catch-up;
     // iOS Safari 常触发 pagehide,Android Chrome 触发 visibilitychange,两者都监听)
