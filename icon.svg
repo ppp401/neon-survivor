@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="72%">
+      <stop offset="0" stop-color="#1a1240"/>
+      <stop offset="1" stop-color="#070611"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="42%">
+      <stop offset="0" stop-color="#5ad1ff" stop-opacity="0.95"/>
+      <stop offset="0.45" stop-color="#c06bff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="92" ry="92" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+  <g transform="translate(256 256)">
+    <g opacity="0.9" filter="url(#blur)">
+      <circle r="52" fill="#fff"/>
+    </g>
+    <circle r="44" fill="#ffffff"/>
+    <circle r="44" fill="none" stroke="#5ad1ff" stroke-width="3" opacity="0.7"/>
+    <g>
+      <polygon points="0,-176 17,-112 -17,-112" fill="#5ad1ff"/>
+      <polygon points="152.4,-88 99.8,-50.8 81.4,-82.6" fill="#c06bff"/>
+      <polygon points="152.4,88 81.4,82.6 99.8,50.8" fill="#5ad1ff"/>
+      <polygon points="0,176 -17,112 17,112" fill="#c06bff"/>
+      <polygon points="-152.4,88 -99.8,50.8 -81.4,82.6" fill="#5ad1ff"/>
+      <polygon points="-152.4,-88 -81.4,-82.6 -99.8,-50.8" fill="#c06bff"/>
+    </g>
+  </g>
+</svg>

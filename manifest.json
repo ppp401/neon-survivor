@@ -1,0 +1,19 @@
+{
+  "name": "霓虹幸存者 · Neon Survivor",
+  "short_name": "霓虹幸存者",
+  "description": "在潮水般的敌人中存活 · 收集经验 · 进化你的武器",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "./index.html?source=pwa",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "orientation": "landscape",
+  "background_color": "#070611",
+  "theme_color": "#070611",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,1203 @@
+// weapons.js — SV.Weapons: 16 种武器系统(全部自动瞄准)+ 投射物池 + 光束/光环/冰爆/榴弹/龙卷/毒/陨石/冲击波/诅咒 + 进化。
+(function () {
+  "use strict";
+  const SV = window.SV;
+  const U = SV.Util;
+  const C = SV.Config.CONST;
+  const Entities = SV.Entities;
+
+  // ── 投射物池
+  function pFactory() {
+    return { x: 0, y: 0, vx: 0, vy: 0, r: 5, damage: 10, life: 1, maxLife: 1, color: "#fff",
+      pierce: 0, homing: false, seek: 4, target: null, hitIds: null, shape: "dot", rot: 0, spin: 0, weaponId: "", phase: 0,
+      explode: 0, vortex: false, vrad: 0, pull: 0, vtick: 0, tc: 0,
+      chainHops: 0, chainRange: 0, splash: 0, splashMul: 0, explodeEvery: false, cluster: false, clustered: false,
+      beamLen: 0, beamWidth: 0, chaseKills: 0, meteor: 0, burn: 0, burnDur: 0, shockwave: null,
+      sheep: false, sheepDur: 0, sheepPierce: 0, sheepFreeze: 0,
+      timestop: 0, tsFreeze: 0, shatter: false };
+  }
+  function pReset(p) {
+    p.vx = 0; p.vy = 0; p.r = 5; p.damage = 10; p.life = 1; p.maxLife = 1; p.color = "#fff";
+    p.pierce = 0; p.homing = false; p.seek = 4; p.target = null; p.hitIds = null; p.shape = "dot"; p.rot = 0; p.spin = 0; p.weaponId = ""; p.phase = 0;
+    p.explode = 0; p.vortex = false; p.vrad = 0; p.pull = 0; p.vtick = 0; p.tc = 0;
+    // 特殊机制字段必须清零,否则回收的投射物会携带上一世的残留(如 shockwave/chainHops/cluster)
+    p.chainHops = 0; p.chainRange = 0; p.splash = 0; p.splashMul = 0; p.explodeEvery = false; p.cluster = false; p.clustered = false;
+    p.beamLen = 0; p.beamWidth = 0; p.chaseKills = 0; p.meteor = 0; p.burn = 0; p.burnDur = 0; p.shockwave = null;
+    p.sheep = false; p.sheepDur = 0; p.sheepPierce = 0; p.sheepFreeze = 0;
+    p.timestop = 0; p.tsFreeze = 0; p.shatter = false;
+  }
+  const proj = SV.Pool.create(pFactory, pReset);
+  const beams = []; // {pts,life,max,color,width}
+  const swings = []; // 扇形挥砍视觉 {x,y,dir,arc,radius,life,max,color}
+
+  // 硬上限:满则回收最旧再取,保证始终返回非空,避免子弹爆炸性增长卡死
+  // 回收策略:跳过返航中的回旋镖(shape=star 且已过半程),它必须回到玩家
+  function mkProj() {
+    if (proj.list.length >= C.MAX_PROJECTILES) {
+      let victim = -1;
+      for (let i = 0; i < proj.list.length; i++) {
+        const q = proj.list[i];
+        if (!(q.shape === "star" && q.life < q.maxLife * 0.5)) { victim = i; break; }
+      }
+      proj.release(proj.list.splice(victim < 0 ? 0 : victim, 1)[0]);
+    }
+    return proj.acquire();
+  }
+
+  function weaponDef(id) { return SV.Config.weaponDef(id); }
+
+  // 角色武器专精加成(每次调用现算,不缓存)。服务 arcanist(元素)/ranger(远程)。
+  function applyCharWeaponSpec(s, def, state) {
+    const sp = state.special;
+    if (!sp || !def.tags) return;
+    const has = function (t) { return def.tags.indexOf(t) >= 0; };
+    if (sp === "arcanist") {
+      // 秘法亲和:法术池重分类后扩大(chain/frost/poison/meteor/hex + 变形/时停),对齐射手档位:+20% 伤 / +10% 范围
+      if (has("spell")) { s.damage *= 1.20; if (s.radius != null) s.radius *= 1.10; }
+    } else if (sp === "ranger") {
+      // 游击射手:远程武器 +伤害 +攻速(近战已被 weaponPolicy 硬禁;另以拾取范围代偿)
+      if (has("ranged")) { s.damage *= 1.15; if (s.cooldown != null) s.cooldown *= 0.90; }
+    }
+  }
+
+  function stats(w, state) {
+    const def = weaponDef(w.id);
+    const base = def.stats(w.level);
+    const m = Entities.mods(state);
+    const s = Object.assign({}, base);
+    s.damage = base.damage * m.damageMul;
+    if (base.cooldown != null) s.cooldown = base.cooldown * m.cdMul;
+    if (base.radius != null) s.radius = base.radius * m.areaMul;
+    if (base.length != null) s.length = base.length * m.areaMul;
+    if (base.expand != null) s.expand = base.expand * m.areaMul;
+    applyCharWeaponSpec(s, def, state); // 角色武器专精
+    return s;
+  }
+
+  function nearest(x, y, maxR) {
+    const st = SV.Game.state;
+    let best = null, bd = maxR * maxR;
+    const arr = st.enemies;
+    for (let i = 0; i < arr.length; i++) {
+      const e = arr[i];
+      if (e.hp <= 0) continue; // 死敌未压缩前不锁定(处决追击重锁更准)
+      const d = U.dist2(x, y, e.x, e.y);
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
+  }
+  function aimFrom(p) {
+    const tgt = nearest(p.x, p.y, 99999);
+    return tgt ? U.angleTo(p.x, p.y, tgt.x, tgt.y) : p.facing;
+  }
+  // 哨卫分头锁定:找最近且未被其他塔锁定的存活目标(locked 每帧重建)
+  function nearestUnlocked(x, y, locked) {
+    const st = SV.Game.state;
+    let best = null, bd = 99999 * 99999;
+    const arr = st.enemies;
+    for (let i = 0; i < arr.length; i++) {
+      const e = arr[i];
+      if (e.hp <= 0 || locked[e.id]) continue;
+      const d = U.dist2(x, y, e.x, e.y);
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
+  }
+  // 变形弹重锁专用:跳过已变羊的敌人(只追新鲜目标,避免弹体绕着绵羊空转)
+  function nearestFresh(x, y) {
+    const st = SV.Game.state;
+    let best = null, bd = 99999 * 99999;
+    const arr = st.enemies;
+    for (let i = 0; i < arr.length; i++) {
+      const e = arr[i];
+      if (e.hp <= 0 || e.sheep > 0) continue;
+      const d = U.dist2(x, y, e.x, e.y);
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
+  }
+  function dmgEnemy(e, dmg, wid) {
+    let v = e.frozen > 0 ? 1.5 : (e.sheep > 0 ? 1.3 : 1);
+    if (e.armorBreak > 0) v += 0.5; // 破甲(战矛 evo 命中附加短暂易伤)
+    const opts = { vuln: v };
+    if (wid) opts.wid = wid; // 按武器累计伤害
+    Entities.damageEnemy(SV.Game.state, e, dmg, opts);
+  }
+
+  // ── 各武器开火
+  function fire(state, w, def, s) {
+    switch (def.kind) {
+      case "missile": fireMissile(state, w, def, s); break;
+      case "shotgun": fireShotgun(state, w, def, s); break;
+      case "boomerang": fireBoomerang(state, w, def, s); break;
+      case "chain": fireChain(state, w, def, s); break;
+      case "lance": fireLance(state, w, def, s); break;
+      case "frost": fireFrost(state, w, def, s); break;
+      case "grenade": fireGrenade(state, w, def, s); break;
+      case "railgun": fireRailgun(state, w, def, s); break;
+      case "poison": firePoison(state, w, def, s); break;
+      case "vortex": fireVortex(state, w, def, s); break;
+      case "meteor": fireMeteor(state, w, def, s); break;
+      case "shockwave": fireShockwave(state, w, def, s); break;
+      case "hex": fireHex(state, w, def, s); break;
+      case "crescent": fireCrescent(state, w, def, s); break;
+      case "detonate": fireDetonate(state, w, def, s); break;
+      case "spear": fireSpear(state, w, def, s); break;
+      case "polymorph": firePolymorph(state, w, def, s); break;
+      case "timestop": fireTimestop(state, w, def, s); break;
+      // 协同进化(fire 型,按武器 id 分发——融合 def 的 kind 统一为 "fusion")
+      case "fusion": {
+        const fn = FUSION_FIRE[w.id];
+        if (fn) fn(state, w, def, s);
+        break;
+      }
+    }
+  }
+  const FUSION_FIRE = {
+    missile_chain: fusionMissileChain,
+    railgun_grenade: fusionRailgunGrenade,
+    frost_poison: fusionFrostPoison,
+    lance_vortex: fusionLanceVortex,
+    shotgun_grenade: fusionShotgunGrenade,
+    meteor_chain: fireMeteor,
+    shockwave_frost: fireShockwave,
+    hex_poison: fireHex,
+    crescent_detonate: fusionCrescentDetonate,
+    polymorph_timestop: fusionPolymorphTimestop,
+    spear_lance: fusionSpearLance
+  };
+
+  function fireMissile(state, w, def, s) {
+    const p = state.player;
+    const locked = {}; // 各弹分头锁敌:多发时尽量覆盖不同目标(对群友好)
+    for (let k = 0; k < s.count; k++) {
+      let tgt = null, bd = 99999 * 99999;
+      const arr = state.enemies;
+      for (let i = 0; i < arr.length; i++) {
+        const e = arr[i];
+        if (e.hp <= 0 || locked[e.id]) continue;
+        const d = U.dist2(p.x, p.y, e.x, e.y);
+        if (d < bd) { bd = d; tgt = e; }
+      }
+      if (!tgt) tgt = nearest(p.x, p.y, 99999);
+      if (!tgt) break;
+      locked[tgt.id] = true;
+      const ang = U.angleTo(p.x, p.y, tgt.x, tgt.y);
+      const pr = mkProj();
+      pr.x = p.x; pr.y = p.y;
+      pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
+      pr.r = 6; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
+      pr.homing = true; pr.seek = 4.5; pr.target = tgt; pr.weaponId = w.id;
+      pr.chaseKills = s.chase || 0; // 处决追击:击杀后继续追猎
+    }
+    SV.Audio.shoot();
+  }
+
+  function fireShotgun(state, w, def, s) {
+    const p = state.player;
+    const dir = aimFrom(p);
+    const pierce = s.pierce || 0;
+    for (let k = 0; k < s.count; k++) {
+      const a = dir + (k - (s.count - 1) / 2) * (s.cone / Math.max(1, s.count));
+      const pr = mkProj();
+      pr.x = p.x; pr.y = p.y;
+      pr.vx = Math.cos(a) * s.speed; pr.vy = Math.sin(a) * s.speed;
+      pr.r = 5; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color; pr.weaponId = w.id;
+      pr.pierce = pierce; if (pierce > 0) pr.hitIds = [];
+    }
+    SV.Audio.shoot();
+  }
+
+  function fireBoomerang(state, w, def, s) {
+    const p = state.player;
+    const base = aimFrom(p);
+    // 收敛散射:多发时紧密排列(0.16rad),近敌/单体时多发都能命中,不再只靠 damage 硬补
+    const spread = def.evo ? 0.22 : 0.16;
+    for (let k = 0; k < s.count; k++) {
+      const a = base + (k - (s.count - 1) / 2) * spread;
+      const pr = mkProj();
+      pr.x = p.x; pr.y = p.y;
+      pr.vx = Math.cos(a) * s.speed; pr.vy = Math.sin(a) * s.speed;
+      pr.r = 8; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
+      pr.shape = "star"; pr.spin = 14; pr.pierce = def.evo ? 99 : 2; pr.hitIds = []; pr.weaponId = w.id; pr.phase = 0;
+    }
+    SV.Audio.shoot();
+  }
+
+  // 连锁闪电:从 (x,y) 向周围跳链,每跳伤害 ×hopMul(融合武器复用)
+  function chainBurst(state, x, y, dmg, hops, range, color, hopMul, wid) {
+    const pts = [[x, y]];
+    const visited = new Set();
+    let cx = x, cy = y, lastDmg = dmg;
+    for (let i = 0; i < hops; i++) {
+      const near = SV.Spatial.queryCircle(cx, cy, range);
+      let best = null, bd = range * range;
+      for (let j = 0; j < near.length; j++) { const e = near[j]; if (visited.has(e.id) || e.hp <= 0) continue; const d = U.dist2(cx, cy, e.x, e.y); if (d < bd) { bd = d; best = e; } }
+      if (!best) break;
+      visited.add(best.id);
+      dmgEnemy(best, lastDmg, wid);
+      SV.Effects.hit(best.x, best.y, color);
+      pts.push([best.x, best.y]);
+      cx = best.x; cy = best.y;
+      lastDmg *= (hopMul || 1);
+    }
+    if (pts.length >= 2) { beams.push({ pts: pts, life: 0.12, max: 0.12, color: color, width: 3 }); SV.Audio.hit(); }
+  }
+  function fireChain(state, w, def, s) {
+    // 普通:每跳等额(1.0);进化:每跳 ×1.1。进化连跳数封顶 8(原"无限"实为 30,过强)。
+    chainBurst(state, state.player.x, state.player.y, s.damage, s.chains === 99 ? 8 : (1 + s.chains), s.range, def.color, def.evo ? 1.1 : 1.0, w.id);
+  }
+
+  // 一条穿透光束的伤害(可复用,lance 与 lance_evo 多束共用)
+  function beamDamage(state, x0, y0, dx, dy, len, halfW, dmg, color, wid) {
+    const visited = new Set();
+    const steps = Math.ceil(len / 22);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const qx = x0 + dx * len * t, qy = y0 + dy * len * t;
+      const near = SV.Spatial.queryCircle(qx, qy, halfW + 24);
+      for (let j = 0; j < near.length; j++) {
+        const e = near[j];
+        if (visited.has(e.id) || e.hp <= 0) continue;
+        const projLen = (e.x - x0) * dx + (e.y - y0) * dy;
+        if (projLen < 0 || projLen > len) continue;
+        const fx = x0 + dx * projLen, fy = y0 + dy * projLen;
+        if (U.dist2(fx, fy, e.x, e.y) < (halfW + e.r) * (halfW + e.r)) {
+          visited.add(e.id); dmgEnemy(e, dmg, wid); SV.Effects.hit(e.x, e.y, color);
+        }
+      }
+    }
+  }
+
+  function fireLance(state, w, def, s) {
+    const p = state.player;
+    const ang = aimFrom(p);
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const beamsN = (def.evo && s.beams) ? s.beams : 1;
+    const halfW = s.width / 2;
+    for (let b = 0; b < beamsN; b++) {
+      const off = beamsN > 1 ? (b - (beamsN - 1) / 2) * (s.width * 0.9) : 0;
+      const x0 = p.x + (-Math.sin(ang)) * off, y0 = p.y + Math.cos(ang) * off;
+      beamDamage(state, x0, y0, dx, dy, s.length, halfW, s.damage, def.color, w.id);
+      beams.push({ pts: [[x0, y0], [x0 + dx * s.length, y0 + dy * s.length]], life: 0.10, max: 0.10, color: def.color, width: s.width });
+    }
+    SV.Audio.shoot();
+  }
+
+  function fireAura(state, w) {
+    const st = SV.Game.state, p = st.player;
+    const def = weaponDef(w.id);
+    const s = stats(w, st);
+    const near = SV.Spatial.queryCircle(p.x, p.y, s.radius);
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (U.dist2(p.x, p.y, e.x, e.y) <= s.radius * s.radius) {
+        dmgEnemy(e, s.damage, w.id);
+        // 减速场:圈内敌人减速 25%
+        e.slow = Math.max(e.slow, 0.5); e.slowF = Math.max(e.slowF, 0.25);
+        if (def.evo && s.pull) {
+          const a = U.angleTo(e.x, e.y, p.x, p.y);
+          const d = U.dist(e.x, e.y, p.x, p.y);
+          const pull = Math.min(s.pull, d * 3);
+          e.x += Math.cos(a) * pull * (1 / 60); e.y += Math.sin(a) * pull * (1 / 60);
+        }
+      }
+    }
+    if (!SV.Effects.isReduced()) SV.Effects.hit(p.x, p.y, def.color);
+  }
+
+  function fireFrost(state, w, def, s) {
+    const p = state.player;
+    const near = SV.Spatial.queryCircle(p.x, p.y, s.radius);
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (U.dist2(p.x, p.y, e.x, e.y) <= s.radius * s.radius) {
+        dmgEnemy(e, s.damage, w.id);
+        // 冰面残留:减速时长 +1.2s,减速更强
+        e.slow = Math.max(e.slow, s.slowDur + 1.2); e.slowF = Math.max(e.slowF, 0.35);
+        if (def.evo && s.freeze) e.frozen = Math.max(e.frozen, s.freeze);
+      }
+    }
+    SV.Effects.ring(p.x, p.y, def.color, 10, s.radius, 0.45, 4);
+    SV.Effects.shake(3, 0.15);
+  }
+
+  // ── 榴弹(抛射 + AoE 爆炸)
+  function fireGrenade(state, w, def, s) {
+    const p = state.player;
+    for (let k = 0; k < s.count; k++) {
+      const ang = aimFrom(p) + (s.count > 1 ? (k - (s.count - 1) / 2) * 0.18 : 0);
+      const pr = mkProj();
+      pr.x = p.x; pr.y = p.y;
+      pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
+      pr.r = 7; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
+      pr.explode = s.radius; pr.cluster = def.evo && s.cluster; pr.weaponId = w.id;
+    }
+    SV.Audio.shoot();
+  }
+  // 通用溅射:范围内伤害 + 爆炸特效(融合武器复用)
+  function splashAt(state, x, y, r, dmg, color, count, wid) {
+    const near = SV.Spatial.queryCircle(x, y, r);
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (U.dist2(x, y, e.x, e.y) <= r * r) dmgEnemy(e, dmg, wid);
+    }
+    SV.Effects.explosion(x, y, color, count || 10);
+  }
+  function explodeGrenade(state, pr) {
+    splashAt(state, pr.x, pr.y, pr.explode, pr.damage, pr.color, 16, pr.weaponId);
+    SV.Effects.ring(pr.x, pr.y, pr.color, 6, pr.explode, 0.3, 3);
+    SV.Audio.die();
+    if (pr.cluster && !pr.clustered) {
+      pr.clustered = true; // 贯穿弹多次爆炸时只集束一次,防弹幕增殖
+      const n = typeof pr.cluster === "number" ? pr.cluster : 3;
+      for (let i = 0; i < n; i++) {           // 集束改为瞬间多点 AOE(同帧 splashAt),不再 spawn 子弹药
+        const a = U.rand(0, U.TAU), d = U.rand(15, pr.explode * 0.5);
+        const bx = pr.x + Math.cos(a) * d, by = pr.y + Math.sin(a) * d;
+        splashAt(state, bx, by, pr.explode * 0.5, pr.damage * 0.55, pr.color, 10, pr.weaponId);
+        SV.Effects.ring(bx, by, pr.color, 6, pr.explode * 0.5, 0.25, 3);
+      }
+    }
+  }
+
+  // ── 轨道炮(超高伤贯穿弹)
+  function fireRailgun(state, w, def, s) {
+    const p = state.player;
+    const ang = aimFrom(p);
+    const pr = mkProj();
+    pr.x = p.x; pr.y = p.y;
+    pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
+    pr.r = 9; pr.damage = s.damage; pr.life = 0.7; pr.maxLife = 0.7; pr.color = def.color;
+    pr.pierce = 99; pr.hitIds = []; pr.weaponId = w.id; pr.explode = def.evo ? s.explode : 0;
+    beams.push({ pts: [[p.x, p.y], [p.x + Math.cos(ang) * 60, p.y + Math.sin(ang) * 60]], life: 0.08, max: 0.08, color: def.color, width: 5 });
+    SV.Audio.shoot();
+    SV.Effects.shake(2, 0.1);
+  }
+
+  // ── 剧毒(给范围内敌人上 DoT)
+  function firePoison(state, w, def, s) {
+    const p = state.player;
+    const near = SV.Spatial.queryCircle(p.x, p.y, s.radius).slice();
+    let any = false;
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (U.dist2(p.x, p.y, e.x, e.y) <= s.radius * s.radius) {
+        // 毒叠层:每层 +40% 毒伤,≤3 层
+        e.poisonStacks = Math.min(3, (e.poisonStacks || 0) + 1);
+        e.poison = s.dotDur; e.poisonDmg = s.dot * (1 + 0.4 * (e.poisonStacks - 1)); e.poisonTick = 0; e.poisonWid = w.id; any = true;
+        if (def.evo) { e.slow = s.slowDur; e.slowF = s.slow; }
+      }
+    }
+    // 进化:剧毒传染——每个已中毒者再传染附近敌人
+    if (def.evo && any) {
+      for (let i = 0; i < near.length; i++) {
+        const src = near[i];
+        if (src.poison <= 0) continue;
+        const spread = SV.Spatial.queryCircle(src.x, src.y, 90);
+        for (let j = 0; j < spread.length; j++) {
+          const e2 = spread[j];
+          if (e2 !== src && e2.poison <= 0) { e2.poison = s.dotDur; e2.poisonDmg = s.dot; e2.poisonTick = 0; e2.poisonWid = w.id; e2.slow = s.slowDur; e2.slowF = s.slow; }
+        }
+      }
+    }
+    SV.Effects.ring(p.x, p.y, def.color, 10, s.radius, 0.4, 3);
+    if (any) SV.Audio.hit();
+  }
+
+  // ── 龙卷风(游走投射物,吸敌 + 持续伤害)
+  function fireVortex(state, w, def, s) {
+    const p = state.player;
+    const base = aimFrom(p);
+    const count = s.count || 1;
+    for (let k = 0; k < count; k++) {
+      const ang = base + (count > 1 ? (k - (count - 1) / 2) * 0.5 : 0);
+      const pr = mkProj();
+      pr.x = p.x; pr.y = p.y;
+      pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
+      pr.r = 12; pr.vrad = s.radius; pr.pull = s.pull;
+      pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
+      pr.vortex = true; pr.vtick = 0; pr.weaponId = w.id;
+    }
+    SV.Audio.shoot();
+  }
+
+  // 附近敌群的多个分散质心(陨石多目标用):以每个未分组敌人为种子,收拢 sep 范围内同伴成一群,
+  // 使多颗陨石分别砸向不同敌群而非排成一列或叠在一点。返回质心数组(可能少于 n 个)。
+  function denseClusters(p, range, n, sep) {
+    const near = SV.Spatial.queryCircle(p.x, p.y, range);
+    const alive = [];
+    for (let i = 0; i < near.length; i++) if (near[i].hp > 0) alive.push(near[i]);
+    const used = new Array(alive.length);
+    const out = [];
+    const s2 = sep * sep;
+    for (let c = 0; c < n; c++) {
+      let seed = -1;
+      for (let i = 0; i < alive.length; i++) if (!used[i]) { seed = i; break; }
+      if (seed < 0) break;
+      let sx = 0, sy = 0, m = 0;
+      const sxe = alive[seed].x, sye = alive[seed].y;
+      for (let i = 0; i < alive.length; i++) {
+        if (used[i]) continue;
+        if (U.dist2(sxe, sye, alive[i].x, alive[i].y) < s2) { sx += alive[i].x; sy += alive[i].y; m++; used[i] = true; }
+      }
+      if (m > 0) out.push({ x: sx / m, y: sy / m });
+    }
+    return out;
+  }
+
+  // ── 陨石(锁定多个敌群质心,延迟爆炸 + 灼烧)
+  function fireMeteor(state, w, def, s) {
+    const p = state.player;
+    const clusters = denseClusters(p, 460, s.count, 170);
+    const fallback = { x: p.x + Math.cos(aimFrom(p)) * 200, y: p.y + Math.sin(aimFrom(p)) * 200 };
+    // 视口可视矩形(世界坐标):把陨石落点夹进屏幕内,否则屏外敌群会让陨石落在视野外看不见
+    const cam = SV.Renderer.cam, sz = SV.Renderer.cssSize();
+    const hw = sz.w / 2 / cam.zoom, hh = sz.h / 2 / cam.zoom, IN = 50;
+    const clampView = hw > IN && hh > IN; // 视口有效(真浏览器)才夹;vm 沙箱无 canvas 时跳过,避免倒夹区间
+    for (let k = 0; k < s.count; k++) {
+      let c = clusters[k];
+      if (!c) { // 敌群少于陨石数:在最大敌群(或瞄准方向)附近散布,避免重叠成一点
+        c = clusters[0] || fallback;
+        c = { x: c.x + U.rand(-26, 26), y: c.y + U.rand(-26, 26) };
+      }
+      if (clampView) { // 落点钳到屏内(留 IN 内边距,保证爆炸圈也可见)
+        c = { x: U.clamp(c.x, cam.x - hw + IN, cam.x + hw - IN),
+              y: U.clamp(c.y, cam.y - hh + IN, cam.y + hh - IN) };
+      }
+      const pr = mkProj();
+      pr.x = c.x; pr.y = c.y;
+      pr.vx = 0; pr.vy = 0;
+      pr.r = 11; pr.damage = s.damage; pr.life = s.arm; pr.maxLife = s.arm; pr.color = def.color;
+      pr.meteor = s.radius; pr.burn = s.burn; pr.burnDur = s.burnDur; pr.cluster = def.evo && s.cluster; pr.weaponId = w.id;
+      if (s.chainHops) { pr.chainHops = s.chainHops; pr.chainRange = s.chainRange; } // 融合(陨雷审判):落地连锁
+      SV.Effects.ring(pr.x, pr.y, def.color, 8, s.radius, s.arm, 4); // 落点预警圈(持续到爆炸)
+    }
+    SV.Audio.shoot();
+  }
+  // 陨石爆炸:范围伤害 + 进化/融合落地留焦土(只伤敌人的燃烧区域)
+  function explodeMeteor(state, pr) {
+    splashAt(state, pr.x, pr.y, pr.meteor, pr.damage, pr.color, 22, pr.weaponId);
+    SV.Effects.explosion(pr.x, pr.y, pr.color, 24); SV.Effects.ring(pr.x, pr.y, pr.color, 8, pr.meteor, 0.4, 4); SV.Effects.shake(5, 0.25); SV.Audio.die();
+    if (pr.chainHops) chainBurst(state, pr.x, pr.y, pr.damage * 0.6, pr.chainHops, pr.chainRange, pr.color, 1.1, pr.weaponId); // 融合:陨雷审判
+    // 进化/融合:落地留焦土(kind:"scorch",只伤敌人、无 warm;与地图灼烧区只伤玩家区分,视觉另配色)
+    if (pr.burn > 0 && state.hazards.length < C.MAX_HAZARDS) {
+      state.hazards.push({ x: pr.x, y: pr.y, r: pr.meteor * 0.85, dmg: pr.burn, life: pr.burnDur, max: pr.burnDur, color: "#ffae42", kind: "scorch", tick: 0.5, wid: pr.weaponId });
+    }
+  }
+  // 时停力场落地:范围伤害 + 冻结(进化冻者碎裂溅射)
+  function explodeTimestop(state, pr) {
+    splashAt(state, pr.x, pr.y, pr.timestop, pr.damage, pr.color, 22, pr.weaponId);
+    const near = SV.Spatial.queryCircle(pr.x, pr.y, pr.timestop);
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (e.hp <= 0 || U.dist2(pr.x, pr.y, e.x, e.y) > pr.timestop * pr.timestop) continue;
+      e.frozen = Math.max(e.frozen, e.isBoss ? pr.tsFreeze * 0.5 : pr.tsFreeze);
+      if (pr.shatter && e.frozen > 0) splashAt(state, e.x, e.y, 36, pr.damage * 0.5, pr.color, 10, pr.weaponId); // evo:冻者碎裂
+    }
+    SV.Effects.explosion(pr.x, pr.y, pr.color, 24); SV.Effects.ring(pr.x, pr.y, pr.color, 8, pr.timestop, 0.4, 4); SV.Effects.shake(5, 0.25); SV.Audio.die();
+  }
+
+  // ── 冲击波(扇形挥砍,伤害 + 击退;evo/融合命中冰冻/碎裂)
+  function fireShockwave(state, w, def, s) {
+    const p = state.player;
+    const base = aimFrom(p);
+    const opts = { knock: s.knock, freeze: def.evo && s.freeze, shatter: s.shatter };
+    for (let k = 0; k < s.count; k++) {
+      const dir = s.count > 1 ? base + k * U.TAU / s.count : base;
+      swingOnce(state, w, def, s, dir, opts);
+    }
+    SV.Audio.shoot(); SV.Effects.shake(2, 0.12);
+  }
+
+  // ── 诅咒(锁定视野内血量最高的敌人——优先 Boss,多目标从高到低;延迟引爆 %+maxHp + 蔓延)
+  function fireHex(state, w, def, s) {
+    const p = state.player;
+    const near = SV.Spatial.queryCircle(p.x, p.y, 460);
+    // 视口矩形(世界坐标):只锁屏内目标;沙箱无 canvas 时 hw/hh 为 0/NaN → 不过滤,沿用 460 范围
+    const cam = SV.Renderer.cam, sz = SV.Renderer.cssSize();
+    const hw = sz.w / 2 / cam.zoom, hh = sz.h / 2 / cam.zoom;
+    const useView = hw > 1 && hh > 1;
+    const cand = [];
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (e.hp <= 0) continue;
+      if (useView && (e.x < cam.x - hw || e.x > cam.x + hw || e.y < cam.y - hh || e.y > cam.y + hh)) continue; // 屏外不锁
+      cand.push(e);
+    }
+    // Boss 优先,再按 maxHp 降序(血量最高的优先,%maxHp 才能打在 Boss 身上);未标记的优先于已标记
+    cand.sort(function (a, b) {
+      const ab = a.isBoss ? 1 : 0, bb = b.isBoss ? 1 : 0;
+      if (ab !== bb) return bb - ab;
+      if (a.maxHp !== b.maxHp) return b.maxHp - a.maxHp;
+      const ah = a.hex > 0 ? 1 : 0, bh = b.hex > 0 ? 1 : 0;
+      return ah - bh;
+    });
+    let marked = 0;
+    for (let i = 0; i < cand.length && marked < s.count; i++) {
+      const e = cand[i];
+      e.hex = s.delay; e.hexDmg = s.damage; e.hexFrac = s.frac; e.hexSpread = s.spread; e.hexWid = w.id;
+      if (s.dot) { e.poisonStacks = Math.min(3, (e.poisonStacks || 0) + 1); e.poison = s.dotDur; e.poisonDmg = s.dot * (1 + 0.4 * ((e.poisonStacks || 1) - 1)); e.poisonTick = 0; e.poisonWid = w.id; } // 融合:腐朽天灾
+      SV.Effects.text(e.x, e.y - e.r - 6, "诅", "#d0a0ff", 13);
+      marked++;
+    }
+    if (marked) SV.Audio.hit();
+  }
+
+  // ── 扇形挥砍(近战通用):以 dir 为中心、s.arc 张角、s.radius 半径内的敌人各命中一次 + 挥砍视觉
+  // opts: { knock, freeze, shatter, armorBreak, explodeChance, explodeR, explodeDmg, chainHops, onHit }
+  function swingOnce(state, w, def, s, dir, opts) {
+    opts = opts || {};
+    const p = state.player;
+    const r = s.radius;
+    const half = (s.arc || 1.2) / 2;
+    const near = SV.Spatial.queryCircle(p.x, p.y, r);
+    let hit = false;
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (e.hp <= 0) continue;
+      if (U.dist2(p.x, p.y, e.x, e.y) > r * r) continue;
+      const ang = U.angleTo(p.x, p.y, e.x, e.y);
+      const diff = Math.abs(Math.atan2(Math.sin(ang - dir), Math.cos(ang - dir)));
+      if (diff > half) continue;
+      dmgEnemy(e, s.damage, w.id);
+      SV.Effects.hit(e.x, e.y, def.color);
+      if (opts.knock) {
+        const a = U.angleTo(p.x, p.y, e.x, e.y);
+        const kb = Math.min(opts.knock, 36) / Math.max(1, e.mass * 0.5);
+        e.x += Math.cos(a) * kb; e.y += Math.sin(a) * kb;
+      }
+      if (opts.freeze) e.frozen = Math.max(e.frozen, opts.freeze);
+      if (opts.shatter && e.frozen > 0) splashAt(state, e.x, e.y, opts.shatter, s.damage * 0.5, def.color, 10, w.id);
+      if (opts.armorBreak) e.armorBreak = Math.max(e.armorBreak || 0, opts.armorBreak);
+      if (opts.explodeChance && Math.random() < opts.explodeChance) explodeAt(state, e.x, e.y, opts.explodeR, opts.explodeDmg, def.color, w.id, opts.chainHops || 0);
+      if (opts.onHit) opts.onHit(e);
+      hit = true;
+    }
+    if (hit) SV.Audio.hit();
+    swings.push({ x: p.x, y: p.y, dir: dir, arc: s.arc || 1.2, radius: r, life: 0.13, max: 0.13, color: def.color });
+  }
+
+  // 以 (x,y) 为圆心的瞬时 AoE 爆炸(不入投射物池);hops>0 时向圈内最近敌人连环引爆(衰减、终止)
+  function explodeAt(state, x, y, radius, dmg, color, wid, hops) {
+    const near = SV.Spatial.queryCircle(x, y, radius);
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (e.hp <= 0) continue;
+      if (U.dist2(x, y, e.x, e.y) <= radius * radius) dmgEnemy(e, dmg, wid);
+    }
+    SV.Effects.explosion(x, y, color, 16);
+    SV.Effects.ring(x, y, color, 8, radius, 0.3, 3);
+    if (hops > 0) {
+      let best = null, bd = radius * radius;
+      for (let i = 0; i < near.length; i++) {
+        const e = near[i];
+        if (e.hp <= 0) continue;
+        const d = U.dist2(x, y, e.x, e.y);
+        if (d < bd) { bd = d; best = e; }
+      }
+      if (best && bd <= radius * radius) explodeAt(state, best.x, best.y, radius * 0.8, dmg * 0.7, color, wid, hops - 1);
+    }
+  }
+
+  // ── 月牙斩(大扇形挥砍;evo 命中留灼烧弧地)
+  function fireCrescent(state, w, def, s) {
+    const p = state.player;
+    const base = aimFrom(p);
+    const opts = {};
+    if (def.evo && s.leaveTrail) opts.onHit = function (e) { e.poisonStacks = Math.min(3, (e.poisonStacks || 0) + 1); e.poison = 1.2; e.poisonDmg = s.damage * 0.25; e.poisonTick = 0; e.poisonWid = w.id; };
+    for (let k = 0; k < (s.count || 1); k++) {
+      const dir = (s.count || 1) > 1 ? base + (k - ((s.count || 1) - 1) / 2) * 0.6 : base;
+      swingOnce(state, w, def, s, dir, opts);
+    }
+    SV.Audio.shoot();
+  }
+
+  // ── 殉爆重击(多向扇形挥砍,命中按概率以敌为圆心爆炸;evo 必爆且连环)
+  function fireDetonate(state, w, def, s) {
+    const base = aimFrom(state.player);
+    const opts = { explodeChance: s.explodeChance, explodeR: s.explodeR, explodeDmg: s.explodeDmg, chainHops: s.chainHops || 0 };
+    const cnt = s.count || 1;
+    for (let k = 0; k < cnt; k++) {
+      const dir = cnt > 1 ? base + (k - (cnt - 1) / 2) * 0.7 : base;
+      swingOnce(state, w, def, s, dir, opts);
+    }
+    SV.Audio.shoot();
+  }
+
+  // ── 贯穿战矛(窄锥前突,沿线全员贯穿;evo 命中破甲短暂易伤)
+  function fireSpear(state, w, def, s) {
+    const dir = aimFrom(state.player);
+    const opts = {};
+    if (def.evo && s.armorBreak) opts.armorBreak = s.armorBreak;
+    swingOnce(state, w, def, s, dir, opts);
+    SV.Audio.shoot(); SV.Effects.shake(1, 0.08);
+  }
+
+  // ── 变形术(发射追踪弹,命中敌人变羊;弹体穿过已变羊目标只打新鲜敌人。进化/融合可穿透多发)
+  function firePolymorph(state, w, def, s) {
+    const p = state.player, arr = state.enemies, locked = {};
+    let fired = 0;
+    for (let k = 0; k < s.count; k++) {            // 各弹锁定不同的、未变羊的最近敌人
+      let best = null, bd = 99999 * 99999;
+      for (let i = 0; i < arr.length; i++) {
+        const e = arr[i];
+        if (e.hp <= 0 || locked[e.id] || e.sheep > 0) continue;
+        const d = U.dist2(p.x, p.y, e.x, e.y);
+        if (d < bd) { bd = d; best = e; }
+      }
+      if (!best) break;
+      locked[best.id] = true;
+      const ang = U.angleTo(p.x, p.y, best.x, best.y);
+      const pr = mkProj();
+      pr.x = p.x; pr.y = p.y;
+      pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
+      pr.r = 7; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
+      pr.homing = true; pr.seek = 4.5; pr.target = best; pr.weaponId = w.id;
+      pr.sheep = true; pr.sheepDur = s.dur; pr.sheepPierce = s.pierce || 0; pr.hitIds = [];
+      fired++;
+    }
+    if (fired) SV.Audio.shoot();
+  }
+
+  // ── 时停力场(锁定敌群密集处,天降延迟力场,落地范围冻结;仿陨石定点轰炸)
+  function fireTimestop(state, w, def, s) {
+    const p = state.player;
+    const clusters = denseClusters(p, 460, s.count, 170);
+    const fallback = { x: p.x + Math.cos(aimFrom(p)) * 200, y: p.y + Math.sin(aimFrom(p)) * 200 };
+    const cam = SV.Renderer.cam, sz = SV.Renderer.cssSize();
+    const hw = sz.w / 2 / cam.zoom, hh = sz.h / 2 / cam.zoom, IN = 50;
+    const clampView = hw > IN && hh > IN;
+    for (let k = 0; k < s.count; k++) {
+      let c = clusters[k];
+      if (!c) { c = clusters[0] || fallback; c = { x: c.x + U.rand(-26, 26), y: c.y + U.rand(-26, 26) }; }
+      if (clampView) { c = { x: U.clamp(c.x, cam.x - hw + IN, cam.x + hw - IN), y: U.clamp(c.y, cam.y - hh + IN, cam.y + hh - IN) }; }
+      const pr = mkProj();
+      pr.x = c.x; pr.y = c.y; pr.vx = 0; pr.vy = 0;
+      pr.r = 11; pr.damage = s.damage; pr.life = s.arm; pr.maxLife = s.arm; pr.color = def.color;
+      pr.timestop = s.radius; pr.tsFreeze = s.freeze; pr.shatter = !!(def.evo && s.shatter); pr.weaponId = w.id;
+      SV.Effects.ring(pr.x, pr.y, def.color, 8, s.radius, s.arm, 4); // 落点预警圈(持续到落地)
+    }
+    SV.Audio.shoot();
+  }
+
+  // ── 旋转光刃(连续)
+  function orbit(state, w, def, dt) {
+    const p = state.player;
+    const s = stats(w, state);
+    const blades = p.blades;
+    if (blades.length !== s.count) {
+      blades.length = 0;
+      for (let i = 0; i < s.count; i++) blades.push({ angle: (w.angle || 0) + i / s.count * U.TAU, x: 0, y: 0 });
+    }
+    w.angle = (w.angle || 0) + s.spin * dt;
+    const cdEvery = def.evo ? 0.25 : 0.3;
+    for (let i = 0; i < blades.length; i++) {
+      const b = blades[i];
+      b.angle = (w.angle || 0) + i / blades.length * U.TAU;
+      b.x = p.x + Math.cos(b.angle) * s.radius;
+      b.y = p.y + Math.sin(b.angle) * s.radius;
+      const near = SV.Spatial.queryCircle(b.x, b.y, 18);
+      for (let j = 0; j < near.length; j++) {
+        const e = near[j];
+        if (e.hp <= 0) continue;
+        if (U.dist2(b.x, b.y, e.x, e.y) < (16 + e.r) * (16 + e.r) && e.bladeCd <= 0) {
+          dmgEnemy(e, s.damage, w.id); e.bladeCd = cdEvery; SV.Effects.hit(e.x, e.y, def.color); SV.Audio.hit();
+        }
+      }
+    }
+  }
+
+  // ── 哨卫炮塔(环绕无人机,自动射击)
+  function sentryUpdate(state, w, def, dt) {
+    const p = state.player;
+    const s = stats(w, state);
+    const arr = p.sentries;
+    if (arr.length !== s.count) {
+      arr.length = 0;
+      for (let i = 0; i < s.count; i++) arr.push({ angle: i / s.count * U.TAU, x: 0, y: 0, cd: 0 });
+    }
+    w.angle = (w.angle || 0) + s.spin * dt;
+    const locked = {}; // 每帧重建:各塔分头锁定不同目标
+    for (let i = 0; i < arr.length; i++) {
+      const dr = arr[i];
+      dr.angle = (w.angle || 0) + i / arr.length * U.TAU;
+      dr.x = p.x + Math.cos(dr.angle) * s.radius;
+      dr.y = p.y + Math.sin(dr.angle) * s.radius;
+      dr.interceptR = s.interceptR; // 供渲染层画拦截圈
+      // 弹幕拦截:塔身接触即消除敌方投射物
+      const es = state.eshots;
+      for (let k = es.length - 1; k >= 0; k--) {
+        if (U.dist2(dr.x, dr.y, es[k].x, es[k].y) < s.interceptR * s.interceptR) {
+          SV.Effects.hit(es[k].x, es[k].y, def.color);
+          es.splice(k, 1);
+          break; // 一塔一帧一次
+        }
+      }
+      dr.cd -= dt;
+      if (dr.cd <= 0) {
+        const tgt = nearestUnlocked(dr.x, dr.y, locked);
+        if (tgt) {
+          locked[tgt.id] = true;
+          const a = U.angleTo(dr.x, dr.y, tgt.x, tgt.y);
+          const pr = mkProj();
+          pr.x = dr.x; pr.y = dr.y;
+          pr.vx = Math.cos(a) * s.projSpeed; pr.vy = Math.sin(a) * s.projSpeed;
+          pr.r = 5; pr.damage = s.damage; pr.life = 1.1; pr.maxLife = 1.1; pr.color = def.color; pr.weaponId = w.id;
+          if (def.evo && s.pierce) { pr.pierce = s.pierce; pr.hitIds = []; }
+          dr.cd = s.fireCd; SV.Audio.shoot();
+        }
+      }
+    }
+  }
+
+  // ── 投射物推进与碰撞
+  function updateProjectiles(state, dt) {
+    const p = state.player;
+    proj.sweep(function (pr) {
+      pr.life -= dt;
+      if (pr.life <= 0) {
+        if (pr.meteor) explodeMeteor(state, pr); // 陨石落地爆炸
+        else if (pr.timestop) explodeTimestop(state, pr); // 时停力场落地冻结
+        else if (pr.explode && pr.pierce <= 0) explodeGrenade(state, pr); // 榴弹到时爆炸
+        return false;
+      }
+      // 冲击波:扩张环,前沿带内伤害 + 径向击退(命中各一次),长到 max 为止
+      if (pr.shockwave) {
+        const sw = pr.shockwave;
+        pr.r += sw.grow * dt;
+        const inner = Math.max(0, pr.r - sw.width);
+        const near = SV.Spatial.queryCircle(pr.x, pr.y, pr.r);
+        for (let i = 0; i < near.length; i++) {
+          const e = near[i];
+          if (e.hp <= 0) continue;
+          if (pr.hitIds.indexOf(e.id) >= 0) continue;
+          const d2 = U.dist2(pr.x, pr.y, e.x, e.y);
+          if (d2 <= pr.r * pr.r && d2 >= inner * inner) {
+            pr.hitIds.push(e.id);
+            dmgEnemy(e, pr.damage, pr.weaponId);
+            const a = U.angleTo(pr.x, pr.y, e.x, e.y);
+            const kb = Math.min(sw.kb, 36) / Math.max(1, e.mass * 0.5); // 单次击退位移上限 36px,防轻质量敌人被推飞
+            e.x += Math.cos(a) * kb; e.y += Math.sin(a) * kb;
+            if (sw.freeze) e.frozen = Math.max(e.frozen, sw.freeze);
+            if (sw.shatter) splashAt(state, e.x, e.y, sw.shatter, pr.damage * 0.5, pr.color, 10, pr.weaponId); // 融合:冰碎共振
+            SV.Effects.hit(e.x, e.y, pr.color);
+          }
+        }
+        if (pr.r >= sw.max) return false;
+        pr.life = Math.max(pr.life, 0.1); // 不因寿命消失,长到 max 为止
+        return true; // 跳过追踪/子步进
+      }
+      // 龙卷风:吸引 + 持续伤害 + 缓慢追踪。吸力限制:Boss 不吸、按质量衰减、单帧位移 ≤90
+      if (pr.vortex) {
+        pr.vtick -= dt;
+        const near = SV.Spatial.queryCircle(pr.x, pr.y, pr.vrad);
+        for (let i = 0; i < near.length; i++) {
+          const e = near[i];
+          if (e.isBoss || e.hp <= 0) continue;
+          const a = U.angleTo(e.x, e.y, pr.x, pr.y);
+          const d = U.dist(e.x, e.y, pr.x, pr.y) || 1;
+          const f = Math.min(pr.pull, d * 4, 90) / Math.max(1, e.mass * 0.5);
+          e.x += Math.cos(a) * f * dt; e.y += Math.sin(a) * f * dt;
+          if (pr.vtick <= 0) dmgEnemy(e, pr.damage, pr.weaponId);
+        }
+        if (pr.vtick <= 0) {
+          pr.vtick = 0.2; SV.Effects.ring(pr.x, pr.y, pr.color, 6, pr.vrad, 0.2, 2);
+          // 裂空风暴:龙卷沿途贯穿光束
+          if (pr.beamLen) {
+            const vang = Math.atan2(pr.vy, pr.vx);
+            beamDamage(state, pr.x, pr.y, Math.cos(vang), Math.sin(vang), pr.beamLen, pr.beamWidth / 2, pr.damage * 1.2, pr.color, pr.weaponId);
+            beams.push({ pts: [[pr.x, pr.y], [pr.x + Math.cos(vang) * pr.beamLen, pr.y + Math.sin(vang) * pr.beamLen]], life: 0.1, max: 0.1, color: pr.color, width: pr.beamWidth });
+          }
+        }
+        const tgt = nearest(pr.x, pr.y, 99999);
+        if (tgt) {
+          const a = U.angleTo(pr.x, pr.y, tgt.x, tgt.y);
+          const sp = Math.hypot(pr.vx, pr.vy) || 1;
+          const cur = Math.atan2(pr.vy, pr.vx);
+          const turn = U.clamp(Math.atan2(Math.sin(a - cur), Math.cos(a - cur)), -1, 1) * 2;
+          const ca = cur + turn * dt;
+          pr.vx = Math.cos(ca) * sp; pr.vy = Math.sin(ca) * sp;
+        }
+      }
+      // 回旋镖:半程后返航(强追踪 + 返航保护:寿命钳底,必须回到玩家身边才消失)
+      if (pr.shape === "star") {
+        pr.rot += pr.spin * dt;
+        if (pr.life < pr.maxLife * 0.5) {
+          const a = U.angleTo(pr.x, pr.y, p.x, p.y);
+          pr.vx = U.lerp(pr.vx, Math.cos(a) * 380, 1 - Math.exp(-12 * dt));
+          pr.vy = U.lerp(pr.vy, Math.sin(a) * 380, 1 - Math.exp(-12 * dt));
+          if (U.dist2(pr.x, pr.y, p.x, p.y) < 26 * 26) return false;
+          if (pr.life < 0.3) pr.life = 0.3; // 返航保护:不因寿命归零而消失
+        }
+      }
+      // 追踪
+      if (pr.homing) {
+        if (!pr.target || pr.target.hp <= 0) pr.target = pr.sheep ? nearestFresh(pr.x, pr.y) : nearest(pr.x, pr.y, 99999);
+        if (pr.target) {
+          const a = U.angleTo(pr.x, pr.y, pr.target.x, pr.target.y);
+          const cur = Math.atan2(pr.vy, pr.vx);
+          const turn = U.clamp(Math.atan2(Math.sin(a - cur), Math.cos(a - cur)), -1, 1) * pr.seek;
+          const sp = Math.hypot(pr.vx, pr.vy) || 1;
+          const ca = cur + turn * dt;
+          pr.vx = Math.cos(ca) * sp; pr.vy = Math.sin(ca) * sp;
+        }
+      }
+      // 子步进移动(防穿透)
+      const sp = Math.hypot(pr.vx, pr.vy);
+      const n = Math.min(8, Math.ceil(sp * dt / 6));
+      let consumed = false;
+      for (let si = 0; si < n; si++) {
+        pr.x += pr.vx * dt / n; pr.y += pr.vy * dt / n;
+        if (collideOne(state, pr)) { consumed = true; break; }
+      }
+      if (!consumed && sp > 1 && !pr.vortex && ((pr.tc = (pr.tc || 0) + 1) % 2 === 0)) SV.Effects.trail(pr.x, pr.y, pr.color);
+      return !consumed;
+    });
+  }
+
+  function collideOne(state, pr) {
+    if (pr.vortex || pr.shockwave || pr.meteor || pr.timestop) return false; // 龙卷风/冲击波/陨石/时停场不硬碰撞
+    const near = SV.Spatial.queryCircle(pr.x, pr.y, pr.r + 30);
+    for (let j = 0; j < near.length; j++) {
+      const e = near[j];
+      if (e.hp <= 0) continue;
+      if (pr.hitIds && pr.hitIds.indexOf(e.id) >= 0) continue;
+      if (pr.sheep && e.sheep > 0) continue; // 变形弹穿过已变羊敌人,只打新鲜目标(不浪费弹)
+      if (U.dist2(pr.x, pr.y, e.x, e.y) < (pr.r + e.r) * (pr.r + e.r)) {
+        // 穿透类(railgun / 回旋 / 霰弹进化);回旋镖(shape=star)命中永不消失,靠 hitIds 去重
+        if (pr.pierce > 0 || pr.shape === "star") {
+          if (pr.hitIds) pr.hitIds.push(e.id);
+          dmgEnemy(e, pr.damage, pr.weaponId); SV.Effects.hit(e.x, e.y, pr.color); SV.Audio.hit();
+          if (pr.explode) { explodeGrenade(state, pr); if (!pr.explodeEvery) pr.explode = 0; } // railgun_evo 首爆一次;轨道轰炸每穿必爆
+          if (pr.pierce > 0) pr.pierce--; // 仅在有界 pierce 时递减;star 恒不消亡
+          return false;
+        }
+        // 榴弹:碰撞即爆炸并消耗
+        if (pr.explode) { explodeGrenade(state, pr); return true; }
+        // 变形弹:命中变羊(+融合附冻结),进化/融合可穿透多发;穿羊逻辑由循环顶 continue 保证
+        if (pr.sheep) {
+          if (!pr.hitIds) pr.hitIds = [];
+          pr.hitIds.push(e.id);
+          e.sheep = Math.max(e.sheep, e.isBoss ? pr.sheepDur * 0.5 : pr.sheepDur);
+          if (pr.sheepFreeze) e.frozen = Math.max(e.frozen, e.isBoss ? pr.sheepFreeze * 0.5 : pr.sheepFreeze);
+          dmgEnemy(e, pr.damage, pr.weaponId);
+          SV.Effects.text(e.x, e.y - e.r - 6, "咩", pr.color, 13);
+          if (pr.sheepPierce > 0) { pr.sheepPierce--; return false; } // 进化/融合:穿透继续
+          return true;                                            // 基础:命中即消耗(单体)
+        }
+        // 普通命中
+        dmgEnemy(e, pr.damage, pr.weaponId); SV.Effects.hit(e.x, e.y, pr.color); SV.Audio.hit();
+        // 处决追击:击杀目标后弹体不消失,伤害 ×0.85 递减,重锁继续追猎(导弹)
+        if (pr.chaseKills > 0 && e.hp <= 0) {
+          pr.chaseKills--; pr.damage *= 0.85; pr.target = null;
+          return false;
+        }
+        // 命中连锁(雷暴蜂群)
+        if (pr.chainHops > 0) chainBurst(state, e.x, e.y, pr.damage * 0.6, pr.chainHops, pr.chainRange, pr.color, 1.1, pr.weaponId);
+        // 命中溅射(爆裂霰弹)
+        if (pr.splash) splashAt(state, pr.x, pr.y, pr.splash, pr.damage * pr.splashMul, pr.color, 10, pr.weaponId);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // ── 协同进化(7 组)──────────────────────────────
+  // 湮灭之轮:8 刃环绕 + 刃刃溅射 + 黑洞聚怪(连续武器)
+  function fusionBladeAura(state, w, def, dt) {
+    const p = state.player;
+    const s = stats(w, state);
+    const blades = p.blades;
+    if (blades.length !== s.count) {
+      blades.length = 0;
+      for (let i = 0; i < s.count; i++) blades.push({ angle: (w.angle || 0) + i / s.count * U.TAU, x: 0, y: 0 });
+    }
+    w.angle = (w.angle || 0) + s.spin * dt;
+    // 黑洞灼烧(aura 本体功能):周期对圈内全部敌人造成伤害
+    w.cd = (w.cd || 0) - dt;
+    if (w.cd <= 0) {
+      w.cd = 0.4;
+      const disk = SV.Spatial.queryCircle(p.x, p.y, s.radius);
+      for (let i = 0; i < disk.length; i++) {
+        const e = disk[i];
+        if (e.hp > 0 && U.dist2(p.x, p.y, e.x, e.y) <= s.radius * s.radius) dmgEnemy(e, s.damage * 0.6, w.id);
+      }
+    }
+    // 黑洞吸力:把圈外敌人吸进刃圈(途经刃刃受击),圈内由灼烧覆盖
+    const near = SV.Spatial.queryCircle(p.x, p.y, s.radius * 1.3);
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (e.isBoss || e.hp <= 0) continue;
+      const d = U.dist(e.x, e.y, p.x, p.y);
+      if (d > s.radius * 0.8) {
+        const a = U.angleTo(e.x, e.y, p.x, p.y);
+        const f = Math.min(s.pull, d * 3) * (1 / 60);
+        e.x += Math.cos(a) * f; e.y += Math.sin(a) * f;
+      }
+    }
+    for (let i = 0; i < blades.length; i++) {
+      const b = blades[i];
+      b.angle = (w.angle || 0) + i / blades.length * U.TAU;
+      b.x = p.x + Math.cos(b.angle) * s.radius;
+      b.y = p.y + Math.sin(b.angle) * s.radius;
+      const nb = SV.Spatial.queryCircle(b.x, b.y, 30); // 命中半径 28:查询须 ≥28(敌人被吸住近乎静止)
+      for (let j = 0; j < nb.length; j++) {
+        const e = nb[j];
+        if (e.hp <= 0) continue;
+        if (U.dist2(b.x, b.y, e.x, e.y) < (16 + e.r) * (16 + e.r) && e.bladeCd <= 0) {
+          dmgEnemy(e, s.damage, w.id); e.bladeCd = 0.25;
+          splashAt(state, b.x, b.y, s.splash, s.damage * s.splashMul, def.color, 10, w.id);
+          SV.Effects.hit(b.x, b.y, def.color); SV.Audio.hit();
+        }
+      }
+    }
+  }
+  // 雷暴蜂群:分裂追踪弹 + 命中连锁闪电
+  function fusionMissileChain(state, w, def, s) {
+    const p = state.player;
+    for (let k = 0; k < s.count; k++) {
+      const tgt = nearest(p.x, p.y, 99999);
+      const ang = tgt ? U.angleTo(p.x, p.y, tgt.x, tgt.y) : p.facing;
+      const pr = mkProj();
+      pr.x = p.x; pr.y = p.y;
+      pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
+      pr.r = 6; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
+      pr.homing = true; pr.seek = s.seek; pr.target = tgt; pr.weaponId = w.id;
+      pr.chaseKills = s.chase || 0;
+      pr.chainHops = s.chainHops || 0; pr.chainRange = s.chainRange || 0;
+    }
+    SV.Audio.shoot();
+  }
+  // 轨道轰炸:贯穿弹 + 每穿透爆炸 + 首命中分裂子榴弹
+  function fusionRailgunGrenade(state, w, def, s) {
+    const p = state.player;
+    const ang = aimFrom(p);
+    const pr = mkProj();
+    pr.x = p.x; pr.y = p.y;
+    pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
+    pr.r = 9; pr.damage = s.damage; pr.life = 0.7; pr.maxLife = 0.7; pr.color = def.color;
+    pr.pierce = 99; pr.hitIds = []; pr.weaponId = w.id;
+    pr.explode = s.explode; pr.explodeEvery = true; pr.cluster = s.cluster;
+    beams.push({ pts: [[p.x, p.y], [p.x + Math.cos(ang) * 60, p.y + Math.sin(ang) * 60]], life: 0.08, max: 0.08, color: def.color, width: 5 });
+    SV.Audio.shoot();
+    SV.Effects.shake(2, 0.1);
+  }
+  // 冰霜瘟疫:冰爆上毒 + 冻结(冻结目标受伤 ×1.5 由 dmgEnemy 的 vuln 天然生效)
+  function fusionFrostPoison(state, w, def, s) {
+    const p = state.player;
+    const near = SV.Spatial.queryCircle(p.x, p.y, s.radius).slice();
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (U.dist2(p.x, p.y, e.x, e.y) <= s.radius * s.radius) {
+        dmgEnemy(e, s.damage, w.id);
+        e.slow = s.slowDur; e.slowF = s.slow;
+        e.frozen = Math.max(e.frozen, s.freeze || 0);
+        e.poisonStacks = Math.min(3, (e.poisonStacks || 0) + 1); // 毒叠层
+        e.poison = s.dotDur; e.poisonDmg = s.dot * (1 + 0.4 * (e.poisonStacks - 1)); e.poisonTick = 0; e.poisonWid = w.id;
+      }
+    }
+    SV.Effects.ring(p.x, p.y, def.color, 10, s.radius, 0.45, 4);
+    SV.Effects.shake(3, 0.15);
+  }
+  // 裂空风暴:龙卷聚怪 + 沿途贯穿光束(连续 fire 弹体)
+  function fusionLanceVortex(state, w, def, s) {
+    const p = state.player;
+    const base = aimFrom(p);
+    const count = s.count || 1;
+    for (let k = 0; k < count; k++) {
+      const ang = base + (count > 1 ? (k - (count - 1) / 2) * 0.5 : 0);
+      const pr = mkProj();
+      pr.x = p.x; pr.y = p.y;
+      pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
+      pr.r = 12; pr.vrad = s.vrad; pr.pull = s.pull;
+      pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
+      pr.vortex = true; pr.vtick = 0; pr.weaponId = w.id;
+      pr.beamLen = s.beamLen; pr.beamWidth = s.beamWidth;
+    }
+    SV.Audio.shoot();
+  }
+  // 爆裂霰弹:锥形弹幕 + 每发命中溅射
+  function fusionShotgunGrenade(state, w, def, s) {
+    const p = state.player;
+    const dir = aimFrom(p);
+    for (let k = 0; k < s.count; k++) {
+      const a = dir + (k - (s.count - 1) / 2) * (s.cone / Math.max(1, s.count));
+      const pr = mkProj();
+      pr.x = p.x; pr.y = p.y;
+      pr.vx = Math.cos(a) * s.speed; pr.vy = Math.sin(a) * s.speed;
+      pr.r = 5; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color; pr.weaponId = w.id;
+      pr.splash = s.splash; pr.splashMul = s.splashMul;
+    }
+    SV.Audio.shoot();
+  }
+  // 风暴哨戒:哨卫抛射去返回旋镖(连续武器)
+  function fusionSentryBoomerang(state, w, def, dt) {
+    const p = state.player;
+    const s = stats(w, state);
+    const arr = p.sentries;
+    if (arr.length !== s.count) {
+      arr.length = 0;
+      for (let i = 0; i < s.count; i++) arr.push({ angle: i / s.count * U.TAU, x: 0, y: 0, cd: 0 });
+    }
+    w.angle = (w.angle || 0) + s.spin * dt;
+    const locked = {};
+    for (let i = 0; i < arr.length; i++) {
+      const dr = arr[i];
+      dr.angle = (w.angle || 0) + i / arr.length * U.TAU;
+      dr.x = p.x + Math.cos(dr.angle) * s.radius;
+      dr.y = p.y + Math.sin(dr.angle) * s.radius;
+      dr.interceptR = s.interceptR; // 供渲染层画拦截圈
+      // 弹幕拦截:塔身接触即消除敌方投射物
+      const es = state.eshots;
+      for (let k = es.length - 1; k >= 0; k--) {
+        if (U.dist2(dr.x, dr.y, es[k].x, es[k].y) < s.interceptR * s.interceptR) {
+          SV.Effects.hit(es[k].x, es[k].y, def.color);
+          es.splice(k, 1);
+          break;
+        }
+      }
+      dr.cd -= dt;
+      if (dr.cd <= 0) {
+        const tgt = nearestUnlocked(dr.x, dr.y, locked);
+        if (tgt) {
+          locked[tgt.id] = true;
+          const a = U.angleTo(dr.x, dr.y, tgt.x, tgt.y);
+          const pr = mkProj();
+          pr.x = dr.x; pr.y = dr.y;
+          pr.vx = Math.cos(a) * s.projSpeed; pr.vy = Math.sin(a) * s.projSpeed;
+          pr.r = 7; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color; pr.weaponId = w.id;
+          pr.shape = "star"; pr.spin = 14; pr.pierce = s.pierce; pr.hitIds = []; // spin=14 为子弹自转(与公转解耦)
+          dr.cd = s.fireCd; SV.Audio.shoot();
+        }
+      }
+    }
+  }
+
+  // ── 协同进化:两武器槽合并为一个融合武器
+  function fuse(state, combo) {
+    const ids = {}; ids[combo.w1] = true; ids[combo.w2] = true;
+    for (let i = state.weapons.length - 1; i >= 0; i--) {
+      if (ids[state.weapons[i].id]) state.weapons.splice(i, 1);
+    }
+    // 记录被合掉的成分 base id:不再作为新武器重发
+    state.everOwned = state.everOwned || {};
+    state.everOwned[combo.w1.replace(/_evo$/, "")] = true;
+    state.everOwned[combo.w2.replace(/_evo$/, "")] = true;
+    state.weapons.push({ id: combo.to, level: 8, cd: 0, angle: 0, evolved: true });
+    state.evolutions++;
+    SV.Audio.evolve();
+    SV.Effects.levelBurst(state.player.x, state.player.y);
+    SV.Effects.shake(8, 0.4);
+  }
+
+  // ── 进化
+  function evolve(state, baseWeaponId) {
+    const evo = SV.Config.EVOLUTIONS[baseWeaponId];
+    if (!evo) return;
+    for (let i = 0; i < state.weapons.length; i++) {
+      if (state.weapons[i].id === baseWeaponId) {
+        state.weapons[i].id = evo.to;
+        state.weapons[i].evolved = true;
+        state.weapons[i].cd = 0;
+        state.evolutions++;
+        SV.Audio.evolve();
+        SV.Effects.levelBurst(state.player.x, state.player.y);
+        SV.Effects.shake(8, 0.4);
+        return;
+      }
+    }
+  }
+
+  // ── 血月断头台(融合:巨型挥砍,命中必爆且连环引爆)
+  function fusionCrescentDetonate(state, w, def, s) {
+    const base = aimFrom(state.player);
+    const opts = { explodeChance: s.explodeChance || 1.0, explodeR: s.explodeR, explodeDmg: s.explodeDmg, chainHops: s.chainHops || 0 };
+    for (let k = 0; k < (s.count || 1); k++) {
+      const dir = (s.count || 1) > 1 ? base + (k - ((s.count || 1) - 1) / 2) * 0.6 : base;
+      swingOnce(state, w, def, s, dir, opts);
+    }
+    SV.Audio.shoot(); SV.Effects.shake(3, 0.15);
+  }
+  // ── 时之诅咒(融合:追踪弹命中同时变羊与冻结,贯穿双重禁锢)
+  function fusionPolymorphTimestop(state, w, def, s) {
+    const p = state.player, arr = state.enemies, locked = {};
+    let fired = 0;
+    for (let k = 0; k < (s.count || 1); k++) {      // 各弹锁定不同的、未变羊的最近敌人
+      let best = null, bd = 99999 * 99999;
+      for (let i = 0; i < arr.length; i++) {
+        const e = arr[i];
+        if (e.hp <= 0 || locked[e.id] || e.sheep > 0) continue;
+        const d = U.dist2(p.x, p.y, e.x, e.y);
+        if (d < bd) { bd = d; best = e; }
+      }
+      if (!best) break;
+      locked[best.id] = true;
+      const ang = U.angleTo(p.x, p.y, best.x, best.y);
+      const pr = mkProj();
+      pr.x = p.x; pr.y = p.y;
+      pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
+      pr.r = 8; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
+      pr.homing = true; pr.seek = 4.5; pr.target = best; pr.weaponId = w.id;
+      pr.sheep = true; pr.sheepDur = s.dur; pr.sheepFreeze = s.freeze; pr.sheepPierce = s.pierce || 1; pr.hitIds = [];
+      fired++;
+    }
+    if (fired) { SV.Audio.hit(); SV.Effects.shake(4, 0.2); }
+  }
+  // ── 贯星长矛(融合:前突贯穿 + 沿途激光束,远近通吃)
+  function fusionSpearLance(state, w, def, s) {
+    const p = state.player;
+    const dir = aimFrom(p);
+    swingOnce(state, w, def, s, dir, {});
+    const dx = Math.cos(dir), dy = Math.sin(dir);
+    beamDamage(state, p.x, p.y, dx, dy, s.beamLen, s.beamWidth / 2, s.beamDmg, def.color, w.id);
+    beams.push({ pts: [[p.x, p.y], [p.x + dx * s.beamLen, p.y + dy * s.beamLen]], life: 0.1, max: 0.1, color: def.color, width: s.beamWidth });
+    SV.Audio.shoot();
+  }
+
+  function init(state, startWeapon) {
+    proj.clear();
+    beams.length = 0;
+    swings.length = 0;
+    state.weapons = [{ id: startWeapon || C.XP_START_WEAPON, level: 1, cd: 0, angle: 0, evolved: false }];
+    state.player.blades = [];
+    state.player.sentries = [];
+  }
+
+  const Weapons = {
+    proj: proj,
+    beams: beams,
+    swings: swings,
+    init: init,
+    stats: stats,
+    updateAll: function (state, dt) {
+      // 光束衰减
+      let bw = 0;
+      for (let i = 0; i < beams.length; i++) { beams[i].life -= dt; if (beams[i].life > 0) { if (bw !== i) beams[bw] = beams[i]; bw++; } }
+      beams.length = bw;
+      // 挥砍视觉衰减
+      let swg = 0;
+      for (let i = 0; i < swings.length; i++) { swings[i].life -= dt; if (swings[i].life > 0) { if (swg !== i) swings[swg] = swings[i]; swg++; } }
+      swings.length = swg;
+
+      for (let i = 0; i < state.weapons.length; i++) {
+        const w = state.weapons[i];
+        if (state.weaponActive) { const k = Entities.tid(w.id); state.weaponActive[k] = (state.weaponActive[k] || 0) + dt; }
+        const def = weaponDef(w.id);
+        if (def.kind === "orbit") { orbit(state, w, def, dt); continue; }
+        if (def.kind === "sentry") { sentryUpdate(state, w, def, dt); continue; }
+        if (def.kind === "aura") { w.cd -= dt; if (w.cd <= 0) { fireAura(state, w); w.cd = stats(w, state).tick; } continue; }
+        if (w.id === "blade_aura") { fusionBladeAura(state, w, def, dt); continue; }            // 融合:连续型(按 id)
+        if (w.id === "boomerang_sentry") { fusionSentryBoomerang(state, w, def, dt); continue; }
+        const s = stats(w, state);
+        w.cd -= dt;
+        if (w.cd <= 0) { fire(state, w, def, s); w.cd = s.cooldown || 0.5; }
+      }
+      updateProjectiles(state, dt);
+    },
+    evolve: evolve,
+    fuse: fuse,
+    tid: Entities.tid
+  };
+
+  SV.Weapons = Weapons;
+})();
