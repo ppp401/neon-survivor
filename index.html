@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#070611">
+<meta name="description" content="霓虹幸存者 — 在潮水般的敌人中存活,收集经验,进化你的武器。Vampire-Survivors 类弹幕肉鸽。">
+<!-- PWA / 移动 App 化 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="霓虹幸存者">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/svg+xml" href="./icon.svg">
+<link rel="apple-touch-icon" href="./icon.svg">
+<title>霓虹幸存者 · Neon Survivor</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- 安全区域探测元素(读取 padding 即 env(safe-area-inset-*)) -->
+  <div id="safeTest" class="safe-test"></div>
+
+  <!-- 游戏画布 -->
+  <canvas id="game"></canvas>
+
+  <!-- 浮动摇杆触控层(仅触屏,z-index 低于 HUD/菜单,按钮触摸不被拦截) -->
+  <div id="stickZone" class="stick-zone"></div>
+
+  <!-- 竖屏旋转提示(纯 CSS @media 控制,横屏自动消失) -->
+  <div id="rotateHint" class="rotate-hint">
+    <div class="rotate-icon">📱</div>
+    <p class="rotate-title">建议横屏游玩</p>
+    <p class="rotate-sub">旋转设备以获得最佳体验</p>
+  </div>
+
+  <!-- HUD 叠层(DOM,pointer-events:none,按钮单独放行) -->
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div class="hud-left">
+        <div id="lvText" class="lv-tag">Lv 1</div>
+        <div class="hp-wrap">
+          <div class="hp-bar"><div id="hpFill" class="hp-fill"></div></div>
+          <div id="hpText" class="hp-text">100 / 100</div>
+        </div>
+      </div>
+      <div class="hud-center">
+        <div id="timerText" class="timer">0:00</div>
+        <div id="stageTag" class="stage-tag"></div>
+      </div>
+      <div class="hud-right">
+        <div id="killText" class="kills">☠ 0</div>
+        <div id="weaponList" class="weapon-list"></div>
+        <button id="btnPause" class="hud-btn" data-act="pause" title="暂停 (P)">❚❚</button>
+      </div>
+    </div>
+
+    <!-- 多 Boss 血条(堆叠 ≤4,由 HUD 动态生成) -->
+    <div id="bossBars" class="boss-bars hidden"></div>
+
+    <!-- 低血量警示蒙层 -->
+    <div id="lowHpWarn" class="lowhp hidden"><span class="lowhp-text">⚠ 生命危急!</span></div>
+
+    <!-- 经验条(底部全宽) -->
+    <div class="xp-bar"><div id="xpFill" class="xp-fill"></div></div>
+
+    <!-- 提示 -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <!-- 虚拟摇杆(仅触屏) -->
+  <div id="stick" class="joystick">
+    <div id="knob" class="knob"></div>
+  </div>
+
+  <!-- 升级选择 -->
+  <div id="levelUp" class="levelup hidden">
+    <div id="lvTitle" class="lv-title">升级!</div>
+    <div id="lvCards" class="lv-cards"></div>
+    <div class="lv-hint">点击卡片 或 按 1 / 2 / 3</div>
+  </div>
+
+  <!-- 标题界面 -->
+  <div id="titleScreen" class="screen">
+    <div class="screen-card">
+      <h1 class="logo">霓虹<span>幸存者</span></h1>
+      <p class="tagline">在潮水般的敌人中存活 · 收集经验 · 进化你的武器</p>
+      <button class="big-btn" data-act="start">▶ 开始游戏</button>
+      <div class="best-row">最佳记录:<span id="titleBest">0:00</span></div>
+      <div class="hint-row">
+        <span>移动:WASD / 方向键 / 摇杆</span>
+        <span class="kbd-only">暂停:P</span>
+        <span class="kbd-only">静音:M</span>
+        <span class="kbd-only">全自动:O</span>
+      </div>
+      <div class="toggle-row">
+        <button class="mini-btn" id="titleSound" data-act="toggleSound">🔊 音效:开</button>
+        <button class="mini-btn" id="titleFx" data-act="toggleFx">⚡ 省电:关</button>
+      </div>
+      <div class="vol-row">
+        <label class="vol-cell">🎵 音乐<input type="range" class="vol-slider vol-music" min="0" max="100" value="100"></label>
+        <label class="vol-cell">🔊 音效<input type="range" class="vol-slider vol-sfx" min="0" max="100" value="100"></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- 选角界面 -->
+  <div id="charSelectScreen" class="screen hidden">
+    <div class="screen-card wide">
+      <h2>选择角色</h2>
+      <div id="charCards" class="lv-cards"></div>
+      <div class="lv-hint">每位角色拥有不同的起手武器与被动</div>
+      <button class="mini-btn" data-act="menu">⌂ 返回标题</button>
+    </div>
+  </div>
+
+  <!-- 选关界面 -->
+  <div id="selectScreen" class="screen hidden">
+    <div class="screen-card wide">
+      <h2>选择关卡</h2>
+      <div class="diff-row">
+        <span class="diff-label">难度</span>
+        <button class="mini-btn diff-btn" data-act="setDiff" data-diff="chill">轻松</button>
+        <button class="mini-btn diff-btn" data-act="setDiff" data-diff="normal">普通</button>
+        <button class="mini-btn diff-btn" data-act="setDiff" data-diff="hard">困难</button>
+        <button class="mini-btn diff-btn" data-act="setDiff" data-diff="nightmare">噩梦</button>
+      </div>
+      <div id="selectStages" class="lv-cards"></div>
+      <div class="lv-hint">点选关卡即开始</div>
+      <button class="mini-btn" data-act="menu">⌂ 返回标题</button>
+    </div>
+  </div>
+
+  <!-- 无尽模式确认(通关后) -->
+  <div id="endlessPromptScreen" class="screen hidden">
+    <div class="screen-card">
+      <h2>🎉 通关胜利!</h2>
+      <div id="endlessInfo" class="best-row"></div>
+      <div id="endlessStats" class="best-row"></div>
+      <p class="tagline">进入无尽模式?敌人将不断变强,且每隔一段时间会有 Boss 波来袭。</p>
+      <button class="big-btn" data-act="endlessYes">∞ 进入无尽模式</button>
+      <button class="mini-btn" data-act="endlessNo">✓ 结束本局</button>
+    </div>
+  </div>
+
+  <!-- 暂停界面(左:装备/数值,右:设置/动作) -->
+  <div id="pauseScreen" class="screen hidden">
+    <div class="screen-card pause-card">
+      <h2>已暂停</h2>
+      <div class="pause-body">
+        <div id="pauseArsenal" class="arsenal"></div>
+        <div class="pause-side">
+          <button class="big-btn" data-act="resume">▶ 继续</button>
+          <button class="mini-btn" data-act="restart">↻ 重新开始</button>
+          <button class="mini-btn" data-act="menu">⌂ 返回标题</button>
+          <div class="side-divider"></div>
+          <button class="mini-btn btn-sound-toggle" data-act="toggleSound">🔊 音效:开</button>
+          <button class="mini-btn btn-fx-toggle" data-act="toggleFx">⚡ 省电:关</button>
+          <button class="mini-btn auto-toggle" data-act="toggleAuto">🤖 全自动:关</button>
+          <div class="side-divider"></div>
+          <label class="vol-cell">🎵 音乐<input type="range" class="vol-slider vol-music" min="0" max="100" value="100"></label>
+          <label class="vol-cell">🔊 音效<input type="range" class="vol-slider vol-sfx" min="0" max="100" value="100"></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 结算界面 -->
+  <div id="gameoverScreen" class="screen hidden">
+    <div class="screen-card">
+      <h2 id="goTitle">你倒下了</h2>
+      <div id="goStage" class="best-row"></div>
+      <div id="goNewBest" class="new-best">★ 新纪录!★</div>
+      <div class="stats-grid">
+        <div><span class="stat-num" id="goTime">0:00</span><span class="stat-lbl">存活时间</span></div>
+        <div><span class="stat-num" id="goLevel">1</span><span class="stat-lbl">等级</span></div>
+        <div><span class="stat-num" id="goKills">0</span><span class="stat-lbl">击杀</span></div>
+        <div><span class="stat-num" id="goEvo">0</span><span class="stat-lbl">进化</span></div>
+      </div>
+      <div id="goWeapons" class="arsenal"></div>
+      <div class="best-row">历史最佳:<span id="goBest">0:00</span></div>
+      <button class="big-btn" data-act="restart">↻ 再来一局</button>
+      <button class="mini-btn" data-act="menu">⌂ 返回标题</button>
+    </div>
+  </div>
+
+  <!-- 脚本:严格按依赖顺序加载(经典 script,file:// 可用) -->
+  <script>window.SV = window.SV || {};</script>
+  <script src="js/util.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/pool.js"></script>
+  <script src="js/spatial.js"></script>
+  <script src="js/effects.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/weapons.js"></script>
+  <script src="js/waves.js"></script>
+  <script src="js/upgrades.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/hud.js"></script>
+  <script src="js/menus.js"></script>
+  <script src="js/auto.js"></script>
+  <script src="js/icon.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
