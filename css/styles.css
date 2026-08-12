@@ -168,7 +168,8 @@ body.touch .joystick.active{ border-color:var(--cyan); box-shadow:0 0 18px rgba(
 
 /* ── 全屏界面 ─────────────────────── */
 .screen{
-  position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; padding:20px;
+  position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   background:radial-gradient(circle at 50% 30%,rgba(30,20,70,.55),rgba(5,4,12,.95));
   backdrop-filter:blur(4px);
 }
@@ -204,8 +205,16 @@ body.touch .joystick.active{ border-color:var(--cyan); box-shadow:0 0 18px rgba(
 .stat-num{ font-size:22px; font-weight:800; color:#fff; font-variant-numeric:tabular-nums; }
 .stat-lbl{ font-size:11px; color:var(--dim); }
 
-/* HUD 关卡/难度标签 */
-.stage-tag{ position:absolute; top:36px; left:50%; transform:translateX(-50%); font-size:11px; color:var(--dim); letter-spacing:1px; }
+/* HUD 顶栏中央:timer + stage-tag 垂直堆叠,屏幕水平居中 */
+.hud-center{
+  position:absolute; left:50%; top:max(10px, env(safe-area-inset-top));
+  transform:translateX(-50%);
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  pointer-events:none;
+}
+
+/* HUD 关卡/难度标签(在 .hud-center 内自然排列,不再单独绝对定位) */
+.stage-tag{ font-size:11px; color:var(--dim); letter-spacing:1px; }
 
 /* 选关界面 */
 .screen-card.wide{ max-width:880px; }
@@ -227,7 +236,7 @@ body.touch .joystick.active{ border-color:var(--cyan); box-shadow:0 0 18px rgba(
 #goTitle{ font-size:30px; }
 
 /* 暂停面板:装备 + 基础数值 */
-.arsenal{ width:100%; max-height:46vh; overflow:auto; text-align:left; display:flex; flex-direction:column; gap:10px; padding:2px; }.ars-section{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:8px 10px; }
+.arsenal{ width:100%; max-height:46vh; overflow:auto; text-align:left; display:flex; flex-direction:column; gap:10px; padding:8px; }.ars-section{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:8px 10px; }
 .ars-title{ font-size:11px; color:var(--dim); letter-spacing:1px; margin-bottom:6px; text-transform:uppercase; }
 .ars-empty{ font-size:12px; color:var(--dim); }
 .ars-row{ display:flex; align-items:center; gap:8px; font-size:13px; padding:3px 0; flex-wrap:wrap; }
@@ -258,17 +267,38 @@ body.touch .joystick.active{ border-color:var(--cyan); box-shadow:0 0 18px rgba(
 .pause-side .mini-btn{ padding: 8px 14px; font-size: 13px; text-align: left; }
 .pause-side .vol-cell{ font-size: 12px; gap: 6px; flex-direction: column; align-items: flex-start; }
 .pause-side .vol-slider{ width: 100%; height: 22px; }
+/* 关键:body.touch 前缀提升优先级到 (0,3,1),压过通用 body.touch .mini-btn (0,2,1) */
+body.touch .pause-side .big-btn{ padding: 8px 12px; font-size: 13px; }
+body.touch .pause-side .mini-btn{ padding: 6px 10px; font-size: 11px; }
+body.touch .pause-side .vol-cell{ font-size: 10px; }
+body.touch .pause-side .vol-slider{ width: 100%; height: 18px; }
 .side-divider{ height: 1px; background: rgba(150,110,255,0.22); margin: 4px 0; }
 .ars-stats{ grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); }
 
-/* 移动横屏:右侧设置列收窄,按钮更紧凑 */
+/* 移动横屏:右侧设置列收窄,按钮更紧凑,arsenal 字号收紧 */
 @media (orientation: landscape) and (max-height: 500px) and (pointer: coarse){
-  .pause-body{ grid-template-columns: 1fr 140px; gap: 10px; }
-  .pause-body .arsenal{ max-height: 78vh; }
-  .pause-side .big-btn{ padding: 8px 12px; font-size: 14px; }
-  .pause-side .mini-btn{ padding: 7px 10px; font-size: 11px; }
-  .pause-side .vol-cell{ font-size: 10px; }
-  .ars-stats{ grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 4px; }
+  .pause-card h2{ font-size: 16px; }
+  .pause-body{ grid-template-columns: 1fr 124px; gap: 8px; }
+  .pause-body .arsenal{ max-height: 80vh; gap: 6px; padding: 6px; }
+  .pause-side{ gap: 4px; }
+  .pause-side .big-btn{ padding: 6px 10px; font-size: 12px; }
+  .pause-side .mini-btn{ padding: 5px 8px; font-size: 10px; }
+  .pause-side .vol-cell{ font-size: 9px; gap: 2px; }
+  .pause-side .vol-slider{ height: 16px; }
+  .side-divider{ margin: 2px 0; }
+  /* arsenal 内文字收紧 */
+  .ars-section{ padding: 5px 7px; }
+  .ars-title{ font-size: 9px; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .ars-row{ font-size: 11px; gap: 5px; padding: 2px 0; }
+  .ars-name{ font-size: 11px; min-width: 56px; font-weight: 600; }
+  .ars-lv{ font-size: 10px; min-width: 38px; }
+  .ars-eff{ font-size: 10px; }
+  .ars-trait{ font-size: 9px; padding: 1px 4px; }
+  .ars-dmg{ font-size: 9px; padding: 1px 5px; }
+  .ars-stat{ padding: 4px; }
+  .ars-stat-n{ font-size: 12px; }
+  .ars-stat-l{ font-size: 9px; }
+  .ars-stats{ grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 4px; }
 }
 /* 移动竖屏:暂停屏改单列堆叠 */
 @media (orientation: portrait) and (pointer: coarse){

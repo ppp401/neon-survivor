@@ -125,10 +125,7 @@
       const p = state.player;
       const k = 1 - Math.exp(-9 * dt);
       let tx = cam.x + (p.x - cam.x) * k;
-      // 横屏 Y 偏移:玩家显示在屏幕 60% 位置(下方),上方留更多视野预警来袭敌人
-      const landscape = cssW > cssH * 1.2;
-      const biasY = landscape ? cssH * 0.10 / cam.zoom : 0;
-      let ty = cam.y + ((p.y - biasY) - cam.y) * k;
+      let ty = cam.y + (p.y - cam.y) * k;
       // 竞技场边界夹取(竞技场大于视口时)
       const half = (state.stage && state.stage.half) || 2000;
       const hw = cssW / 2 / cam.zoom, hh = cssH / 2 / cam.zoom;
