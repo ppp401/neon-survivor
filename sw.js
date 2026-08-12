@@ -1,6 +1,6 @@
 // sw.js — Neon Survivor Service Worker(离线缓存)。纯 JS 无依赖。
 // 注意:SW 仅在 HTTPS 或 localhost 下生效;局域网 IP 的 HTTP 不可用(详见 DEPLOY.md)。
-const CACHE = "neon-survivor-v1";
+const CACHE = "neon-survivor-v1.01";
 const ASSETS = [
   "./",
   "./index.html",
