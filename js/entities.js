@@ -441,8 +441,9 @@
 
     // 宝石磁吸与拾取
     const pr2 = p.pickupRadius * p.pickupRadius;
-    const pull = 520 * Math.max(1, m.pickupMul * 0.6);
+    const pull = C.GEM_PULL_BASE * Math.max(1, m.pickupMul * 0.6);
     const gems = state.gems;
+    const collectR = C.GEM_COLLECT_RADIUS;
     for (let i = gems.length - 1; i >= 0; i--) {
       const g = gems[i];
       const dx = p.x - g.x, dy = p.y - g.y;
@@ -450,10 +451,11 @@
       if (d2 < pr2) g.pulled = true;
       if (g.pulled) {
         const d = Math.sqrt(d2) || 1;
-        const f = Math.min(pull, d * 9);
+        // 保底速度恒快于玩家当前速度 35%+30,杜绝逃跑时经验球卡在拾取圈外死区
+        const f = Math.max(spd * 1.35 + 30, Math.min(pull, d * C.GEM_PULL_NEAR_K));
         g.x += dx / d * f * dt; g.y += dy / d * f * dt;
       }
-      if (d2 < 18 * 18) {
+      if (d2 < collectR * collectR) {
         state.xp += g.value * m.xpMul;
         gems.splice(i, 1);
         SV.Audio.pickup();

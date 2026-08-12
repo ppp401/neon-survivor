@@ -21,6 +21,9 @@
     PLAYER_BASE_SPEED: 165, // 略快于一切追逐者
     PLAYER_RADIUS: 14,
     PICKUP_RADIUS: 72,
+    GEM_COLLECT_RADIUS: 20, // 经验球拾取半径(中心距)
+    GEM_PULL_BASE: 540,     // 经验球远场牵引速度上限(受磁吸属性放大)
+    GEM_PULL_NEAR_K: 10,    // 经验球近场牵引速度系数(速度 = d * K,随距离线性衰减防过冲)
     IFRAME: 0.85, // 受击无敌秒数
     REGEN_INTERVAL: 1, // 回血结算间隔
     LIFESTEAL_CAP: 0.05, // 吸血每秒回血上限(占最大生命比例)。属性上限仍 10%,治疗上限降到 5%/s 以防后期站撸
@@ -133,7 +136,7 @@
       desc: "周身伤害力场,周期灼烧。",
       tags: ["melee"],
       stats: function (lv) {
-        return { damage: 4 + (lv - 1) * 0.6, radius: 60 + (lv - 1) * 10, tick: Math.max(0.15, 0.5 - (lv - 1) * 0.05) };
+        return { damage: 6 + (lv - 1) * 1.4, radius: 65 + (lv - 1) * 12, tick: Math.max(0.11, 0.42 - (lv - 1) * 0.045) };
       }
     },
     shotgun: {
@@ -261,7 +264,7 @@
       desc: "发射追踪弹,命中敌人变羊:期间不能攻击/移动,且受伤增加。弹体穿过已变羊的目标,只打新鲜敌人。",
       tags: ["spell"],
       stats: function (lv) {
-        return { damage: 4 + (lv - 1) * 1, cooldown: Math.max(2.0, 4.0 - (lv - 1) * 0.25), count: 1 + Math.floor((lv - 1) / 2), dur: 2.5 + (lv - 1) * 0.2, speed: 260, life: 1.8 };
+        return { damage: 6 + (lv - 1) * 2, cooldown: Math.max(1.5, 3.2 - (lv - 1) * 0.22), count: 1 + Math.floor(lv / 2), dur: 2.8 + (lv - 1) * 0.35, speed: 260, life: 1.8 };
       }
     },
     timestop: {
@@ -269,7 +272,7 @@
       desc: "锁定敌群密集处,天降时停力场,延迟落地冻结范围内敌人。",
       tags: ["spell"],
       stats: function (lv) {
-        return { damage: 8 + (lv - 1) * 2, cooldown: Math.max(3.0, 5.6 - (lv - 1) * 0.3), radius: 72 + (lv - 1) * 7, freeze: 1.2 + (lv - 1) * 0.12, arm: 0.6, count: 1 + (lv >= 4 ? 1 : 0) + (lv >= 7 ? 1 : 0) };
+        return { damage: 10 + (lv - 1) * 3, cooldown: Math.max(2.4, 4.8 - (lv - 1) * 0.34), radius: 80 + (lv - 1) * 9, freeze: 1.4 + (lv - 1) * 0.18, arm: 0.6, count: 1 + (lv >= 3 ? 1 : 0) + (lv >= 6 ? 1 : 0) };
       }
     }
   };
@@ -400,7 +403,7 @@
     runner: { name: "飞刃虫", hp: 6, speed: 132, dmg: 6, xp: 1, r: 9, color: "#ff5d6c", ai: "fast", shape: "triangle", skill: "高速摇摆追击" },
     brute: { name: "重装兵", hp: 60, speed: 40, dmg: 18, xp: 5, r: 21, color: "#b06bff", ai: "tank", shape: "square", skill: "缓慢重装推进,高血量" },
     shooter: { name: "炮台", hp: 18, speed: 70, dmg: 0, projDmg: 8, xp: 3, r: 13, color: "#5ad1ff", ai: "shooter", shape: "pentagon", skill: "中距游走,远程射击" },
-    bomber: { name: "自爆虫", hp: 14, speed: 96, dmg: 25, xp: 2, r: 14, color: "#ff9a3c", ai: "bomber", aoe: 62, shape: "blob", skill: "冲撞玩家,贴身自爆(AOE)" },
+    bomber: { name: "自爆虫", hp: 14, speed: 96, dmg: 20, xp: 2, r: 14, color: "#ff9a3c", ai: "bomber", aoe: 62, shape: "blob", skill: "冲撞玩家,贴身自爆(AOE)" },
     swarmer: { name: "食脑蛛", hp: 3, speed: 150, dmg: 4, xp: 1, r: 6, color: "#ffe14d", ai: "fast", shape: "triangle", skill: "成群高速蜂拥" },
     spawner: { name: "母虫巢", hp: 80, speed: 0, dmg: 0, xp: 12, r: 22, color: "#ff5dc0", ai: "spawner", shape: "hex", skill: "静止不动,持续孵化食脑蛛" },
     charger: { name: "冲锋兽", hp: 30, speed: 60, chargeSpeed: 380, dmg: 14, xp: 4, r: 15, color: "#6ba8ff", ai: "charger", shape: "triangle", skill: "蓄力预警后高速冲刺" },

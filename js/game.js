@@ -79,7 +79,7 @@
 
   function showCharSelect() {
     Game.mode = "charselect";
-    SV.Menus.showCharSelect({ char: selChar });
+    SV.Menus.showCharSelect({ stage: selStage, diff: selDiff, char: selChar });
     showHud(false);
   }
 
@@ -162,11 +162,25 @@
 
   // ── 菜单/按钮动作
   function handleAct(act, el) {
-    if (act === "start") showCharSelect(); // 标题 → 选角
-    else if (act === "select") showSelect();
-    else if (act === "pickChar") { selChar = el.getAttribute("data-char"); SV.Storage.setChar(selChar); showSelect(); }
-    else if (act === "pickStage") { selStage = el.getAttribute("data-stage"); SV.Storage.setSelection(selStage, selDiff); startRun(); }
-    else if (act === "setDiff") { selDiff = el.getAttribute("data-diff"); SV.Storage.setSelection(selStage, selDiff); SV.Menus.showSelect({ stage: selStage, diff: selDiff, char: selChar }); }
+    if (act === "start") showSelect(); // 标题 → 选图(第一步)
+    else if (act === "pickStage") { // 选图:只选中并重绘,留在本屏
+      selStage = el.getAttribute("data-stage");
+      SV.Storage.setSelection(selStage, selDiff);
+      SV.Menus.showSelect({ stage: selStage, diff: selDiff, char: selChar });
+    }
+    else if (act === "toChar") showCharSelect(); // 选图屏「继续」→ 选角屏
+    else if (act === "pickChar") { // 选角:只切选中 + 刷详情,留在本屏(不重建网格)
+      selChar = el.getAttribute("data-char");
+      SV.Storage.setChar(selChar);
+      SV.Menus.selectChar(selChar);
+    }
+    else if (act === "setDiff") { // 切难度:只切换高亮,留在本屏
+      selDiff = el.getAttribute("data-diff");
+      SV.Storage.setSelection(selStage, selDiff);
+      SV.Menus.setDiffHighlight(selDiff);
+    }
+    else if (act === "toStage") showSelect(); // 选角屏「返回选关」→ 选图屏
+    else if (act === "beginRun") startRun(); // 选角屏「开始游戏」→ 进入战斗
     else if (act === "endlessYes") enterEndless();
     else if (act === "endlessNo") endRun(true);
     else if (act === "restart") startRun();
@@ -198,7 +212,7 @@
     }
     if (SV.Input.consumeMute()) { const m = !SV.Audio.isMuted(); SV.Audio.setMuted(m); SV.Menus.setSoundToggle(m); }
     if (SV.Input.consumeConfirm()) {
-      if (Game.mode === "menu") showCharSelect();
+      if (Game.mode === "menu") showSelect();
       else if (Game.mode === "endlessprompt") enterEndless(); // 回车默认进入无尽
       else if (Game.mode === "gameover") startRun();
       else if (Game.mode === "paused") togglePause();

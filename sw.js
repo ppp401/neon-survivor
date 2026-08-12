@@ -3,7 +3,7 @@
 //
 // ★ 部署/更新代码后,必须递增 CACHE 版本号(如 v2 → v3),否则老用户拿不到新版!
 //   详见 DEPLOY.md「Service Worker 缓存与版本更新」一节。
-const CACHE = "neon-survivor-v2.1";
+const CACHE = "neon-survivor-v2.1.1";
 const ASSETS = [
   "./",
   "./index.html",

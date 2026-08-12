@@ -102,33 +102,56 @@
 
     // ── 选角界面(4 名角色,点选即进选关)
     showCharSelect: function (sel) {
+      this.setDiffHighlight(sel.diff);
+      // 图标网格:每个角色一个紧凑图标块(选中金色描边)
       const wrap = document.getElementById("charCards");
       const order = SV.Config.CHARACTER_ORDER;
       const cur = sel.char;
-      let html = "";
+      let grid = "";
       for (let i = 0; i < order.length; i++) {
         const id = order[i], ch = SV.Config.CHARACTERS[id];
-        const startW = SV.Config.weaponDef(ch.startWeapon);
-        html += '<button class="card char-card' + (id === cur ? " selected" : "") + '" data-act="pickChar" data-char="' + id + '" style="border-color:' + ch.color + '">';
-        html += '<div class="card-icon" style="color:' + ch.color + '">' + ch.icon + "</div>";
-        html += '<div class="card-name">' + ch.name + "</div>";
-        html += '<div class="card-title">' + ch.title + "</div>";
-        html += '<div class="card-desc">' + ch.desc + "</div>";
-        html += '<div class="char-stats">';
-        html += '<span class="char-chip">HP ×' + ch.hpMul + "</span>";
-        html += '<span class="char-chip">移速 ×' + ch.speedMul + "</span>";
-        html += '<span class="char-chip">' + (startW.icon || "◆") + " " + startW.name + "</span>";
-        for (const pid in ch.startPassives) {
-          const pd = SV.Config.PASSIVES[pid];
-          html += '<span class="char-chip">' + pd.icon + " " + pd.name + "×" + ch.startPassives[pid] + "</span>";
-        }
-        html += "</div>";
-        const cs = SV.Storage.charSummary(id);
-        if (cs.stages > 0) html += '<div class="char-best">✓' + cs.clears + " 通关 · 最佳 " + SV.Util.fmtTime(cs.bestTime) + "</div>";
-        html += "</button>";
+        grid += '<button class="char-tile' + (id === cur ? " selected" : "") + '" data-act="pickChar" data-char="' + id + '" style="border-color:' + ch.color + '">';
+        grid += '<div class="tile-icon" style="color:' + ch.color + '">' + ch.icon + "</div>";
+        grid += '<div class="tile-name">' + ch.name + "</div>";
+        grid += "</button>";
       }
-      wrap.innerHTML = html;
+      wrap.innerHTML = grid;
+      // 常驻详情面板:显示当前选中角色的完整介绍
+      this.renderCharDetail(cur);
       this.show("charselect");
+    },
+    // 渲染详情面板(左头像列 + 右正文列)
+    renderCharDetail: function (id) {
+      const ch = SV.Config.CHARACTERS[id];
+      const wrap = document.getElementById("charDetail");
+      if (!ch || !wrap) return;
+      const startW = SV.Config.weaponDef(ch.startWeapon);
+      let chips = '<span class="char-chip">HP ×' + ch.hpMul + "</span>";
+      chips += '<span class="char-chip">移速 ×' + ch.speedMul + "</span>";
+      chips += '<span class="char-chip">' + (startW.icon || "◆") + " " + startW.name + "</span>";
+      for (const pid in ch.startPassives) {
+        const pd = SV.Config.PASSIVES[pid];
+        if (pd) chips += '<span class="char-chip">' + pd.icon + " " + pd.name + "×" + ch.startPassives[pid] + "</span>";
+      }
+      let html = '<div class="cd-head">';
+      html += '<div class="cd-icon" style="color:' + ch.color + '">' + ch.icon + "</div>";
+      html += '<div class="cd-name" style="color:' + ch.color + '">' + ch.name + "</div>";
+      html += '<div class="cd-title">' + ch.title + "</div></div>";
+      html += '<div class="cd-body">';
+      html += '<div class="cd-desc">' + ch.desc + "</div>";
+      html += '<div class="cd-chips">' + chips + "</div>";
+      const cs = SV.Storage.charSummary(id);
+      if (cs && cs.stages > 0) html += '<div class="cd-best">✓' + cs.clears + " 通关 · 最佳 " + SV.Util.fmtTime(cs.bestTime) + "</div>";
+      html += "</div>";
+      wrap.innerHTML = html;
+    },
+    // 点图标:只切 .selected + 刷详情(不重建网格,顺滑无闪烁)
+    selectChar: function (id) {
+      const tiles = document.getElementById("charCards").children;
+      for (let i = 0; i < tiles.length; i++) {
+        tiles[i].classList.toggle("selected", tiles[i].getAttribute("data-char") === id);
+      }
+      this.renderCharDetail(id);
     },
 
     // ── 无尽模式确认(通关后弹出)
@@ -140,22 +163,19 @@
       this.show("endlessprompt");
     },
 
-    // ── 选关界面
+    // ── 选关界面(第一步:只选图,不显示最佳——此时尚未选角色/难度)
     showSelect: function (sel) {
-      this.setDiffHighlight(sel.diff);
       const wrap = document.getElementById("selectStages");
       const order = SV.Config.STAGE_ORDER;
       const cur = sel.stage;
       let html = "";
       for (let i = 0; i < order.length; i++) {
         const id = order[i], st = SV.Config.STAGES[id];
-        const best = SV.Storage.getBest(id, sel.diff, sel.char);
         const pal = st.palette;
         html += '<button class="card stage-card' + (id === cur ? " selected" : "") + '" data-act="pickStage" data-stage="' + id + '" style="border-color:' + pal.gridStrong + '">';
         html += '<div class="card-icon" style="color:' + (pal.star || "#fff") + '">' + (STAGE_ICON[id] || "◆") + "</div>";
         html += '<div class="card-name">' + st.name + "</div>";
         html += '<div class="card-desc">存活 ' + Math.round(st.goalMin / 60) + " 分钟" + (st.finale ? " · 终局 Boss" : "") + "</div>";
-        html += '<div class="stage-best">最佳 ' + SV.Util.fmtTime(best.time) + (best.cleared ? " ✓通关" : "") + "</div>";
         html += "</button>";
       }
       wrap.innerHTML = html;

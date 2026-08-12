@@ -104,20 +104,10 @@
     </div>
   </div>
 
-  <!-- 选角界面 -->
+  <!-- 选角界面(第二步:选角色 + 难度) -->
   <div id="charSelectScreen" class="screen hidden">
     <div class="screen-card wide">
-      <h2>选择角色</h2>
-      <div id="charCards" class="lv-cards"></div>
-      <div class="lv-hint">每位角色拥有不同的起手武器与被动</div>
-      <button class="mini-btn" data-act="menu">⌂ 返回标题</button>
-    </div>
-  </div>
-
-  <!-- 选关界面 -->
-  <div id="selectScreen" class="screen hidden">
-    <div class="screen-card wide">
-      <h2>选择关卡</h2>
+      <h2>选择角色与难度</h2>
       <div class="diff-row">
         <span class="diff-label">难度</span>
         <button class="mini-btn diff-btn" data-act="setDiff" data-diff="chill">轻松</button>
@@ -125,9 +115,26 @@
         <button class="mini-btn diff-btn" data-act="setDiff" data-diff="hard">困难</button>
         <button class="mini-btn diff-btn" data-act="setDiff" data-diff="nightmare">噩梦</button>
       </div>
+      <div id="charCards" class="char-grid"></div>
+      <div id="charDetail" class="char-detail"></div>
+      <div class="lv-hint">点击图标查看角色详情 · 每位角色拥有不同的起手武器与被动</div>
+      <div class="btn-row">
+        <button class="big-btn" data-act="beginRun">▶ 开始游戏</button>
+        <button class="mini-btn" data-act="toStage">◀ 返回选关</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 选关界面(第一步:选图) -->
+  <div id="selectScreen" class="screen hidden">
+    <div class="screen-card wide">
+      <h2>选择关卡</h2>
       <div id="selectStages" class="lv-cards"></div>
-      <div class="lv-hint">点选关卡即开始</div>
-      <button class="mini-btn" data-act="menu">⌂ 返回标题</button>
+      <div class="lv-hint">选择关卡后点击「继续」</div>
+      <div class="btn-row">
+        <button class="big-btn" data-act="toChar">▶ 继续</button>
+        <button class="mini-btn" data-act="menu">⌂ 返回标题</button>
+      </div>
     </div>
   </div>
 
