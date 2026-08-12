@@ -237,11 +237,15 @@ body.touch .joystick.active{ border-color:var(--cyan); box-shadow:0 0 18px rgba(
 .char-best{ margin-top:6px; font-size:11px; color:var(--gold); font-variant-numeric:tabular-nums; }
 #goTitle{ font-size:30px; }
 
-/* 选角:图标网格 + 常驻详情面板(取代滚动卡片,省空间) */
-.char-grid{ display:flex; flex-wrap:wrap; justify-content:center; gap:10px; width:100%; max-width:520px; }
+/* 选角:图标单行横排,宽度不足时横向滑动(桌面够宽则居中无滑动条) */
+.char-grid{
+  display:flex; flex-wrap:nowrap; overflow-x:auto; gap:10px; width:100%;
+  justify-content:center; justify-content:safe center;
+  padding-bottom:4px; -webkit-overflow-scrolling:touch;
+}
 .char-tile{
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
-  width:78px; min-height:66px; padding:8px 4px; cursor:pointer; pointer-events:auto;
+  flex:0 0 auto; width:78px; min-height:66px; padding:8px 4px; cursor:pointer; pointer-events:auto;
   background:var(--panel); border:1px solid var(--stroke); border-radius:12px; color:var(--ink);
   transition:transform .1s, border-color .1s; -webkit-tap-highlight-color:transparent;
 }
