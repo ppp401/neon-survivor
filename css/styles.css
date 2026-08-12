@@ -254,6 +254,8 @@ body.touch .joystick.active{ border-color:var(--cyan); box-shadow:0 0 18px rgba(
 
 /* 暂停屏 2 列布局:左数值/图鉴,右动作 + 设置 */
 .pause-card{ max-width: 920px; width: 100%; }
+/* 触屏:收窄整张卡片(父级 .screen flex 自动居中),避免填满手机屏 */
+body.touch .pause-card{ max-width: min(94vw, 620px); }
 .pause-body{
   display: grid; grid-template-columns: 1fr 180px; gap: 14px;
   width: 100%; align-items: stretch;
@@ -272,6 +274,16 @@ body.touch .pause-side .big-btn{ padding: 8px 12px; font-size: 13px; }
 body.touch .pause-side .mini-btn{ padding: 6px 10px; font-size: 11px; }
 body.touch .pause-side .vol-cell{ font-size: 10px; }
 body.touch .pause-side .vol-slider{ width: 100%; height: 18px; }
+/* 触屏:数值面板字号收紧(武器行/被动行/角色行统一,原仅横屏≤500px 现提升到所有触屏) */
+body.touch .arsenal{ gap: 6px; padding: 6px; }
+body.touch .ars-section{ padding: 6px 8px; }
+body.touch .ars-title{ font-size: 10px; letter-spacing: .5px; margin-bottom: 3px; }
+body.touch .ars-row{ font-size: 11px; gap: 5px; padding: 2px 0; }
+body.touch .ars-name{ font-size: 11px; min-width: 56px; }
+body.touch .ars-lv{ font-size: 10px; min-width: 38px; }
+body.touch .ars-eff{ font-size: 10px; }
+body.touch .ars-trait{ font-size: 9px; padding: 1px 4px; }
+body.touch .ars-dmg{ font-size: 9px; padding: 1px 5px; }
 .side-divider{ height: 1px; background: rgba(150,110,255,0.22); margin: 4px 0; }
 .ars-stats{ grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); }
 
