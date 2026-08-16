@@ -22,13 +22,27 @@
     return { total: total, perMin: active > 0 ? total / active * 60 : 0 };
   }
   // 怪物图鉴条目(本局已遇)。敌人展示初始→当前值,8min 后额外标精英变异倍率。dmgToMe: {total, perMin} 或 null
+  // 伤害分项标注:接触 / 自爆 / 弹幕·狙击 / 毒径 各列各的(特殊机制伤害与接触伤害分开)
+  function enemyDmgSegs(def, cur) {
+    const isBomber = def.ai === "bomber";
+    const segs = [];
+    const conI = isBomber ? 0 : (def.dmg || 0), conC = cur.contact || 0;
+    if (conI > 0 || conC > 0) segs.push("接触 " + fmtNum(conI) + "→" + fmtNum(conC));
+    const boomI = isBomber ? (def.dmg || 0) : 0, boomC = cur.boom || 0;
+    if (boomI > 0 || boomC > 0) segs.push("自爆 " + fmtNum(boomI) + "→" + fmtNum(boomC));
+    const projI = def.projDmg || 0, projC = cur.proj || 0;
+    if (projI > 0 || projC > 0) segs.push((def.ai === "sniper" ? "狙击 " : "弹幕 ") + fmtNum(projI) + "→" + fmtNum(projC));
+    const tr = cur.trail || Math.round((def.trailDmg || 0) * 0.5);
+    if (tr > 0) segs.push("毒径 " + fmtNum(tr) + "/跳");
+    return segs.length ? segs.join(" · ") : "无攻击";
+  }
   function bestiaryRow(def, cur, withElite, dmgToMe, isBoss) {
-    const initHp = def.hp, initDmg = def.dmg || def.projDmg || def.boomDmg || 0;
-    const curHp = cur.hp, curDmg = cur.dmg;
+    const initHp = def.hp;
+    const curHp = cur.hp;
     let html = '<div class="ars-row" style="flex-direction:column;align-items:flex-start;gap:2px">';
     html += '<div style="display:flex;width:100%;justify-content:space-between;align-items:center">';
     html += '<span><canvas class="ars-ic" width="22" height="22" data-shape="' + (def.shape || "circle") + '" data-color="' + def.color + '"></canvas><span class="ars-name">' + def.name + "</span></span>";
-    html += '<span class="ars-lv">HP ' + fmtNum(initHp) + "→" + fmtNum(curHp) + " · 伤 " + fmtNum(initDmg) + "→" + fmtNum(curDmg) + " · 经验 " + (cur.xp || def.xp) + "</span>";
+    html += '<span class="ars-lv">HP ' + fmtNum(initHp) + "→" + fmtNum(curHp) + " · " + (isBoss ? "接触 " + fmtNum(def.dmg) + "→" + fmtNum(cur.dmg) : enemyDmgSegs(def, cur)) + " · 经验 " + (cur.xp || def.xp) + "</span>";
     html += "</div>";
     let eff = def.skill || "";
     if (withElite) eff += " · <span style='color:#ffd86b'>精英变异:HP×4 / 伤×1.5 / 体型×1.4</span>";
@@ -141,7 +155,20 @@
       html += '<div class="cd-desc">' + ch.desc + "</div>";
       html += '<div class="cd-chips">' + chips + "</div>";
       const cs = SV.Storage.charSummary(id);
-      if (cs && cs.stages > 0) html += '<div class="cd-best">✓' + cs.clears + " 通关 · 最佳 " + SV.Util.fmtTime(cs.bestTime) + "</div>";
+      if (cs && cs.stages > 0) {
+        // 按难度分档列出各自最佳成绩(用户要求:各难度的最佳成绩写清楚)
+        const byDiff = SV.Storage.charSummaryByDiff ? SV.Storage.charSummaryByDiff(id) : {};
+        const order = SV.Config.DIFFICULTY_ORDER || Object.keys(SV.Config.DIFFICULTY);
+        let dh = "";
+        for (let i = 0; i < order.length; i++) {
+          const dn = (SV.Config.DIFFICULTY[order[i]] || {}).name || order[i];
+          const dd = byDiff[order[i]];
+          dh += (i ? " · " : "") + (dd && dd.bestTime > 0
+            ? dn + " " + SV.Util.fmtTime(dd.bestTime) + (dd.clears > 0 ? "(" + dd.clears + "✓)" : "")
+            : dn + " —");
+        }
+        html += '<div class="cd-best">✓' + cs.clears + " 通关 · " + dh + "</div>";
+      }
       html += "</div>";
       wrap.innerHTML = html;
     },
@@ -175,7 +202,7 @@
         html += '<button class="card stage-card' + (id === cur ? " selected" : "") + '" data-act="pickStage" data-stage="' + id + '" style="border-color:' + pal.gridStrong + '">';
         html += '<div class="card-icon" style="color:' + (pal.star || "#fff") + '">' + (STAGE_ICON[id] || "◆") + "</div>";
         html += '<div class="card-name">' + st.name + "</div>";
-        html += '<div class="card-desc">存活 ' + Math.round(st.goalMin / 60) + " 分钟" + (st.finale ? " · 终局 Boss" : "") + "</div>";
+        html += '<div class="card-desc">存活 ' + Math.round(st.goalMin / 60) + " 分钟</div>";
         html += "</button>";
       }
       wrap.innerHTML = html;

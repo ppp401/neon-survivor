@@ -497,12 +497,21 @@
 
     _glowBeams: function () {
       const beams = SV.Weapons.beams;
-      for (let i = 0; i < beams.length; i++) { const b = beams[i]; ctx.globalAlpha = 0.5 * (b.life / b.max); ctx.strokeStyle = b.color; ctx.lineWidth = b.width * 2.4; this._strokePoly(b.pts); }
+      // 光束辉光:默认较宽较亮;贯穿激光(lance)整体细化调暗(不遮弹幕),进化版略增强以示机制差异
+      for (let i = 0; i < beams.length; i++) {
+        const b = beams[i];
+        let a = 0.5, gw = 2.4;
+        if (b.lance) { a = b.evo ? 0.30 : 0.20; gw = b.evo ? 1.8 : 1.2; }
+        ctx.globalAlpha = a * (b.life / b.max); ctx.strokeStyle = b.color; ctx.lineWidth = b.width * gw; this._strokePoly(b.pts);
+      }
       ctx.globalAlpha = 1;
     },
     _drawBeams: function () {
       const beams = SV.Weapons.beams;
-      for (let i = 0; i < beams.length; i++) { const b = beams[i]; ctx.globalAlpha = b.life / b.max; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = b.width; this._strokePoly(b.pts); }
+      for (let i = 0; i < beams.length; i++) {
+        const b = beams[i];
+        ctx.globalAlpha = (b.lance ? 0.85 : 1) * (b.life / b.max); ctx.strokeStyle = "#ffffff"; ctx.lineWidth = b.width; this._strokePoly(b.pts);
+      }
       ctx.globalAlpha = 1;
     },
     _drawSwings: function () {

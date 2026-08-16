@@ -301,8 +301,16 @@
 
   const AI = {
     update: function (state, e, dt) {
-      // 冰冻/变羊:完全停滞(不移动、不开火、不产卵、 bomber 不自爆)
-      if (e.frozen > 0 || e.sheep > 0) { e.vx = 0; e.vy = 0; return; }
+      // 冰冻:完全停滞(不移动、不开火、不产卵、bomber 不自爆)
+      if (e.frozen > 0) { e.vx = 0; e.vy = 0; return; }
+      // 变羊:中等速度随机游走(不追玩家、不开火;碰撞伤害由接触判定跳过,其余机制不变)
+      if (e.sheep > 0) {
+        e.t2 -= dt;
+        if (e.t2 <= 0) { e.t2 = U.rand(0.5, 1.3); e.cdir = U.rand(0, U.TAU); }
+        const spd = SV.Config.CONST.SHEEP_SPEED;
+        e.vx = Math.cos(e.cdir) * spd; e.vy = Math.sin(e.cdir) * spd;
+        return;
+      }
       const p = state.player;
       const fn = Beh[e.ai] || Beh.chase;
       fn(e, p, dt);

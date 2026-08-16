@@ -19,7 +19,7 @@
   // AI 用 Rw 判断"够不够得着":最近敌距>Rw×ENGAGE_FAR 时主动靠近,避免老在外围打不到。
   function weaponRange(state) {
     let posR = 0, anyRanged = false;
-    const POSITIONAL = { orbit: 1, aura: 1, frost: 1, poison: 1, shockwave: 1, crescent: 1, detonate: 1, spear: 1, vortex: 1 };
+    const POSITIONAL = { orbit: 1, aura: 1, frost: 1, poison: 1, shockwave: 1, crescent: 1, detonate: 1, spear: 1, vortex: 1, lance: 1 };
     for (let i = 0; i < state.weapons.length; i++) {
       const w = state.weapons[i];
       let def = null;
@@ -31,11 +31,11 @@
       const k = def.kind;
       if (k === "fusion") {
         // 融合:有 radius/vrad/beamLen 的按位置型处理
-        const r = Math.max(st.radius || 0, st.vrad || 0);
+        const r = Math.max(st.radius || 0, st.vrad || 0, st.beamLen || 0);
         if (r > 0) posR = Math.max(posR, r);
         else anyRanged = true;
       } else if (POSITIONAL[k]) {
-        posR = Math.max(posR, st.radius || 0);
+        posR = Math.max(posR, st.radius || st.length || 0);
       } else {
         anyRanged = true;
       }
@@ -62,7 +62,7 @@
     let nearEX = 0, nearEY = 0;        // 最近敌相对位置(ENGAGE 朝它靠近,而非朝质心扎堆)
     for (let i = 0; i < near.length; i++) {
       const e = near[i];
-      if (e.frozen > 0 || e.sheep > 0) continue;     // 冻/变羊:暂时无害
+      if (e.sheep > 0) continue;                       // 变羊:无接触伤,暂时无害(冻结敌仍有接触伤,仍算威胁)
       let R, w;
       if (e.aoe > 0) {                                // bomber:死亡 AOE 穿 i-frame,优先远离
         R = e.aoe + p.r + A.BOMBER_PAD; w = 3.5;
@@ -70,8 +70,8 @@
         continue;                                    // Boss 由专用扫描处理(远距感知 + 自适应权重 + 引力/激光)
       } else if (e.dmg > 0) {
         R = p.r + e.r; w = 1.0;
-      } else continue;                                // 纯远程敌(shooter/spawner/ghost)无接触伤,不计
-      // 速度前探:charger/快速追逐者按速度方向预测落点,自然横向躲开
+      } else continue;                                // 无接触伤敌(ghost)不计;炮台/狙击/母虫巢已有较低接触伤
+      // 速度前探:charger/快速追逐者按速度方向预测落点,自然横向躲开(冻结敌 vx=0,前探无害)
       const ex = e.x + e.vx * A.ELEAD, ey = e.y + e.vy * A.ELEAD;
       tx.push(ex - p.x); ty.push(ey - p.y); tR.push(R); tw.push(w);
       cx += ex - p.x; cy += ey - p.y; cCount++;
@@ -81,12 +81,13 @@
     // Boss 专用扫描(不走网格):远距感知(BOSS_SENSE)+ 按 dmg 自适应权重 + 磁暴引力放大 + 巨像激光注入。
     // Boss 单独贡献 flee 方向(bcx/bcy),不被杂兵质心稀释——即使被围也强推离 Boss。
     let bcx = 0, bcy = 0, bwSum = 0, bossClear = Infinity;
+    let nbX = 0, nbY = 0;                              // 最近 Boss 位置(贴身逃离用;对侧双 Boss 不抵消)
     const bs2 = A.BOSS_SENSE * A.BOSS_SENSE;
     const enemies = state.enemies;
     if (enemies) {
       for (let i = 0; i < enemies.length; i++) {
         const e = enemies[i];
-        if (!e.isBoss || e.hp <= 0 || e.frozen > 0 || e.sheep > 0) continue;
+        if (!e.isBoss || e.hp <= 0 || e.sheep > 0) continue;
         const dx = e.x - p.x, dy = e.y - p.y, d2 = dx * dx + dy * dy;
         if (d2 > bs2) continue;
         const pull = (e.bossType === "magnetwarper" && e.cstate === "pull") ? A.BOSS_PULL_W : 1;
@@ -97,7 +98,7 @@
         const dm = Math.sqrt(d2) || 1;
         bcx += (-dx / dm) * w; bcy += (-dy / dm) * w; bwSum += w;   // 远离 Boss 单位向量 × 权重
         const cl = dm - R;
-        if (cl < bossClear) bossClear = cl;
+        if (cl < bossClear) { bossClear = cl; nbX = dx; nbY = dy; }
         // 巨像扫射激光:沿 e.cdir 把光束采成一串伪威胁(AI 当墙绕开;原 beams 不入 eshots/hazards)
         if (e.bossType === "colossus" && e.cstate === "sweep") {
           const cdx = Math.cos(e.cdir), cdy = Math.sin(e.cdir);
@@ -118,16 +119,50 @@
         tR.push(s.r + p.r); tw.push(A.ESHOT_W);
       }
     }
-    // 危险区(穿 i-frame,warm 预警区也计入)
+    // 危险区(穿 i-frame,warm 预警区也计入)。区分圈内/圈外:
+    //   圈外:膨胀半径(HAZARD_PAD)+ 满权重,正常绕行;
+    //   圈内(已身处实际伤害圈):不再膨胀并降权——膨胀圈互相重叠会封死所有方向的跑道,
+    //   误判被围后原地抽搐(灼烧区 bug 根因);同时记录区内偏移,供逃离偏置(见 HAZARD_ESC)。
     const hz = state.hazards;
+    let hazInX = 0, hazInY = 0, hazInN = 0;
     if (hz && hz.length) {
       for (let i = 0; i < hz.length; i++) {
         const h = hz[i];
         if (h.kind === "scorch") continue;            // 陨石焦土只伤敌人,不躲(否则乱绕自己武器)
-        tx.push(h.x - p.x); ty.push(h.y - p.y);
-        tR.push(h.r + p.r + A.HAZARD_PAD); tw.push(A.HAZARD_W);
+        const dxh = h.x - p.x, dyh = h.y - p.y;
+        const rr = h.r + p.r;
+        tx.push(dxh); ty.push(dyh);
+        if (dxh * dxh + dyh * dyh < rr * rr) {
+          tR.push(rr); tw.push(A.HAZARD_W_IN || 1.2);
+          hazInX += dxh; hazInY += dyh; hazInN++;
+        } else {
+          tR.push(rr + A.HAZARD_PAD); tw.push(A.HAZARD_W);
+        }
       }
     }
+    // 危险区内目标判定(宝石/特殊掉落安全门):位于任一伤害圈(含 26px 边缘带)内则不值得冒险去捡
+    const inHazard = function (x, y) {
+      if (!hz || !hz.length) return false;
+      for (let i = 0; i < hz.length; i++) {
+        const h = hz[i];
+        if (h.kind === "scorch") continue;
+        const rr = h.r + 26;
+        if (U.dist2(x, y, h.x, h.y) < rr * rr) return true;
+      }
+      return false;
+    };
+    // Boss 周身拾取安全门:Boss 接触半径+BOSS_LOOT_PAD 内的宝石/掉落不吸引。
+    // Boss 尸体爆的宝石/宝箱会把 AI 反复拉回贴脸(尤其 Boss 密集的后期),该圈内不值得冒险。
+    const inBossZone = function (x, y) {
+      if (!bwSum || !enemies) return false;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (!e.isBoss || e.hp <= 0) continue;
+        const rr = e.r + (A.BOSS_LOOT_PAD || 80);
+        if (U.dist2(x, y, e.x, e.y) < rr * rr) return true;
+      }
+      return false;
+    };
 
     // 减速时膨胀危险半径(更保守);gentle,防冻住时过激
     const slowScale = 1 + (p.slow > 0 ? (p.slowF || 0) : 0) * 0.8;
@@ -148,6 +183,8 @@
         const g = gems[i];
         const dx = g.x - p.x, dy = g.y - p.y, d2 = dx * dx + dy * dy;
         if (d2 > gs2 || d2 < 1) continue;
+        if (inHazard(g.x, g.y)) continue;             // 危险区内的宝石不吸(否则把玩家拉回灼烧圈里反复横跳)
+        if (inBossZone(g.x, g.y)) continue;           // Boss 周身的宝石不吸(否则贴脸捡尸反复挨打)
         const d = Math.sqrt(d2);
         const w = (g.value || 1) * (1 - d / A.GEM_SENSE);   // 越近越权重高
         gvx += dx / d * w; gvy += dy / d * w; gemCount++;
@@ -169,6 +206,8 @@
         const pk = picks[i];
         const dx = pk.x - p.x, dy = pk.y - p.y, d = Math.hypot(dx, dy);
         if (d > A.GEM_SENSE || d < 1) continue;
+        if (inHazard(pk.x, pk.y)) continue;           // 危险区内的掉落不抢(等区域消失或磁铁吸)
+        if (inBossZone(pk.x, pk.y)) continue;         // Boss 周身的掉落不抢(含 Boss 宝箱,磁铁可吸)
         let v;
         if (pk.kind === "health") v = A.SPEC * A.SPEC_HEALTH * (0.3 + miss * 1.5);
         else if (pk.kind === "magnet") v = A.SPEC * (0.6 + Math.min(2.0, gemN * A.SPEC_MAGNET));
@@ -198,6 +237,21 @@
     if (bwSum > 0) {
       bossAwayX = bcx / bwSum; bossAwayY = bcy / bwSum;
       bossFleeW = A.FLEE * 1.2 * U.clamp((A.BOSS_FEAR - bossClear) / A.BOSS_FEAR, 0, 1);
+    }
+    // Boss 贴身逃离:最近 boss 净空<BOSS_ESC_R 时沿"远离最近 Boss"方向强推(压过宝石/拾取吸引)。
+    // 与 bossFleeW 互补:flee 方向是全部 Boss 加权和,对侧双 Boss 会抵消;此偏置只看最近一只,永远有明确出口。
+    let bossEscX = 0, bossEscY = 0, bossEscW = 0;
+    if (bossClear < (A.BOSS_ESC_R || 130)) {
+      const bm = Math.hypot(nbX, nbY) || 1;
+      bossEscX = -nbX / bm; bossEscY = -nbY / bm;
+      bossEscW = A.BOSS_ESC || 110;
+    }
+    // 危险区逃离偏置:身处伤害圈内时,沿「区内位置 → 区外」方向强推(压过宝石/拾取吸引,对抗进出抖动)
+    let hazEscX = 0, hazEscY = 0, hazEscW = 0;
+    if (hazInN > 0) {
+      const hm = Math.hypot(hazInX, hazInY) || 1;
+      hazEscX = -hazInX / hm; hazEscY = -hazInY / hm;
+      hazEscW = A.HAZARD_ESC || 90;
     }
 
     // ENGAGE 贴脸:最近敌距离>武器射程×ENGAGE_FAR 且射程足够安全(≥ENGAGE_MIN)时,朝最近敌靠近。
@@ -264,10 +318,14 @@
         score += A.STICK * A.BREAKOUT_STICK * (dx * bDirX + dy * bDirY);
         if (gemMag > 0) score += A.GEM * gemMag * 0.3 * (dx * gemDirX + dy * gemDirY); // 宝石吸引大幅衰减(逃命优先)
         if (specVal > 0) score += specVal * 0.3 * (dx * specDirX + dy * specDirY);
+        if (hazEscW > 0) score += hazEscW * 0.8 * (dx * hazEscX + dy * hazEscY);      // 身陷危险区:优先冲出
+        if (bossEscW > 0) score += bossEscW * 0.8 * (dx * bossEscX + dy * bossEscY);   // 贴 Boss 时:沿出口先拉出再谈别的
       } else {
         score = srun;
         if (awX || awY) score += fleeW * (dx * awX + dy * awY);                  // 主:远离敌群(随净空衰减)
         if (bossFleeW > 0) score += bossFleeW * (dx * bossAwayX + dy * bossAwayY); // Boss 专属 flee
+        if (bossEscW > 0) score += bossEscW * (dx * bossEscX + dy * bossEscY);   // Boss 贴身逃离(不被宝石/宝箱拉回去)
+        if (hazEscW > 0) score += hazEscW * (dx * hazEscX + dy * hazEscY);       // 危险区逃离(不被宝石吸引拉回去)
         if (engageW > 0) score += engageW * (dx * engageX + dy * engageY);        // 贴脸:朝最近敌靠近到射程
         if (tanX || tanY) score += A.ORBIT * Math.abs(dx * tanX + dy * tanY);    // 辅:轻微环绕
         score += A.STICK * (dx * Auto._lx + dy * Auto._ly);                      // 航向粘滞(防抖)

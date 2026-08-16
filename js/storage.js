@@ -95,6 +95,21 @@
       return { clears: clears, bestTime: bestTime, stages: stages };
     },
 
+    // 某角色按难度的最佳成绩(跨所有关卡,含无尽桶):{ diffId -> {bestTime, clears} }
+    charSummaryByDiff: function (charId) {
+      const bests = load().bests;
+      const out = {};
+      for (const k in bests) {
+        const p = k.split(":");
+        if (p[2] !== charId) continue;
+        const b = bests[k];
+        if (!out[p[1]]) out[p[1]] = { bestTime: 0, clears: 0 };
+        if (b.time > out[p[1]].bestTime) out[p[1]].bestTime = b.time;
+        if (b.cleared) out[p[1]].clears++;
+      }
+      return out;
+    },
+
     flushNow: writeNow
   };
 

@@ -48,11 +48,17 @@
   }
   function invalidateMods(state) { if (state) state._mods = null; }
 
-  // ── 怪物数值预览(图鉴用,纯计算,不创建实体、不碰缓存)。返回 {hp,speed,dmg,xp}
+  // ── 怪物数值预览(图鉴用,纯计算,不创建实体、不碰缓存)。返回 {hp,speed,xp,...}
+  // 伤害分项:contact 接触 / boom 自爆(bomber) / proj 弹幕(炮台/狙击) / trail 毒径每跳;dmg 为旧兼容字段(取最大者)
   function previewEnemy(type, state) {
     const def = EN[type]; if (!def) return null;
     const e = makeEnemy(state, type, 0, 0);
-    return { hp: Math.round(e.maxHp), speed: Math.round(e.speed), dmg: Math.round(e.dmg || e.boomDmg || e.projDmg || 0), xp: e.xp, def: def };
+    return {
+      hp: Math.round(e.maxHp), speed: Math.round(e.speed), xp: e.xp, def: def,
+      contact: Math.round(e.dmg || 0), boom: Math.round(e.boomDmg || 0), proj: Math.round(e.projDmg || 0),
+      trail: Math.round((e.trailDmg || 0) * 0.5),
+      dmg: Math.round(e.dmg || e.boomDmg || e.projDmg || 0)
+    };
   }
   function previewBoss(bossType, state) {
     const def = BOSSES[bossType]; if (!def) return null;
@@ -140,7 +146,7 @@
   function makeGem(x, y, value) {
     return { x: x, y: y, vx: 0, vy: 0, value: value, pulled: false, bob: U.rand(0, U.TAU) };
   }
-  function makePickup(x, y, kind) { return { x: x, y: y, kind: kind, bob: U.rand(0, U.TAU) }; }
+  function makePickup(x, y, kind) { return { x: x, y: y, kind: kind, bob: U.rand(0, U.TAU), pulled: false }; }
 
   // 受伤(玩家)
   function damagePlayer(state, dmg, ignoreIframe, srcType) {
@@ -153,6 +159,10 @@
       const full = p.speed * m.speedMul;
       const norm = full > 0 ? Math.min(1, Math.hypot(p.vx, p.vy) / full) : 1;
       armorMul *= 1 - (1 - norm) * 0.55;
+    } else if (state.special === "berserker") {
+      // 血怒坦度:血不满时受伤降低,血越少减伤越高(满血无减伤,空血 -50%)
+      const miss = p.maxHp > 0 ? 1 - p.hp / p.maxHp : 0;
+      if (miss > 0) armorMul *= 1 - miss * 0.5;
     }
     const real = dmg * armorMul;
     p.hp -= real;
@@ -307,11 +317,15 @@
       }
       state.bossFlags.count = Math.max(0, (state.bossFlags.count || 0) - 1);
     } else {
-      // 精英:散落 3 颗高价值宝石 + 高概率血包/磁铁 + 金色死亡特效
+      // 精英:散落 3 颗高价值宝石 + 血包/磁铁 + 金色死亡特效。
+      // 掉率基础 20%/10%(8min 精英刚出现时),此后随时间衰减(与普通掉落同 0.25/min 系数,自 8min 起算);
+      // 受幸运提升(+50% 幸运时恰为旧固定值 30%/15%)。
       if (e.elite) {
         for (let i = 0; i < 3; i++) state.gems.push(makeGem(e.x + U.rand(-14, 14), e.y + U.rand(-14, 14), Math.max(1, Math.round(e.xp / 3))));
-        if (U.chance(0.30)) state.pickups.push(makePickup(e.x, e.y, "health"));
-        if (U.chance(0.15)) state.pickups.push(makePickup(e.x, e.y, "magnet"));
+        const luckF = 1 + mods(state).luck;
+        const eDf = 1 / (1 + 0.25 * Math.max(0, state.time / 60 - 8));
+        if (Math.random() < 0.20 * eDf * luckF) state.pickups.push(makePickup(e.x, e.y, "health"));
+        if (Math.random() < 0.10 * eDf * luckF) state.pickups.push(makePickup(e.x, e.y, "magnet"));
         SV.Effects.explosion(e.x, e.y, SV.Config.COLORS.gold, 22);
       } else {
         state.gems.push(makeGem(e.x, e.y, e.xp));
@@ -331,14 +345,16 @@
         if (U.dist(e.x, e.y, state.player.x, state.player.y) < e.aoe + state.player.r) damagePlayer(state, e.boomDmg || e.dmg, true, e.bossType || e.type);
         SV.Effects.shake(6, 0.2);
       }
-      // 小概率掉落(精英已有高概率掉落,不再 roll 小概率)。概率随时间递减提高难度;难度越高概率越低
+      // 小概率掉落(精英另有上表,不再 roll)。概率随时间递减提高难度;难度越高概率越低。
+      // 幸运提升特殊掉落率:基础已按 ÷1.5 下调,+50% 幸运时恰回到旧值(各难度 dropMul 天然分档)。
       if (!e.elite) {
         const diff = diffOf(state);
-        const df = diff.dropMul / (1 + 0.25 * (state.time / 60));
+        const luckF = 1 + mods(state).luck;
+        const df = diff.dropMul / (1 + 0.25 * (state.time / 60)) * luckF;
         const r = Math.random();
-        if (r < 0.012 * df) state.pickups.push(makePickup(e.x, e.y, "health"));
-        else if (r < 0.020 * df) state.pickups.push(makePickup(e.x, e.y, "magnet"));
-        else if (r < 0.022 * df) state.pickups.push(makePickup(e.x, e.y, "bomb"));
+        if (r < 0.008 * df) state.pickups.push(makePickup(e.x, e.y, "health"));
+        else if (r < 0.01333 * df) state.pickups.push(makePickup(e.x, e.y, "magnet"));
+        else if (r < 0.01467 * df) state.pickups.push(makePickup(e.x, e.y, "bomb"));
       }
     }
     if (state.gems.length > C.MAX_GEMS) state.gems.splice(0, state.gems.length - C.MAX_GEMS);
@@ -472,10 +488,16 @@
         }
       }
     }
-    // 掉落物拾取
+    // 掉落物拾取(pulled:被磁铁吸附的宝箱飞向玩家,速度保底快于玩家,不会永远追不上)
     const picks = state.pickups;
     for (let i = picks.length - 1; i >= 0; i--) {
       const pk = picks[i];
+      if (pk.pulled) {
+        const dx = p.x - pk.x, dy = p.y - pk.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const f = Math.max(spd * 1.35 + 30, 340);
+        pk.x += dx / d * f * dt; pk.y += dy / d * f * dt;
+      }
       if (U.dist(p.x, p.y, pk.x, pk.y) < p.r + 12) {
         applyPickup(state, pk.kind);
         picks.splice(i, 1);
@@ -488,8 +510,12 @@
     const p = state.player;
     const m = mods(state);
     if (kind === "health") { p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.3); SV.Effects.text(p.x, p.y - 20, "+治疗", "#7CFFB2"); }
-    else if (kind === "magnet") { for (let i = 0; i < state.gems.length; i++) state.gems[i].pulled = true; SV.Effects.text(p.x, p.y - 20, "磁吸!", SV.Config.COLORS.gold); }
-    else if (kind === "treasure") { state.xp += 25 * (1 + state.level * 0.5) * m.xpMul; SV.Game.onXP(); SV.Effects.text(p.x, p.y - 20, "宝箱!", SV.Config.COLORS.gold); }
+    else if (kind === "magnet") {
+      for (let i = 0; i < state.gems.length; i++) state.gems[i].pulled = true;
+      for (let i = 0; i < state.pickups.length; i++) if (state.pickups[i].kind === "treasure") state.pickups[i].pulled = true; // 连 Boss 宝箱一起吸过来
+      SV.Effects.text(p.x, p.y - 20, "磁吸!", SV.Config.COLORS.gold);
+    }
+    else if (kind === "treasure") { state.xp += C.TREASURE_XP * m.xpMul; SV.Game.onXP(); SV.Effects.text(p.x, p.y - 20, "宝箱!", SV.Config.COLORS.gold); }
     else if (kind === "bomb") {
       SV.Effects.shake(10, 0.4);
       for (let i = 0; i < state.enemies.length; i++) { const e = state.enemies[i]; if (!e.isBoss) { damageEnemy(state, e, e.maxHp, { text: false }); } }
@@ -577,7 +603,8 @@
       const near = Sp.queryCircle(p.x, p.y, p.r + 44);
       for (let i = 0; i < near.length; i++) {
         const e = near[i];
-        if (e.dmg <= 0 || e.frozen > 0 || e.sheep > 0) continue;
+        // 变羊:无接触伤害(随机游走不伤人);冻结敌不动不射弹,但接触伤害保留(与变羊区分)
+        if (e.dmg <= 0 || e.sheep > 0) continue;
         const rr = p.r + e.r;
         if (U.dist2(p.x, p.y, e.x, e.y) < rr * rr) {
           damagePlayer(state, e.dmg, false, e.bossType || e.type);
@@ -631,19 +658,32 @@
       const nz = Math.min(C.MAX_HAZARDS - state.hazards.length, 1 + Math.floor(t / 3));
       const burnDmg = env.dps * 0.5 * CU.dmgFactor(t);
       const mkBurn = (hx, hy) => state.hazards.push({ x: hx, y: hy, r: env.r, dmg: burnDmg, life: env.dur, max: env.dur, color: "#ff7a3c", kind: "burn", tick: 0.5, warm: env.warm || 0 });
-      // 先放 min(nz,4) 个等角不重叠(1.45r 半径 → 两两 ≥2r,封住四向走位);再放剩余的随机(制造重叠高伤点)。
-      const baseN = Math.min(nz, 4);
-      if (baseN > 0) {
-        const baseAng = U.rand(0, U.TAU), step = U.TAU / baseN, baseD = env.r * 1.45; // 随机起始角提供朝向变化;无抖动保证两两 ≥2r
-        for (let z = 0; z < baseN; z++) {
-          const a = baseAng + z * step;
-          mkBurn(U.clamp(p.x + Math.cos(a) * baseD, -half, half), U.clamp(p.y + Math.sin(a) * baseD, -half, half));
+      // 采样矩形:优先视口(世界坐标,留 env.r 内边距),沙箱/视口无效时回退玩家周围固定矩形
+      let minX = p.x - 560, minY = p.y - 360, maxX = p.x + 560, maxY = p.y + 360;
+      try {
+        const cam = SV.Renderer.cam, sz = SV.Renderer.cssSize();
+        const vw = sz.w / 2 / cam.zoom, vh = sz.h / 2 / cam.zoom;
+        if (vw > env.r && vh > env.r) {
+          minX = cam.x - vw + env.r; maxX = cam.x + vw - env.r;
+          minY = cam.y - vh + env.r; maxY = cam.y + vh - env.r;
         }
+      } catch (e) {}
+      const rx = function () { return U.clamp(U.rand(minX, maxX), -half + env.r, half - env.r); };
+      const ry = function () { return U.clamp(U.rand(minY, maxY), -half + env.r, half - env.r); };
+      // 前 4 个完全随机但两两不重合(圆心距 ≥ 2r,拒绝采样,超次数后放弃允许重叠);之后完全随机允许重叠
+      const first = Math.min(nz, 4);
+      for (let z = 0; z < first; z++) {
+        let hx = 0, hy = 0, ok = false;
+        for (let tries = 0; tries < 12 && !ok; tries++) {
+          hx = rx(); hy = ry(); ok = true;
+          for (let j = state.hazards.length - 1; j >= 0 && (state.hazards[j].kind === "burn"); j--) {
+            const h = state.hazards[j];
+            if (U.dist2(hx, hy, h.x, h.y) < (2 * env.r) * (2 * env.r)) { ok = false; break; }
+          }
+        }
+        mkBurn(hx, hy);
       }
-      for (let z = baseN; z < nz; z++) { // 剩余(仅 nz>4 时)随机布点,允许与基准/彼此重叠
-        const a = U.rand(0, U.TAU), d = U.rand(40, 150);
-        mkBurn(U.clamp(p.x + Math.cos(a) * d, -half, half), U.clamp(p.y + Math.sin(a) * d, -half, half));
-      }
+      for (let z = first; z < nz; z++) mkBurn(rx(), ry());
       if (nz > 0) SV.HUD.toast("⚠ 灼烧区域!");
     } else if (env.type === "freeze") {
       // 减速时长随时间增长,上限为触发间隔的 1/3(避免无限冰冻)

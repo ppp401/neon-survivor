@@ -34,13 +34,78 @@
       else n = Math.abs(d) < 10 ? Math.round(d * 10) / 10 : Math.round(d); // 溢出递减期显示一位小数
       if (tpl.indexOf("{N}") >= 0 && n === 0) continue; // 跳过四舍五入为 0 的噪声字段
       parts.push(tpl.replace("{N}", n));
-      if (k === "chains" || k === "tick" || k === "fireCd") milestone = true;
+      if (k === "chains" || k === "tick" || k === "fireCd" || k === "beams") milestone = true;
     }
     if (!parts.length) {
       const dd = (b.damage || 0) - (a.damage || 0);
       if (Math.abs(dd) >= 0.05) parts.push("伤害 +" + (Math.abs(dd) < 1 ? Math.round(dd * 10) / 10 : Math.round(dd)));
     }
     return { text: parts.join(" · "), milestone: milestone };
+  }
+
+  // 多伤害来源武器的补充说明(暂停面板用):把每种伤害成分的数值分别说清楚
+  function extraSummary(id, s) {
+    const R = Math.round;
+    const out = [];
+    switch (id) {
+      case "meteor_evo": case "meteor_chain":
+        if (s.burn) out.push("焦土 " + R(s.burn) + "/0.5s×" + (Math.round(s.burnDur * 10) / 10) + "s");
+        break;
+      case "lance":
+        out.push("一次触碰受创一次");
+        break;
+      case "lance_evo":
+        out.push("线上每0.1s受创(多次伤害)");
+        break;
+      case "lance_vortex":
+        out.push("卷伤 " + R(s.damage) + "/0.2s · 光束 " + R(s.beamDmg || 0) + "/0.2s");
+        break;
+      case "spear_lance":
+        if (s.beamDmg) out.push("激光 " + R(s.beamDmg));
+        break;
+      case "missile_chain":
+        out.push("闪电 " + R(s.damage * 0.6) + "/跳×" + (s.chainHops || 3));
+        break;
+      case "frost_poison":
+        if (s.freeze) out.push("冻结 " + (Math.round(s.freeze * 10) / 10) + "s(受伤+50%)");
+        break;
+      case "shotgun_grenade":
+        if (s.splash) out.push("溅射 " + R(s.damage * s.splashMul));
+        break;
+      case "grenade_evo":
+        out.push("子爆 " + R(s.damage * 0.55) + "×" + (typeof s.cluster === "number" ? s.cluster : 2));
+        break;
+      case "railgun_evo": case "railgun_grenade":
+        if (s.explode) out.push("贯穿爆 " + R(s.damage) + "·半径" + R(s.explode));
+        break;
+      case "detonate": case "detonate_evo": case "crescent_detonate":
+        if (s.explodeDmg) out.push("殉爆 " + R(s.explodeDmg));
+        break;
+      case "shockwave_frost":
+        if (s.shatter) out.push("碎裂 " + R(s.damage * 0.5));
+        if (s.freeze) out.push("冻结 " + (Math.round(s.freeze * 10) / 10) + "s");
+        break;
+      case "timestop_evo":
+        if (s.shatter) out.push("碎裂 " + R(s.damage * 0.5));
+        break;
+      case "polymorph_timestop":
+        if (s.freeze) out.push("冻结 " + (Math.round(s.freeze * 10) / 10) + "s");
+        break;
+      case "blade_aura":
+        if (s.splash) out.push("溅射 " + R(s.damage * s.splashMul));
+        if (s.pull) out.push("吸力 " + R(s.pull));
+        break;
+      case "crescent_evo":
+        if (s.leaveTrail) out.push("弧灼 " + R(s.damage * 0.25) + "/0.5s");
+        break;
+      case "chain_evo":
+        out.push("每跳伤害 ×1.1");
+        break;
+      case "hex": case "hex_evo": case "hex_poison":
+        if (s.frac) out.push("引爆 +" + Math.round(s.frac * 100) + "%maxHp");
+        break;
+    }
+    return out;
   }
 
   // 武器当前生效数值摘要(暂停面板用)
@@ -54,7 +119,9 @@
     if (s.damage != null) p.push(Math.round(s.damage) + " 伤害");
     if (s.cooldown != null) p.push("CD " + (Math.round(s.cooldown * 100) / 100) + "s");
     if (s.radius != null) p.push("半径 " + Math.round(s.radius));
+    if (s.vrad != null) p.push("卷半径 " + Math.round(s.vrad));
     if (s.length != null) p.push("长 " + Math.round(s.length));
+    if (s.beams != null) p.push(s.beams + " 光束");
     if (s.chains != null) p.push("连跳 " + (s.chains >= 99 ? "∞" : s.chains));
     if (s.chase != null) p.push("追击 " + (s.chase >= 99 ? "∞" : s.chase));
     if (s.dot != null) p.push("毒 " + Math.round(s.dot) + "/跳");
@@ -62,6 +129,8 @@
     if (s.tick != null) p.push("每 " + (Math.round(s.tick * 100) / 100) + "s");
     if (s.slow != null) p.push("减速 " + Math.round(s.slow * 100) + "%");
     if (s.dur != null) p.push("变形 " + (Math.round(s.dur * 10) / 10) + "s");
+    const ex = extraSummary(w.id, s);
+    for (let i = 0; i < ex.length; i++) p.push(ex[i]);
     return p.join(" · ") || def.desc;
   }
 
