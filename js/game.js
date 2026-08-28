@@ -54,8 +54,9 @@
     s.hudAccum = 0;
     s.ended = false;
     SV.Entities.invalidateMods(s);    // 清跨局残留的 mods 缓存
-    SV.Weapons.init(s, ch.startWeapon); // 起手武器(随角色)
-    s.everOwned = {}; s.everOwned[ch.startWeapon] = true; // 武器历史:防止融合/进化后被当新武器重发
+    const startW = SV.Config.rollStartWeapon(ch); // 起手武器(固定或按角色随机,每局重掷)
+    SV.Weapons.init(s, startW);
+    s.everOwned = {}; s.everOwned[startW] = true; // 武器历史(记解析后的具体 id):防止融合/进化后被当新武器重发
     // 起手满血(含角色 hpMul)
     const m = SV.Entities.mods(s);
     s.player.maxHp = m.maxHp;

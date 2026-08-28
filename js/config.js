@@ -401,18 +401,41 @@
     knock: "击退 +{N}", burn: "灼烧 +{N}", frac: "%生命 +{N}%", spread: "蔓延 +{N}", spin: "旋转 +{N}"
   };
 
-  // ── 可选角色(4 名):起手武器 + 起手被动 + 生命/移速倍率
+  // ── 可选角色(8 名):起手武器(startWeapon 或 startWeaponTags 随机池) + 起手被动 + 生命/移速倍率
   const CHARACTERS = {
-    bulwark: { name: "铁壁", title: "重装战士", icon: "🛡", color: "#aab4ff", startWeapon: "crescent", startPassives: { armor: 1 }, hpMul: 1.3, speedMul: 0.92, special: "bulwark", desc: "站定时减伤大增并周期发出冲击波,移动越快减伤越低。", appearance: { shape: "circle", deco: "ring" } },
-    arcanist: { name: "星语", title: "秘法师", icon: "✦", color: "#c06bff", startWeapon: "frost", startPassives: { area: 1 }, hpMul: 0.85, speedMul: 1.0, charMods: { pickupMul: 0.75 }, special: "arcanist", weaponPolicy: { require: ["spell"] }, desc: "法术武器 +20% 伤害与范围,但只能使用法术武器、且拾取范围 −25%。", appearance: { shape: "diamond", deco: "spark" } },
-    ranger: { name: "流光", title: "游击射手", icon: "➤", color: "#5ad1ff", startWeapon: "missile", startPassives: { damage: 1, cooldown: 1 }, hpMul: 1.0, speedMul: 1.12, charMods: { pickupMul: 0.75 }, special: "ranger", weaponPolicy: { forbid: ["melee"] }, desc: "远程武器 +15% 伤害与攻速,但拾取范围 -25%、发育较慢,且不能使用近战武器。", appearance: { shape: "triangle", deco: "arrow" } },
+    bulwark: { name: "铁壁", title: "重装战士", icon: "🛡", color: "#aab4ff", startWeaponTags: ["melee"], startPassives: { armor: 1 }, hpMul: 1.3, speedMul: 0.92, special: "bulwark", desc: "站定时减伤大增并周期发出冲击波,移动越快减伤越低。", appearance: { shape: "circle", deco: "ring" } },
+    arcanist: { name: "星语", title: "秘法师", icon: "✦", color: "#c06bff", startWeaponTags: ["spell"], startPassives: { area: 1 }, hpMul: 0.85, speedMul: 1.0, charMods: { pickupMul: 0.75 }, special: "arcanist", weaponPolicy: { require: ["spell"] }, desc: "法术武器 +20% 伤害与范围,但只能使用法术武器、且拾取范围 −25%。", appearance: { shape: "diamond", deco: "spark" } },
+    ranger: { name: "流光", title: "游击射手", icon: "➤", color: "#5ad1ff", startWeaponTags: ["ranged"], startPassives: { damage: 1, cooldown: 1 }, hpMul: 1.0, speedMul: 1.12, charMods: { pickupMul: 0.75 }, special: "ranger", weaponPolicy: { forbid: ["melee"] }, desc: "远程武器 +15% 伤害与攻速,但拾取范围 -25%、发育较慢,且不能使用近战武器。", appearance: { shape: "triangle", deco: "arrow" } },
     assassin: { name: "夜刃", title: "影刃刺客", icon: "✸", color: "#ff5d8e", startWeapon: "boomerang", startPassives: { crit: 2 }, hpMul: 0.9, speedMul: 1.05, charMods: { lifestealMul: 0 }, special: "assassin", desc: "对生命低于 30% 的敌人伤害翻倍,残血收割机,但无法吸血。", appearance: { shape: "star", deco: "dagger" } },
     collector: { name: "磁芯", title: "拾取共鸣", icon: "✜", color: "#ffd86b", startWeapon: "aura", startPassives: { magnet: 1 }, hpMul: 1.0, speedMul: 0.92, charMods: { pickupMul: 1.4 }, special: "collector", desc: "拾取经验球时引发小范围伤害爆发,拾取范围 +40%,但移速较慢。", appearance: { shape: "circle", deco: "magnet" } },
     berserker: { name: "血怒", title: "狂战士", icon: "⚔", color: "#ff5d8e", startWeapon: "detonate", startPassives: { damage: 2 }, hpMul: 0.9, speedMul: 1.0, charMods: { regenMul: 0, lifestealMul: 0 }, special: "berserker", desc: "当前生命越低伤害越高(空血 ×2.5);血不满时受伤降低(空血 -50%),但无再生、无吸血。", appearance: { shape: "square", deco: "rage" } },
     lingerer: { name: "时滞者", title: "时空凝滞", icon: "◷", color: "#9be7ff", startWeapon: "timestop", startPassives: { cooldown: 1 }, hpMul: 1.0, speedMul: 0.85, charMods: { enemySpeedMul: 0.7, enemySpawnMul: 0.8, pickupMul: 0.85 }, special: "lingerer", desc: "敌人减速 30%、刷怪量 -20%,但自身移速 -15%、拾取范围 -15%。", appearance: { shape: "hex", deco: "clock" } },
-    allrounder: { name: "全能者", title: "均衡之刃", icon: "✦", color: "#b8c6ff", startWeapon: "blade", startPassives: { damage: 1, maxhp: 1 }, hpMul: 1.0, speedMul: 1.0, desc: "全面均衡,无短板也无专精,适合任何流派。", appearance: { shape: "circle", deco: "core" } }
+    allrounder: { name: "全能者", title: "均衡之刃", icon: "✦", color: "#b8c6ff", startPassives: { damage: 1, maxhp: 1 }, hpMul: 1.0, speedMul: 1.0, desc: "全面均衡,无短板也无专精,适合任何流派。", appearance: { shape: "circle", deco: "core" } }
   };
   const CHARACTER_ORDER = ["allrounder", "bulwark", "arcanist", "ranger", "assassin", "collector", "berserker", "lingerer"];
+
+  // 起手武器解析:固定角色直返 startWeapon;否则按 startWeaponTags 从基础武器表随机(每局重掷)
+  function rollStartWeapon(ch) {
+    if (ch && ch.startWeapon) return ch.startWeapon;
+    const tags = (ch && ch.startWeaponTags) || null;
+    const pool = [];
+    for (const id in WEAPONS) {
+      if (!tags || (WEAPONS[id].tags || []).some(function (t) { return tags.indexOf(t) >= 0; })) pool.push(id);
+    }
+    if (!pool.length) return CONST.XP_START_WEAPON;
+    return pool[(Math.random() * pool.length) | 0];
+  }
+  // 起手武器展示文案(选角详情/暂停军械库):随机角色显示类别而非具体武器
+  function startWeaponLabel(ch) {
+    if (ch && ch.startWeapon) {
+      const d = weaponDef(ch.startWeapon);
+      return { icon: d.icon, name: d.name };
+    }
+    const cn = { melee: "近战", ranged: "远程", spell: "法术" };
+    const tags = (ch && ch.startWeaponTags) || [];
+    const t = tags.map(function (x) { return cn[x] || x; }).join("·");
+    return { icon: "🎲", name: t ? "随机" + t + "武器" : "随机武器" };
+  }
 
   // ── 敌人(20 种)。hp/speed/dmg 为分钟1 基础值,实际生成时乘难度倍率。shape 控制渲染形状,skill 为图鉴文案。
   const ENEMIES = {
@@ -557,6 +580,8 @@
     EVOLUTIONS: EVOLUTIONS,
     FUSIONS: FUSIONS,
     weaponDef: weaponDef,
+    rollStartWeapon: rollStartWeapon,
+    startWeaponLabel: startWeaponLabel,
     PASSIVES: PASSIVES,
     COUNT_NOUN: COUNT_NOUN,
     STAT_LABEL: STAT_LABEL,

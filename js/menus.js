@@ -139,7 +139,7 @@
       const ch = SV.Config.CHARACTERS[id];
       const wrap = document.getElementById("charDetail");
       if (!ch || !wrap) return;
-      const startW = SV.Config.weaponDef(ch.startWeapon);
+      const startW = SV.Config.startWeaponLabel(ch);
       let chips = '<span class="char-chip">HP ×' + ch.hpMul + "</span>";
       chips += '<span class="char-chip">移速 ×' + ch.speedMul + "</span>";
       chips += '<span class="char-chip">' + (startW.icon || "◆") + " " + startW.name + "</span>";
@@ -302,7 +302,7 @@
       // 角色(被动技能说明)
       const ch = SV.Config.CHARACTERS[state.charId];
       if (ch) {
-        const startW = SV.Config.weaponDef(ch.startWeapon);
+        const startW = SV.Config.startWeaponLabel(ch);
         html += '<div class="ars-section"><div class="ars-title">角色</div>';
         html += '<div class="ars-row"><span class="ars-ic" style="color:' + ch.color + '">' + ch.icon + "</span>" +
           '<span class="ars-name">' + ch.name + " · " + ch.title + "</span>" +
