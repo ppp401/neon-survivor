@@ -10,19 +10,19 @@
   function pFactory() {
     return { x: 0, y: 0, vx: 0, vy: 0, r: 5, damage: 10, life: 1, maxLife: 1, color: "#fff",
       pierce: 0, homing: false, seek: 4, target: null, hitIds: null, shape: "dot", rot: 0, spin: 0, weaponId: "", phase: 0,
-      explode: 0, vortex: false, vrad: 0, pull: 0, vtick: 0, tc: 0,
+      explode: 0, vortex: false, vrad: 0, pull: 0, vtick: 0, btick: 0, tc: 0,
       chainHops: 0, chainRange: 0, splash: 0, splashMul: 0, explodeEvery: false, cluster: false, clustered: false,
-      beamLen: 0, beamWidth: 0, beamDmg: 0, beamSpin: 0, chaseKills: 0, meteor: 0, burn: 0, burnDur: 0, shockwave: null,
+      beamLen: 0, beamWidth: 0, beamDmg: 0, beamTick: 0, beamSpin: 0, chaseKills: 0, meteor: 0, burn: 0, burnDur: 0, shockwave: null,
       sheep: false, sheepDur: 0, sheepPierce: 0, sheepFreeze: 0,
       timestop: 0, tsFreeze: 0, shatter: false };
   }
   function pReset(p) {
     p.vx = 0; p.vy = 0; p.r = 5; p.damage = 10; p.life = 1; p.maxLife = 1; p.color = "#fff";
     p.pierce = 0; p.homing = false; p.seek = 4; p.target = null; p.hitIds = null; p.shape = "dot"; p.rot = 0; p.spin = 0; p.weaponId = ""; p.phase = 0;
-    p.explode = 0; p.vortex = false; p.vrad = 0; p.pull = 0; p.vtick = 0; p.tc = 0;
+    p.explode = 0; p.vortex = false; p.vrad = 0; p.pull = 0; p.vtick = 0; p.btick = 0; p.tc = 0;
     // 特殊机制字段必须清零,否则回收的投射物会携带上一世的残留(如 shockwave/chainHops/cluster)
     p.chainHops = 0; p.chainRange = 0; p.splash = 0; p.splashMul = 0; p.explodeEvery = false; p.cluster = false; p.clustered = false;
-    p.beamLen = 0; p.beamWidth = 0; p.beamDmg = 0; p.beamSpin = 0; p.chaseKills = 0; p.meteor = 0; p.burn = 0; p.burnDur = 0; p.shockwave = null;
+    p.beamLen = 0; p.beamWidth = 0; p.beamDmg = 0; p.beamTick = 0; p.beamSpin = 0; p.chaseKills = 0; p.meteor = 0; p.burn = 0; p.burnDur = 0; p.shockwave = null;
     p.sheep = false; p.sheepDur = 0; p.sheepPierce = 0; p.sheepFreeze = 0;
     p.timestop = 0; p.tsFreeze = 0; p.shatter = false;
   }
@@ -278,7 +278,7 @@
     }
   }
 
-  // 触碰型光束(基础贯穿激光):判定为一条线(敌中心到线段距离 < 敌自身半径 + 2px 容差)。
+  // 触碰型光束(基础环绕激光):判定为一条线(敌中心到线段距离 < 敌自身半径 + 2px 容差)。
   // 「一次触碰只造成一次伤害」= 边沿触发:仅当敌人本帧触碰、上一帧未触碰(新进入)时受创一次;
   // 敌人离开光束后再次被扫到(光束旋转回来/敌人走进来)会再次触发。返回本帧触碰的敌人 id 集合。
   function beamTouch(state, x0, y0, dx, dy, len, prev, dmg, color, wid) {
@@ -304,7 +304,7 @@
     return now;
   }
 
-  // ── 贯穿激光(连续型):环绕玩家旋转的贯穿激光。
+  // ── 环绕激光(连续型):环绕玩家旋转的贯穿光束。
   //   基础(恒单束):触碰型——边沿触发,敌人进入光束时受创一次(beamTouch 维护上一帧触碰集合);
   //   进化:两道相隔 180°、旋转较慢,线上敌人每 0.1s 持续受创(周期型多次伤害)。
   function lanceUpdate(state, w, def, dt) {
@@ -877,12 +877,15 @@
         }
         if (pr.vtick <= 0) {
           pr.vtick = 0.2; SV.Effects.ring(pr.x, pr.y, pr.color, pr.vrad, 8, 0.2, 2); // 向内收缩的环(龙卷是吸引)
-          // 裂空风暴:光束绕龙卷风旋转切割(独立伤害,与龙卷撕扯分开计算)
-          if (pr.beamLen) {
-            pr.phase = (pr.phase || 0) + (pr.beamSpin || 2) * 0.2;
-            const bd = pr.beamDmg || pr.damage;
+        }
+        // 裂空风暴:环绕激光绕龙卷中心匀速旋转,每 0.1s 对线上敌人结算一跳(独立于龙卷 0.2s 撕扯 tick)
+        if (pr.beamLen) {
+          pr.btick -= dt;
+          if (pr.btick <= 0) {
+            pr.btick = pr.beamTick || 0.1;
+            pr.phase = (pr.phase || 0) + (pr.beamSpin || 2) * pr.btick;
             const dx = Math.cos(pr.phase), dy = Math.sin(pr.phase);
-            beamDamage(state, pr.x, pr.y, dx, dy, pr.beamLen, pr.beamWidth / 2, bd, pr.color, pr.weaponId);
+            beamDamage(state, pr.x, pr.y, dx, dy, pr.beamLen, pr.beamWidth / 2, pr.beamDmg || pr.damage, pr.color, pr.weaponId);
             beams.push({ pts: [[pr.x, pr.y], [pr.x + dx * pr.beamLen, pr.y + dy * pr.beamLen]], life: 0.1, max: 0.1, color: pr.color, width: pr.beamWidth });
           }
         }
@@ -1097,7 +1100,8 @@
       pr.r = 12; pr.vrad = s.vrad; pr.pull = s.pull;
       pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
       pr.vortex = true; pr.vtick = 0; pr.weaponId = w.id;
-      pr.beamLen = s.beamLen; pr.beamWidth = s.beamWidth; pr.beamDmg = s.beamDmg; pr.beamSpin = s.beamSpin;
+      pr.beamLen = s.beamLen; pr.beamWidth = s.beamWidth; pr.beamDmg = s.beamDmg; pr.beamTick = s.beamTick || 0.1; pr.beamSpin = s.beamSpin;
+      pr.btick = 0;
     }
     SV.Audio.shoot();
   }

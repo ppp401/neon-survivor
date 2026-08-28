@@ -497,7 +497,7 @@
 
     _glowBeams: function () {
       const beams = SV.Weapons.beams;
-      // 光束辉光:默认较宽较亮;贯穿激光(lance)整体细化调暗(不遮弹幕),进化版略增强以示机制差异
+      // 光束辉光:默认较宽较亮;环绕激光(lance)整体细化调暗(不遮弹幕),进化版略增强以示机制差异
       for (let i = 0; i < beams.length; i++) {
         const b = beams[i];
         let a = 0.5, gw = 2.4;

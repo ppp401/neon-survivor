@@ -58,7 +58,7 @@
         out.push("线上每0.1s受创(多次伤害)");
         break;
       case "lance_vortex":
-        out.push("卷伤 " + R(s.damage) + "/0.2s · 光束 " + R(s.beamDmg || 0) + "/0.2s");
+        out.push("卷伤 " + R(s.damage) + "/0.2s · 环绕激光 " + R(s.beamDmg || 0) + "/" + (Math.round((s.beamTick || 0.1) * 10) / 10) + "s");
         break;
       case "spear_lance":
         if (s.beamDmg) out.push("激光 " + R(s.beamDmg));
@@ -102,7 +102,7 @@
         out.push("每跳伤害 ×1.1");
         break;
       case "hex": case "hex_evo": case "hex_poison":
-        if (s.frac) out.push("引爆 +" + Math.round(s.frac * 100) + "%maxHp");
+        if (s.frac) out.push("引爆 +" + Math.round(s.frac * 100) + "%maxHp(Boss÷3)");
         break;
     }
     return out;

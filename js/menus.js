@@ -351,7 +351,7 @@
       html += statTile("减伤", "-" + Math.round((1 - m.armorMul) * 100) + "%");
       html += statTile("再生", m.regen + "/s");
       html += statTile("暴击", Math.round(m.critChance * 100) + "%");
-      html += statTile("吸血", Math.round(m.lifesteal * 100) + "%");
+      html += statTile("吸血·秒回≤5%", Math.round(m.lifesteal * 100) + "%");
       html += statTile("拾取", pct(m.pickupMul - 1));
       html += statTile("经验", pct(m.xpMul - 1));
       html += statTile("幸运", pct(m.luck));

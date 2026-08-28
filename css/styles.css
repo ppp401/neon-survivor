@@ -70,14 +70,14 @@ canvas#game{ position:fixed; top:0; left:0; width:100vw; height:100vh; display:b
 .hud-btn:active{ transform:scale(.92); }
 .hud-btn.on{ background:rgba(90,209,255,.18); border-color:var(--cyan); color:var(--cyan); box-shadow:0 0 8px rgba(90,209,255,.35); }
 
-/* 多 Boss 血条(堆叠 ≤4,颜色/渐变按 Boss 内联) */
+/* 多 Boss 血条(单行紧凑条:≤6 只并排,竖向只占 ~20px,多 Boss 不再糊满屏幕) */
 .boss-bars{
   position:absolute; top:54px; left:50%; transform:translateX(-50%);
-  width:min(560px,80vw); display:flex; flex-direction:column; gap:5px;
+  width:min(720px,92vw); display:flex; gap:8px;
 }
-.boss-row{ text-align:center; }
-.boss-name{ font-size:13px; font-weight:800; letter-spacing:1px; text-shadow:0 0 10px currentColor; margin-bottom:2px; }
-.boss-track{ height:10px; border-radius:6px; background:rgba(0,0,0,.55); border:1px solid var(--stroke); overflow:hidden; }
+.boss-row{ flex:1; min-width:0; text-align:center; }
+.boss-name{ font-size:10px; font-weight:800; letter-spacing:.5px; text-shadow:0 0 8px currentColor; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.boss-track{ height:5px; border-radius:3px; background:rgba(0,0,0,.55); border:1px solid var(--stroke); overflow:hidden; }
 .boss-fill{ height:100%; width:100%; transition:width .15s linear; animation:bossPulse 1.6s ease-in-out infinite alternate; }
 @keyframes bossPulse{ from{filter:brightness(.9);} to{filter:brightness(1.4);} }
 

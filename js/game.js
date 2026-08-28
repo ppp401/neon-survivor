@@ -49,6 +49,8 @@
     s.weaponActive = {};                     // 每武器累计活跃秒数(键=canonical id)
     s.enemyDamage = {};                      // 每敌人类型对玩家累计伤害(键=type/bossType)
     s.bossFlags = { count: 0, wraithEnrage: false };
+    s._bossLoot = {};  // 多体 Boss 掉落去重(gid → 已掉过)
+    s._bossGid = 0;    // 多体 Boss 组 id 计数(waves.spawnBoss 分配)
     s.hudAccum = 0;
     s.ended = false;
     SV.Entities.invalidateMods(s);    // 清跨局残留的 mods 缓存

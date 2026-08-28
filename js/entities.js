@@ -267,9 +267,11 @@
     }
   }
 
-  // 诅咒引爆:对 e 结算 %+maxHp 伤害(可选,引信到期 e 还活着时) + 向周围蔓延 + 视觉;清印记
+  // 诅咒引爆:对 e 结算 固定伤害+百分比maxHp 伤害(可选,引信到期 e 还活着时) + 向周围蔓延 + 视觉;清印记
   function hexDetonate(state, e, damageToo) {
-    const dmg = (e.hexDmg || 0) + e.maxHp * (e.hexFrac || 0);
+    // 百分比项对 Boss ×1/3(防 %maxHp 对 Boss 过强;固定项不受影响)
+    const frac = (e.hexFrac || 0) * (e.isBoss ? 1 / 3 : 1);
+    const dmg = (e.hexDmg || 0) + e.maxHp * frac;
     if (damageToo) {
       damageEnemy(state, e, dmg, { text: false, wid: e.hexWid });
       SV.Effects.text(e.x, e.y - e.r - 4, Math.round(dmg), "#d0a0ff", 14);
@@ -291,14 +293,28 @@
   function killEnemy(state, e) {
     if (e.hex > 0) hexDetonate(state, e, false); // 被提前击杀:诅咒立刻蔓延(不被抢杀浪费)
     SV.Effects.death(e.x, e.y, e.color);
-    SV.Audio.die();
+    SV.Audio.die(!!e.isBoss);
     state.kills++;
     // 经验宝石
     if (e.isBoss) {
-      // Boss:散落多颗高价值宝石 + 必掉宝箱与血包
-      for (let i = 0; i < 8; i++) { const a = U.rand(0, U.TAU), d = U.rand(10, 50); state.gems.push(makeGem(e.x + Math.cos(a) * d, e.y + Math.sin(a) * d, Math.max(1, Math.round(e.xp / 8)))); }
-      if (!state.endless) state.pickups.push(makePickup(e.x, e.y, "treasure")); // 无尽模式 Boss 不掉宝箱
-      state.pickups.push(makePickup(e.x + 30, e.y, "health"));
+      // Boss:散落多颗高价值宝石 + 必掉宝箱与血包。
+      // 多体 Boss(双生怨灵/镜像双子,e.gid 同组):整组只由最后死亡者掉一份(同帧双杀按先结算者,也只一份)
+      let dropReward = true;
+      if (e.gid) {
+        let mateAlive = false;
+        for (let i = 0; i < state.enemies.length; i++) {
+          const o = state.enemies[i];
+          if (o !== e && o.isBoss && o.gid === e.gid && o.hp > 0) { mateAlive = true; break; }
+        }
+        if (!state._bossLoot) state._bossLoot = {};
+        dropReward = !mateAlive && !state._bossLoot[e.gid];
+        if (dropReward) state._bossLoot[e.gid] = true;
+      }
+      if (dropReward) {
+        for (let i = 0; i < 8; i++) { const a = U.rand(0, U.TAU), d = U.rand(10, 50); state.gems.push(makeGem(e.x + Math.cos(a) * d, e.y + Math.sin(a) * d, Math.max(1, Math.round(e.xp / 8)))); }
+        if (!state.endless) state.pickups.push(makePickup(e.x, e.y, "treasure")); // 无尽模式 Boss 不掉宝箱
+        state.pickups.push(makePickup(e.x + 30, e.y, "health"));
+      }
       SV.Effects.shake(12, 0.5);
       if (e.bossType === "wraith") {
         state.bossFlags.wraithEnrage = true;

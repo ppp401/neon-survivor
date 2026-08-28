@@ -50,13 +50,13 @@
       }
       el.weaponList.innerHTML = html;
 
-      // 多 Boss 血条(全部存活 Boss,堆叠 ≤4)
+      // 多 Boss 血条(全部存活 Boss,单行紧凑条并排 ≤6,防手机上竖向糊满屏幕)
       const bosses = [];
       for (let i = 0; i < state.enemies.length; i++) { const e = state.enemies[i]; if (e.isBoss && e.hp > 0) bosses.push(e); }
       if (bosses.length) {
         el.bossBars.classList.remove("hidden");
         let html = "";
-        const n = Math.min(bosses.length, 4);
+        const n = Math.min(bosses.length, 6);
         for (let i = 0; i < n; i++) {
           const b = bosses[i];
           const def = SV.Config.BOSSES[b.bossType] || {};

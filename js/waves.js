@@ -134,9 +134,11 @@
     spawnBoss: function (state, bossType) {
       const def = CFG.BOSSES[bossType];
       const count = def.count || 1;
+      const gid = count > 1 ? (state._bossGid = (state._bossGid || 0) + 1) : 0; // 多体 Boss 同组共享 gid(整组只掉一份 Boss 奖励)
       for (let i = 0; i < count; i++) {
         const pos = spawnPos(state);
-        SV.Entities.addBoss(state, bossType, pos.x, pos.y);
+        const e = SV.Entities.addBoss(state, bossType, pos.x, pos.y);
+        if (e && gid) e.gid = gid;
       }
       state.spawnPause = 3;
       SV.Audio.bossWarn();

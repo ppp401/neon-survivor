@@ -141,7 +141,8 @@
       desc: "电击最近敌人并向周围跳跃。",
       tags: ["spell"],
       stats: function (lv) {
-        return { damage: 11.5 + (lv - 1) * 4, cooldown: Math.max(0.9, 1.4 - (lv - 1) * 0.07), chains: 2 + Math.floor((lv - 1) / 2), range: 185 };
+        // L8(伤害 39.5/冷却 0.98)保持旧值,L1 削弱(伤害-24%/冷却+18%)→升级增益更大
+        return { damage: 8.7 + (lv - 1) * 4.4, cooldown: Math.max(0.9, 0.98 + (8 - lv) * 0.096), chains: 2 + Math.floor((lv - 1) / 2), range: 185 };
       }
     },
     aura: {
@@ -169,11 +170,12 @@
       }
     },
     lance: {
-      name: "贯穿激光", icon: "⟶", color: "#ff7eb6", max: 8, kind: "lance",
-      desc: "环绕玩家旋转的贯穿激光,触碰的敌人受创一次(一次触碰仅一次,离开后再触碰可再触发)。判定为一条线,靠敌人自身体积触发。",
+      name: "环绕激光", icon: "⟶", color: "#ff7eb6", max: 8, kind: "lance",
+      desc: "环绕玩家旋转的高能激光,触碰的敌人受创一次(一次触碰仅一次,离开后再触碰可再触发)。判定为一条线,靠敌人自身体积触发。",
       tags: ["ranged"],
       stats: function (lv) {
-        return { damage: 14 + (lv - 1) * 2.6, spin: 1.8 + (lv - 1) * 0.15, length: 175 + (lv - 1) * 20, width: 6 };
+        // L8(伤害 32.2/转速 2.85)保持旧值,L1 削弱(伤害-20%/转速-16%)→升级增益更大
+        return { damage: 11.2 + (lv - 1) * 3, spin: 1.52 + (lv - 1) * 0.19, length: 175 + (lv - 1) * 20, width: 6 };
       }
     },
     boomerang: {
@@ -181,7 +183,8 @@
       desc: "抛出回旋镖,去返皆伤敌(自动瞄准最近敌人)。",
       tags: ["ranged"],
       stats: function (lv) {
-        return { damage: 16 + (lv - 1) * 4, count: 1 + (lv >= 3 ? 1 : 0) + (lv >= 6 ? 1 : 0), cooldown: Math.max(0.7, 1.5 - (lv - 1) * 0.08), speed: 350, life: 1.6, spin: 14 };
+        // 全级削弱:伤害约-17%,冷却全档 +0.1s
+        return { damage: 13 + (lv - 1) * 3.4, count: 1 + (lv >= 3 ? 1 : 0) + (lv >= 6 ? 1 : 0), cooldown: Math.max(0.7, 1.6 - (lv - 1) * 0.08), speed: 350, life: 1.6, spin: 14 };
       }
     },
     grenade: {
@@ -197,7 +200,8 @@
       desc: "蓄能射出超高伤贯穿弹,直线穿透所有敌人。",
       tags: ["ranged"],
       stats: function (lv) {
-        return { damage: 36 + (lv - 1) * 12, cooldown: Math.max(1.6, 3.4 - (lv - 1) * 0.22), speed: 900 };
+        // L8(伤害 120/冷却 1.86)保持旧值,L1 削弱(伤害-19%/冷却+16%)→升级增益更大
+        return { damage: 29 + (lv - 1) * 13, cooldown: Math.max(1.6, 1.86 + (8 - lv) * 0.3), speed: 900 };
       }
     },
     poison: {
@@ -242,7 +246,7 @@
     },
     hex: {
       name: "诅咒", icon: "✟", color: "#b06bff", max: 8, kind: "hex",
-      desc: "锁定视野内血量最高的敌人(优先Boss),延迟引爆:百分比最大生命伤害 + 伤害下限,目标被提前击杀则诅咒蔓延。",
+      desc: "锁定视野内血量最高的敌人(优先Boss),延迟引爆:固定伤害 + 百分比最大生命伤害(对Boss百分比降至1/3),目标被提前击杀则诅咒蔓延。",
       tags: ["spell"],
       stats: function (lv) {
         return { damage: 10 + (lv - 1) * 3, frac: Math.min(0.12, 0.05 + (lv - 1) * 0.01), count: 1 + Math.floor((lv - 1) / 2), spread: 2 + Math.floor((lv - 1) / 3), delay: 1.6, cooldown: Math.max(0.9, 1.8 - (lv - 1) * 0.1) };
@@ -343,7 +347,7 @@
     railgun_grenade: Object.assign({}, WEAPONS.railgun, { name: "轨道轰炸", color: "#ff5d73", icon: "☄", evo: true, kind: "fusion", fuse: ["railgun_evo", "grenade_evo"], stats: function (lv) { const s = WEAPONS.railgun.stats(8); return Object.assign({}, s, { damage: s.damage + 52, cooldown: 1.6, explode: 58, cluster: 2 }); } }),
     frost_poison: Object.assign({}, WEAPONS.frost, { name: "冰霜瘟疫", color: "#a8f0ff", icon: "❅", evo: true, kind: "fusion", tags: ["spell"], fuse: ["frost_evo", "poison_evo"], stats: function (lv) { const s = WEAPONS.frost.stats(8); return Object.assign({}, s, { damage: s.damage + 10, dot: s.dot + 30, dotDur: s.dotDur + 1.5, slow: 0.8, freeze: 0.5 }); } }),
     boomerang_sentry: Object.assign({}, WEAPONS.sentry, { name: "风暴哨戒", color: "#7df9ff", icon: "✪", evo: true, kind: "fusion", fuse: ["boomerang_evo", "sentry_evo"], stats: function (lv) { const s = WEAPONS.sentry.stats(8); return Object.assign({}, s, { count: s.count + 2, damage: s.damage + 16, projSpeed: 380, pierce: 2, life: 1.6 }); } }),
-    lance_vortex: Object.assign({}, WEAPONS.vortex, { name: "裂空风暴", color: "#ff6b9d", icon: "⇶", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["lance_evo", "vortex_evo"], stats: function (lv) { const s = WEAPONS.vortex.stats(8); return Object.assign({}, s, { damage: s.damage + 1, life: s.life * 4 / 3, vrad: s.radius * 1.1, pull: s.pull + 60, beamDmg: 22, beamLen: 200, beamWidth: 12, beamSpin: 2.2 }); } }),
+    lance_vortex: Object.assign({}, WEAPONS.vortex, { name: "裂空风暴", color: "#ff6b9d", icon: "⇶", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["lance_evo", "vortex_evo"], stats: function (lv) { const s = WEAPONS.vortex.stats(8); return Object.assign({}, s, { damage: s.damage + 1, life: s.life * 4 / 3, vrad: s.radius * 1.1, pull: s.pull + 60, beamDmg: 11, beamTick: 0.1, beamLen: 200, beamWidth: 12, beamSpin: 2.2 }); } }),
     shotgun_grenade: Object.assign({}, WEAPONS.shotgun, { name: "爆裂霰弹", color: "#ffe066", icon: "≣", evo: true, kind: "fusion", fuse: ["shotgun_evo", "grenade_evo"], stats: function (lv) { const s = WEAPONS.shotgun.stats(8); return Object.assign({}, s, { damage: s.damage + 40, count: s.count + 2, cone: s.cone * 1.2, splash: 28, splashMul: 0.5 }); } }),
     meteor_chain: Object.assign({}, WEAPONS.meteor, { name: "陨雷审判", color: "#ffb14d", icon: "☄", evo: true, kind: "fusion", fuse: ["meteor_evo", "chain_evo"], stats: function (lv) { const s = WEAPONS.meteor.stats(8); return Object.assign({}, s, { damage: s.damage + 10, count: s.count + 2, radius: Math.round(s.radius * 1.2), burn: 18, burnDur: 2.6, chainHops: 4, chainRange: 180 }); } }),
     shockwave_frost: Object.assign({}, WEAPONS.shockwave, { name: "冰碎共振", color: "#a8f0ff", icon: "◎", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["shockwave_evo", "frost_evo"], stats: function (lv) { const s = WEAPONS.shockwave.stats(8); return Object.assign({}, s, { damage: s.damage + 32, count: s.count + 1, radius: Math.round(s.radius * 1.25), knock: s.knock + 22, freeze: 0.6, shatter: 60 }); } }),
@@ -359,7 +363,7 @@
     { w1: "railgun_evo", w2: "grenade_evo", to: "railgun_grenade", name: "轨道轰炸", desc: "贯穿即爆,首命中分裂子榴弹,整排开花。", color: "#ff5d73", icon: "☄" },
     { w1: "frost_evo", w2: "poison_evo", to: "frost_poison", name: "冰霜瘟疫", desc: "冰爆上毒,冻结目标受伤 +50%。", color: "#a8f0ff", icon: "❅" },
     { w1: "boomerang_evo", w2: "sentry_evo", to: "boomerang_sentry", name: "风暴哨戒", desc: "五座哨塔齐射去返回旋镖,穿透收割。", color: "#7df9ff", icon: "✪" },
-    { w1: "lance_evo", w2: "vortex_evo", to: "lance_vortex", name: "裂空风暴", desc: "龙卷聚怪,沿途贯穿光束切割。", color: "#ff6b9d", icon: "⇶" },
+    { w1: "lance_evo", w2: "vortex_evo", to: "lance_vortex", name: "裂空风暴", desc: "龙卷聚怪,中心射出环绕激光,0.1s 一跳持续切割。", color: "#ff6b9d", icon: "⇶" },
     { w1: "shotgun_evo", w2: "grenade_evo", to: "shotgun_grenade", name: "爆裂霰弹", desc: "锥形弹幕,每发命中溅射开花。", color: "#ffe066", icon: "≣" },
     { w1: "meteor_evo", w2: "chain_evo", to: "meteor_chain", name: "陨雷审判", desc: "陨石落地连锁闪电,轰炸整片敌群。", color: "#ffb14d", icon: "☄" },
     { w1: "shockwave_evo", w2: "frost_evo", to: "shockwave_frost", name: "冰碎共振", desc: "冲击波冻住敌人,冰冻目标被波及即碎裂。", color: "#a8f0ff", icon: "◎" },
@@ -471,12 +475,13 @@
   // 集群波只用小怪
   const SWARM_TYPES = ["swarmer", "swarmer", "swarmer", "runner", "zombie"];
 
-  // ── 难度 4 档(乘子叠在刷怪率/敌血/敌伤上)
+  // ── 难度 4 档(乘子叠在刷怪率/敌血/敌伤上)。设计:方差适中(比初版窄、比上一版稍宽);
+  // xpMul 与 spawnMul 反向联动,保持各难度总经验(spawn×xp)≈1.0 倍普通档;特殊掉落概率(dropMul)分档不变
   const DIFFICULTY = {
-    chill: { name: "轻松", spawnMul: 0.6, hpMul: 0.7, dmgMul: 0.65, dropMul: 1.4, xpMul: 1.3 },
+    chill: { name: "轻松", spawnMul: 0.75, hpMul: 0.8, dmgMul: 0.75, dropMul: 1.4, xpMul: 1.3 },
     normal: { name: "普通", spawnMul: 1.0, hpMul: 1.0, dmgMul: 1.0, dropMul: 1.0, xpMul: 1.0 },
-    hard: { name: "困难", spawnMul: 1.5, hpMul: 1.5, dmgMul: 1.4, dropMul: 0.6, xpMul: 0.7 },
-    nightmare: { name: "噩梦", spawnMul: 2.0, hpMul: 1.8, dmgMul: 1.7, dropMul: 0.4, xpMul: 0.5 }
+    hard: { name: "困难", spawnMul: 1.3, hpMul: 1.35, dmgMul: 1.25, dropMul: 0.6, xpMul: 0.81 },
+    nightmare: { name: "噩梦", spawnMul: 1.7, hpMul: 1.65, dmgMul: 1.55, dropMul: 0.4, xpMul: 0.58 }
   };
   const DIFFICULTY_ORDER = ["chill", "normal", "hard", "nightmare"];
 
@@ -534,12 +539,12 @@
     return w;
   }
 
-  // ── 关卡(全部直接可选,无需解锁)。bosses=[[type,min秒]],finale=终局Boss组,bgm=程序化合成配置
+  // ── 关卡(全部直接可选,无需解锁)。bosses=[[type,min秒]],finale=终局Boss组,bgm=BGM 曲目 id(audio.js 播 audio/<id>_loop.mp3)
   const STAGES = {
-    ruins: { name: "霓虹废墟", goalMin: 20 * 60, half: 1700, palette: PAL.ruins, weights: wRuins, bosses: [["duke", 300], ["magnetwarper", 600], ["architect", 840]], finale: null, envField: null, bgm: { root: 55, scale: [0, 3, 5, 7, 10], bpm: 110, wave: "triangle", theme: "invention" } },
-    crimson: { name: "血色荒原", goalMin: 20 * 60, half: 1500, palette: PAL.crimson, weights: wCrimson, bosses: [["wraith", 300], ["queen", 600], ["inquisitor", 840]], finale: null, envField: { type: "burn", interval: 12, dur: 4, r: 90, dps: 14, warm: 2 }, bgm: { root: 65.41, scale: [0, 1, 4, 6, 7], bpm: 120, wave: "sawtooth", theme: "toccata" } },
-    frozen: { name: "冰封核心", goalMin: 20 * 60, half: 1600, palette: PAL.frozen, weights: wFrozen, bosses: [["duke", 300], ["twins", 600], ["colossus", 840]], finale: null, envField: { type: "freeze", interval: 15, dur: 1.5, slowF: 0.55 }, bgm: { root: 110, scale: [0, 2, 4, 7, 9], bpm: 110, wave: "sine", theme: "aria" } },
-    void: { name: "虚空深渊", goalMin: 20 * 60, half: 1900, palette: PAL.void, weights: wVoid, bosses: [["wraith", 300], ["magnetwarper", 600], ["colossus", 840]], finale: ["duke", "wraith", "inquisitor"], finaleMin: 18 * 60, envField: { type: "gravity", interval: 18, dur: 1.0, pull: 220 }, bgm: { root: 49, scale: [0, 2, 4, 6, 8, 10], bpm: 130, wave: "square", theme: "fugue" } }
+    ruins: { name: "霓虹废墟", goalMin: 20 * 60, half: 1700, palette: PAL.ruins, weights: wRuins, bosses: [["duke", 300], ["magnetwarper", 600], ["architect", 840]], finale: null, envField: null, bgm: "ruins" },
+    crimson: { name: "血色荒原", goalMin: 20 * 60, half: 1500, palette: PAL.crimson, weights: wCrimson, bosses: [["wraith", 300], ["queen", 600], ["inquisitor", 840]], finale: null, envField: { type: "burn", interval: 12, dur: 4, r: 90, dps: 14, warm: 2 }, bgm: "crimson" },
+    frozen: { name: "冰封核心", goalMin: 20 * 60, half: 1600, palette: PAL.frozen, weights: wFrozen, bosses: [["duke", 300], ["twins", 600], ["colossus", 840]], finale: null, envField: { type: "freeze", interval: 15, dur: 1.5, slowF: 0.55 }, bgm: "frozen" },
+    void: { name: "虚空深渊", goalMin: 20 * 60, half: 1900, palette: PAL.void, weights: wVoid, bosses: [["wraith", 300], ["magnetwarper", 600], ["colossus", 840]], finale: ["duke", "wraith", "inquisitor"], finaleMin: 18 * 60, envField: { type: "gravity", interval: 18, dur: 1.0, pull: 220 }, bgm: "void" }
   };
   const STAGE_ORDER = ["ruins", "crimson", "frozen", "void"];
 
@@ -564,7 +569,7 @@
     DIFFICULTY_ORDER: DIFFICULTY_ORDER,
     STAGES: STAGES,
     STAGE_ORDER: STAGE_ORDER,
-    MENU_BGM: { root: 65.41, scale: [0, 2, 4, 7, 9], bpm: 128, wave: "square", theme: "badinerie" },   // 主菜单/选角/选关:Badinerie (BWV 1067),C 大 pentatonic
+    MENU_BGM: "menu",   // 主菜单/选角/选关 BGM:audio/menu_loop.mp3
     CHARACTERS: CHARACTERS,
     CHARACTER_ORDER: CHARACTER_ORDER
   };

@@ -3,13 +3,18 @@
 //
 // ★ 部署/更新代码后,必须递增 CACHE 版本号(如 v2 → v3),否则老用户拿不到新版!
 //   详见 DEPLOY.md「Service Worker 缓存与版本更新」一节。
-const CACHE = "neon-survivor-v2.2.1";
+const CACHE = "neon-survivor-v2.3.0";
 const ASSETS = [
   "./",
   "./index.html",
   "./css/styles.css",
   "./manifest.json",
   "./icon.svg",
+  "./audio/menu_loop.mp3",
+  "./audio/ruins_loop.mp3",
+  "./audio/crimson_loop.mp3",
+  "./audio/frozen_loop.mp3",
+  "./audio/void_loop.mp3",
   "./js/util.js",
   "./js/config.js",
   "./js/storage.js",
