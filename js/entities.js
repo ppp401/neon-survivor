@@ -335,13 +335,14 @@
     } else {
       // 精英:散落 3 颗高价值宝石 + 血包/磁铁 + 金色死亡特效。
       // 掉率基础 20%/10%(8min 精英刚出现时),此后随时间衰减(与普通掉落同 0.25/min 系数,自 8min 起算);
-      // 受幸运提升(+50% 幸运时恰为旧固定值 30%/15%)。
+      // 受幸运提升;难度分档与普通掉落同用 dropMul(困难 0.6 / 噩梦 0.4)。
       if (e.elite) {
         for (let i = 0; i < 3; i++) state.gems.push(makeGem(e.x + U.rand(-14, 14), e.y + U.rand(-14, 14), Math.max(1, Math.round(e.xp / 3))));
         const luckF = 1 + mods(state).luck;
         const eDf = 1 / (1 + 0.25 * Math.max(0, state.time / 60 - 8));
-        if (Math.random() < 0.20 * eDf * luckF) state.pickups.push(makePickup(e.x, e.y, "health"));
-        if (Math.random() < 0.10 * eDf * luckF) state.pickups.push(makePickup(e.x, e.y, "magnet"));
+        const eMul = diffOf(state).dropMul;
+        if (Math.random() < 0.20 * eMul * eDf * luckF) state.pickups.push(makePickup(e.x, e.y, "health"));
+        if (Math.random() < 0.10 * eMul * eDf * luckF) state.pickups.push(makePickup(e.x, e.y, "magnet"));
         SV.Effects.explosion(e.x, e.y, SV.Config.COLORS.gold, 22);
       } else {
         state.gems.push(makeGem(e.x, e.y, e.xp));

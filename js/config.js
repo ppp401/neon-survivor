@@ -158,7 +158,7 @@
       desc: "朝最近敌人方向发射锥形弹丸。",
       tags: ["ranged"],
       stats: function (lv) {
-        return { damage: 10 + (lv - 1) * 2.6, count: 4 + (lv - 1), cooldown: Math.max(0.6, 1.4 - (lv - 1) * 0.1), speed: 330, life: 0.85, cone: (35 + (lv - 1) * 3) * Math.PI / 180 };
+        return { damage: 10 + (lv - 1) * 2.6, count: 4 + (lv - 1), cooldown: Math.max(0.6, 1.4 - (lv - 1) * 0.1), speed: 330, life: 0.85 + (lv - 1) * 0.08, cone: (35 + (lv - 1) * 3) * Math.PI / 180 };
       }
     },
     frost: {
@@ -166,7 +166,7 @@
       desc: "周期性冰爆,减速范围内敌人。",
       tags: ["spell"],
       stats: function (lv) {
-        return { damage: 7.5 + (lv - 1) * 2.6, radius: 110 + (lv - 1) * 15, cooldown: Math.max(0.8, 1.6 - (lv - 1) * 0.1), slow: Math.min(0.75, 0.4 + (lv - 1) * 0.05), slowDur: 1.5 + (lv - 1) * 0.1, expand: 620 };
+        return { damage: 8.2 + (lv - 1) * 2.8, radius: 110 + (lv - 1) * 15, cooldown: Math.max(0.72, 1.45 - (lv - 1) * 0.1), slow: Math.min(0.75, 0.4 + (lv - 1) * 0.05), slowDur: 1.5 + (lv - 1) * 0.1, expand: 620 };
       }
     },
     lance: {
@@ -209,7 +209,8 @@
       desc: "向附近敌人注入剧毒,持续掉血。",
       tags: ["spell"],
       stats: function (lv) {
-        return { damage: 6.5 + (lv - 1) * 1.8, cooldown: Math.max(0.8, 1.6 - (lv - 1) * 0.1), radius: 130 + (lv - 1) * 10, dot: 6.5 + (lv - 1) * 1.8, dotDur: 2.5 + (lv - 1) * 0.2 };
+        // 纯毒伤武器:无直接攻击伤害(damage 字段已删),只有 DoT(不吃伤害被动)
+        return { cooldown: Math.max(1.0, 2.1 - (lv - 1) * 0.14), radius: 112 + (lv - 1) * 8, dot: 6 + (lv - 1) * 1.6, dotDur: 2.5 + (lv - 1) * 0.2 };
       }
     },
     vortex: {
@@ -233,7 +234,7 @@
       desc: "锁定附近敌群最密集处,天降陨石,延迟爆炸。",
       tags: ["spell"],
       stats: function (lv) {
-        return { damage: 21 + (lv - 1) * 4.5, radius: 52 + (lv - 1) * 6, cooldown: Math.max(2.9, 3.6 - (lv - 1) * 0.1), arm: 0.55, count: 1 + (lv >= 4 ? 1 : 0) + (lv >= 7 ? 1 : 0), burn: 0, burnDur: 0 };
+        return { damage: 21 + (lv - 1) * 4.5, radius: 52 + (lv - 1) * 6, cooldown: Math.max(3.4, 4.2 - (lv - 1) * 0.1), arm: 0.55, count: 1 + (lv >= 4 ? 1 : 0) + (lv >= 7 ? 1 : 0), burn: 0, burnDur: 0 };
       }
     },
     shockwave: {
@@ -289,7 +290,7 @@
       desc: "锁定敌群密集处,天降时停力场,延迟落地冻结范围内敌人(冻结者不动不射弹,但仍有接触伤害)。",
       tags: ["spell"],
       stats: function (lv) {
-        return { damage: 9.5 + (lv - 1) * 2.8, cooldown: Math.max(2.6, 4.9 - (lv - 1) * 0.3), radius: 58 + (lv - 1) * 6.5, freeze: 1.0 + (lv - 1) * 0.13, arm: 0.6, count: 1 + (lv >= 3 ? 1 : 0) + (lv >= 6 ? 1 : 0) };
+        return { damage: 14 + (lv - 1) * 4, cooldown: Math.max(2.6, 4.9 - (lv - 1) * 0.3), radius: 58 + (lv - 1) * 6.5, freeze: 1.0 + (lv - 1) * 0.13, arm: 0.6, count: 1 + (lv >= 3 ? 1 : 0) + (lv >= 6 ? 1 : 0) };
       }
     }
   };
@@ -345,7 +346,7 @@
     blade_aura: Object.assign({}, WEAPONS.blade, { name: "湮灭之轮", color: "#ffd0a0", icon: "☀", evo: true, kind: "fusion", fuse: ["blade_evo", "aura_evo"], stats: function (lv) { const s = WEAPONS.blade.stats(8); return { damage: s.damage + 18, count: 8, radius: s.radius * 1.6, spin: s.spin + 1.2, splash: 26, splashMul: 0.6, pull: 150 }; } }),
     missile_chain: Object.assign({}, WEAPONS.missile, { name: "雷暴蜂群", color: "#ff9a3c", icon: "⚡", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["missile_evo", "chain_evo"], stats: function (lv) { const s = WEAPONS.missile.stats(8); return { damage: 34, cooldown: 0.9, count: 5, speed: 300, seek: 5, life: 2.2, chase: 2, chainHops: 3, chainRange: 180 }; } }),
     railgun_grenade: Object.assign({}, WEAPONS.railgun, { name: "轨道轰炸", color: "#ff5d73", icon: "☄", evo: true, kind: "fusion", fuse: ["railgun_evo", "grenade_evo"], stats: function (lv) { const s = WEAPONS.railgun.stats(8); return Object.assign({}, s, { damage: s.damage + 52, cooldown: 1.6, explode: 58, cluster: 2 }); } }),
-    frost_poison: Object.assign({}, WEAPONS.frost, { name: "冰霜瘟疫", color: "#a8f0ff", icon: "❅", evo: true, kind: "fusion", tags: ["spell"], fuse: ["frost_evo", "poison_evo"], stats: function (lv) { const s = WEAPONS.frost.stats(8); return Object.assign({}, s, { damage: s.damage + 10, dot: s.dot + 30, dotDur: s.dotDur + 1.5, slow: 0.8, freeze: 0.5 }); } }),
+    frost_poison: Object.assign({}, WEAPONS.frost, { name: "冰霜瘟疫", color: "#a8f0ff", icon: "❅", evo: true, kind: "fusion", tags: ["spell"], fuse: ["frost_evo", "poison_evo"], stats: function (lv) { const s = WEAPONS.frost.stats(8); return Object.assign({}, s, { damage: s.damage + 10, dot: 30, dotDur: 4.5, slow: 0.8, freeze: 0.5 }); } }),
     boomerang_sentry: Object.assign({}, WEAPONS.sentry, { name: "风暴哨戒", color: "#7df9ff", icon: "✪", evo: true, kind: "fusion", fuse: ["boomerang_evo", "sentry_evo"], stats: function (lv) { const s = WEAPONS.sentry.stats(8); return Object.assign({}, s, { count: s.count + 2, damage: s.damage + 16, projSpeed: 380, pierce: 2, life: 1.6 }); } }),
     lance_vortex: Object.assign({}, WEAPONS.vortex, { name: "裂空风暴", color: "#ff6b9d", icon: "⇶", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["lance_evo", "vortex_evo"], stats: function (lv) { const s = WEAPONS.vortex.stats(8); return Object.assign({}, s, { damage: s.damage + 1, life: s.life * 4 / 3, vrad: s.radius * 1.1, pull: s.pull + 60, beamDmg: 11, beamTick: 0.1, beamLen: 200, beamWidth: 12, beamSpin: 2.2 }); } }),
     shotgun_grenade: Object.assign({}, WEAPONS.shotgun, { name: "爆裂霰弹", color: "#ffe066", icon: "≣", evo: true, kind: "fusion", fuse: ["shotgun_evo", "grenade_evo"], stats: function (lv) { const s = WEAPONS.shotgun.stats(8); return Object.assign({}, s, { damage: s.damage + 40, count: s.count + 2, cone: s.cone * 1.2, splash: 28, splashMul: 0.5 }); } }),
@@ -398,7 +399,8 @@
     chains: "连跳 +{N}", length: "长度 +{N}", width: "宽度 +{N}", speed: "速度 +{N}", chase: "追击 +{N}",
     slow: "减速 +{N}%", slowDur: "减速时长 +{N}s", tick: "频率↑", dot: "毒伤 +{N}",
     dotDur: "毒续 +{N}s", pull: "吸力 +{N}", expand: "扩张 +{N}", fireCd: "射速↑", projSpeed: "弹速 +{N}",
-    knock: "击退 +{N}", burn: "灼烧 +{N}", frac: "%生命 +{N}%", spread: "蔓延 +{N}", spin: "旋转 +{N}"
+    knock: "击退 +{N}", burn: "灼烧 +{N}", frac: "%生命 +{N}%", spread: "蔓延 +{N}", spin: "旋转 +{N}",
+    life: "弹存 +{N}s"
   };
 
   // ── 可选角色(8 名):起手武器(startWeapon 或 startWeaponTags 随机池) + 起手被动 + 生命/移速倍率

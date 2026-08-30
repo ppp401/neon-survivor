@@ -53,10 +53,10 @@
     const has = function (t) { return def.tags.indexOf(t) >= 0; };
     if (sp === "arcanist") {
       // 秘法亲和:法术池重分类后扩大(chain/frost/poison/meteor/hex + 变形/时停),对齐射手档位:+20% 伤 / +10% 范围
-      if (has("spell")) { s.damage *= 1.20; if (s.radius != null) s.radius *= 1.10; }
+      if (has("spell")) { if (s.damage != null) s.damage *= 1.20; if (s.radius != null) s.radius *= 1.10; }
     } else if (sp === "ranger") {
       // 游击射手:远程武器 +伤害 +攻速(近战已被 weaponPolicy 硬禁;另以拾取范围代偿)
-      if (has("ranged")) { s.damage *= 1.15; if (s.cooldown != null) s.cooldown *= 0.90; }
+      if (has("ranged")) { if (s.damage != null) s.damage *= 1.15; if (s.cooldown != null) s.cooldown *= 0.90; }
     }
   }
 
@@ -65,7 +65,7 @@
     const base = def.stats(w.level);
     const m = Entities.mods(state);
     const s = Object.assign({}, base);
-    s.damage = base.damage * m.damageMul;
+    if (base.damage != null) s.damage = base.damage * m.damageMul;
     if (base.cooldown != null) s.cooldown = base.cooldown * m.cdMul;
     if (base.radius != null) s.radius = base.radius * m.areaMul;
     if (base.length != null) s.length = base.length * m.areaMul;
