@@ -150,7 +150,8 @@
       desc: "周身伤害力场,周期灼烧。",
       tags: ["melee"],
       stats: function (lv) {
-        return { damage: 6 + (lv - 1) * 1.4, radius: 65 + (lv - 1) * 12, tick: Math.max(0.11, 0.42 - (lv - 1) * 0.045) };
+        // 伤害频率(tick)在 weapons.js 受冷却缩减影响(仅光环系)
+        return { damage: 7 + (lv - 1) * 1.6, radius: 65 + (lv - 1) * 12, tick: Math.max(0.11, 0.42 - (lv - 1) * 0.045) };
       }
     },
     shotgun: {
@@ -158,7 +159,8 @@
       desc: "朝最近敌人方向发射锥形弹丸。",
       tags: ["ranged"],
       stats: function (lv) {
-        return { damage: 10 + (lv - 1) * 2.6, count: 4 + (lv - 1), cooldown: Math.max(0.6, 1.4 - (lv - 1) * 0.1), speed: 330, life: 0.85 + (lv - 1) * 0.08, cone: (35 + (lv - 1) * 3) * Math.PI / 180 };
+        // 子弹存在时长(即射程)随等级成长:L8=1.69s ≈ L1(0.85s) 的 2 倍
+        return { damage: 10 + (lv - 1) * 2.6, count: 4 + (lv - 1), cooldown: Math.max(0.6, 1.4 - (lv - 1) * 0.1), speed: 330, life: 0.85 + (lv - 1) * 0.12, cone: (35 + (lv - 1) * 3) * Math.PI / 180 };
       }
     },
     frost: {
@@ -210,7 +212,8 @@
       tags: ["spell"],
       stats: function (lv) {
         // 纯毒伤武器:无直接攻击伤害(damage 字段已删),只有 DoT(不吃伤害被动)
-        return { cooldown: Math.max(1.0, 2.1 - (lv - 1) * 0.14), radius: 112 + (lv - 1) * 8, dot: 6 + (lv - 1) * 1.6, dotDur: 2.5 + (lv - 1) * 0.2 };
+        // L8(dot 17.2/cd 1.12)保持旧值,L1 削弱(dot -20%/cd +19%)→升级增益更大;范围全等级缩小
+        return { cooldown: Math.max(1.0, 2.5 - (lv - 1) * 0.1971), radius: 100 + (lv - 1) * 8, dot: 4.81 + (lv - 1) * 1.77, dotDur: 2.5 + (lv - 1) * 0.2 };
       }
     },
     vortex: {
@@ -242,7 +245,8 @@
       desc: "朝最近敌人挥出冲击扇形,击退并伤害范围内敌人。",
       tags: ["melee"],
       stats: function (lv) {
-        return { damage: 8 + (lv - 1) * 2.5, radius: 110 + (lv - 1) * 9, cooldown: Math.max(0.9, 1.8 - (lv - 1) * 0.12), count: 1 + (lv >= 4 ? 1 : 0), arc: 0.85 + (lv - 1) * 0.03, knock: 22 + (lv - 1) * 3 };
+        // 全级大幅增伤:约 +30%
+        return { damage: 10.5 + (lv - 1) * 3.2, radius: 110 + (lv - 1) * 9, cooldown: Math.max(0.9, 1.8 - (lv - 1) * 0.12), count: 1 + (lv >= 4 ? 1 : 0), arc: 0.85 + (lv - 1) * 0.03, knock: 22 + (lv - 1) * 3 };
       }
     },
     hex: {
@@ -258,7 +262,8 @@
       desc: "朝最近敌人挥出大扇形弧刃,横扫范围内敌人。",
       tags: ["melee"],
       stats: function (lv) {
-        return { damage: 21 + (lv - 1) * 6.1, cooldown: Math.max(0.7, 1.4 - (lv - 1) * 0.07), radius: 95 + (lv - 1) * 9, arc: 1.5 + (lv - 1) * 0.06, count: 1 + (lv >= 4 ? 1 : 0) };
+        // 全级削弱:伤害约 -12%,冷却全档 +7%
+        return { damage: 18.5 + (lv - 1) * 5.4, cooldown: Math.max(0.7, 1.5 - (lv - 1) * 0.075), radius: 95 + (lv - 1) * 9, arc: 1.5 + (lv - 1) * 0.06, count: 1 + (lv >= 4 ? 1 : 0) };
       }
     },
     detonate: {

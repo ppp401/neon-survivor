@@ -67,6 +67,7 @@
     const s = Object.assign({}, base);
     if (base.damage != null) s.damage = base.damage * m.damageMul;
     if (base.cooldown != null) s.cooldown = base.cooldown * m.cdMul;
+    if (base.tick != null && def.kind === "aura") s.tick = Math.max(0.055, base.tick * m.cdMul); // 光环系伤害频率吃冷却缩减(下限防每帧跳伤;不波及 lance_evo 的 tick)
     if (base.radius != null) s.radius = base.radius * m.areaMul;
     if (base.length != null) s.length = base.length * m.areaMul;
     if (base.expand != null) s.expand = base.expand * m.areaMul;
