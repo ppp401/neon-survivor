@@ -464,9 +464,9 @@
     shielder: { name: "盾甲兵", hp: 55, speed: 50, dmg: 16, xp: 7, r: 18, color: "#6b8aff", ai: "shield", dr: 0.55, shape: "hex", skill: "高额减伤(受伤 -55%)" },
     sniper: { name: "狙击手", hp: 22, speed: 60, dmg: 6, projDmg: 16, xp: 6, r: 12, color: "#ff8aff", ai: "sniper", shape: "diamond", skill: "远程站桩,精确狙击(接触伤害较低)" },
     regen: { name: "自愈者", hp: 48, speed: 56, dmg: 14, xp: 6, r: 16, color: "#5affb0", ai: "regen", regenRate: 7, shape: "cross", skill: "持续回血" },
-    warden: { name: "光环盾卫", hp: 70, speed: 48, dmg: 14, xp: 8, r: 19, color: "#8aa0ff", ai: "shield_aura", shape: "hex", auraR: 120, auraDr: 0.40, skill: "给周围敌人套减伤护盾" },
-    priest: { name: "血祭司", hp: 55, speed: 52, dmg: 12, xp: 8, r: 17, color: "#ff6b8a", ai: "heal_aura", shape: "star", auraR: 130, healRate: 6, skill: "治疗周围敌人" },
-    overdriver: { name: "狂热者", hp: 50, speed: 50, dmg: 12, xp: 7, r: 16, color: "#c084fc", ai: "speed_aura", shape: "triangle", auraR: 130, auraSpeed: 1.4, skill: "加速周围敌人" },
+    warden: { name: "光环盾卫", hp: 70, speed: 48, dmg: 14, xp: 8, r: 19, color: "#8aa0ff", ai: "shield_aura", shape: "hex", auraR: 140, auraDr: 0.40, skill: "给周围敌人套减伤护盾(减伤随时间提升,上限70%)" },
+    priest: { name: "血祭司", hp: 55, speed: 52, dmg: 12, xp: 8, r: 17, color: "#ff6b8a", ai: "heal_aura", shape: "star", auraR: 130, healRate: 4, skill: "治疗周围敌人(不治疗同类,治疗量随时间回升)" },
+    overdriver: { name: "狂热者", hp: 50, speed: 50, dmg: 12, xp: 7, r: 16, color: "#c084fc", ai: "speed_aura", shape: "triangle", auraR: 150, auraSpeed: 1.4, skill: "加速周围敌人(光环范围随时间扩大)" },
     burster: { name: "爆巢者", hp: 40, speed: 64, dmg: 12, xp: 6, r: 18, color: "#ff7a3c", ai: "chase", shape: "blob", burstCount: 5, burstType: "swarmer", skill: "死亡爆出一群食脑蛛" },
     stalker: { name: "潜伏者", hp: 35, speed: 78, dmg: 16, xp: 7, r: 15, color: "#a8e8ff", ai: "stalker", shape: "diamond", stealth: true, skill: "隐身接近,近身现身突袭(首击破隐)" },
     slimer: { name: "腐泥", hp: 28, speed: 58, dmg: 10, xp: 5, r: 14, color: "#9bff5a", ai: "slime", shape: "blob", trailInterval: 0.45, trailDur: 2.0, trailDmg: 8, skill: "摇摆追击,路径留下毒径" }
@@ -493,7 +493,11 @@
     dmgFactor: function (t) { return t <= 4 ? 1 : 1 + 0.12 * (t - 4); }, // 4min 起敌伤每分 +12%(配合 5-10min 渐增与 10min 峰值)。t=10:1.72 t=20:2.92
     xpForLevel: function (N) { return Math.floor(3 + 2.2 * N + Math.pow(N, 1.2)); },
     // 无尽模式:通关后随(超时分钟)额外敌血/敌伤倍率
-    endlessMul: function (overMin) { return 1 + 0.22 * overMin + 0.01 * overMin * overMin; }
+    endlessMul: function (overMin) { return 1 + 0.22 * overMin + 0.01 * overMin * overMin; },
+    // 光环敌人成长(t=分钟,由 entities.tickAuras 按全局时间回写):
+    wardenDr: function (t) { return Math.min(0.70, 0.40 + 0.015 * t); }, // 盾卫减伤:t=0:0.40 t=5:0.475 t=10:0.55 t=15:0.625 t=20:0.70(封顶)
+    overdriveR: function (t) { return 150 + 5 * t; }, // 狂热者光环半径:t=0:150 t=5:175 t=10:200 t=15:225 t=20:250
+    priestHeal: function (t) { return Math.min(6, 4 + 0.15 * t); } // 血祭司治疗率(前期弱、后期还原原版 6):t=0:4 t=5:4.75 t=10:5.5 t≈13.3 追平(封顶)
   };
 
   // 按时间返回刷怪权重表(类型 -> 权重)

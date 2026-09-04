@@ -583,23 +583,28 @@
 
   // 光环(护盾/回血/加速)节流施加:每 0.3s,先清护盾标记再让光环敌人 queryCircle 给邻居施 buff。
   // speed buff 用 0.4s 衰减窗覆盖 0.3s 重算间隙,无抖动。
+  // 血祭司不治疗自己与同类(o.type !== e.type);盾卫减伤/狂热者光环半径按全局时间成长(曲线在 CURVES)。
   function tickAuras(state, dt) {
     state._auraTick = (state._auraTick || 0) - dt;
     if (state._auraTick > 0) return;
     state._auraTick = 0.3;
     const Sp = SV.Spatial, enemies = state.enemies;
     const healScale = healScaleOf(state); // 血祭司回血随时间成长(同敌人 maxHP 因子)
+    const at = (state.time || 0) / 60;
     for (let i = 0; i < enemies.length; i++) enemies[i]._shieldedByAura = false;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (e.hp <= 0) continue;
       if (!(e.auraDr || e.healRate || e.auraSpeed)) continue;
+      if (e.auraDr) e.auraDr = CU.wardenDr(at); // 盾卫减伤随时间提升(上限 70%)
+      if (e.auraSpeed) e.auraR = CU.overdriveR(at); // 狂热者光环范围随时间扩大
+      if (e.healRate) e.healRate = CU.priestHeal(at); // 血祭司治疗率随时间回升(前期弱、后期还原)
       const q = Sp.queryCircle(e.x, e.y, e.auraR);
       for (let j = 0; j < q.length; j++) {
         const o = q[j];
         if (o === e || o.hp <= 0) continue;
         if (e.auraDr) { o._shieldedByAura = true; o._shieldDr = e.auraDr; }
-        if (e.healRate) o.hp = Math.min(o.maxHp, o.hp + e.healRate * healScale * 0.3);
+        if (e.healRate && o.type !== e.type) o.hp = Math.min(o.maxHp, o.hp + e.healRate * healScale * 0.3);
         if (e.auraSpeed) { o._speedBuff = e.auraSpeed; o._speedBuffT = 0.4; }
       }
     }
