@@ -505,23 +505,61 @@
       }
     },
 
-    // ── 敌方投射物(boss/炮台)
+    // ── 敌方投射物(boss/炮台)。Boss 弹幕专属风格:ring 空心魔环 / bolt 高速光矛 / rune 符文菱形
+    // (风格由 config BOSSES.shotStyle 决定,addEShot 打 boss 标记;均复用缓存 glow,不进实时 shadowBlur)
     _drawEShots: function (state) {
       const list = state.eshots;
       if (!list.length) return;
+      const now = state.time || 0;
+      // 辉光层(lighter):普通弹用原样方形辉光;Boss 弹加大 + 常驻微脉冲(相位用坐标伪随机,零字段开销)
       ctx.save(); ctx.globalCompositeOperation = "lighter";
       for (let i = 0; i < list.length; i++) {
         const s = list[i];
         if (s.x < view.l || s.x > view.r || s.y < view.t || s.y > view.b) continue;
-        ctx.globalAlpha = 0.85; ctx.drawImage(glow(s.color), s.x - s.r * 3, s.y - s.r * 3, s.r * 6, s.r * 6);
+        if (s.boss) {
+          const pulse = 1 + 0.14 * Math.sin(now * 7 + s.x * 0.13 + s.y * 0.17);
+          const R = (s.r + 1.5) * pulse;
+          ctx.globalAlpha = 0.9;
+          if (s.style === "bolt") {
+            // 高速光矛:辉光沿速度方向拉长 ×2.2
+            ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(Math.atan2(s.vy, s.vx));
+            ctx.drawImage(glow(s.color), -R * 2.2, -R, R * 4.4, R * 2);
+            ctx.restore();
+          } else {
+            const g = R * 3.2;
+            ctx.drawImage(glow(s.color), s.x - g, s.y - g, g * 2, g * 2);
+          }
+        } else {
+          ctx.globalAlpha = 0.85; ctx.drawImage(glow(s.color), s.x - s.r * 3, s.y - s.r * 3, s.r * 6, s.r * 6);
+        }
       }
       ctx.globalAlpha = 1; ctx.restore();
-      ctx.fillStyle = "#fff";
+      // 弹体层
       for (let i = 0; i < list.length; i++) {
         const s = list[i];
         if (s.x < view.l || s.x > view.r || s.y < view.t || s.y > view.b) continue;
-        ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 0.6, 0, U.TAU); ctx.fill();
-        ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, U.TAU); ctx.fill(); ctx.fillStyle = "#fff";
+        const R = s.r + (s.boss ? 1.5 : 0);
+        if (s.style === "ring") {
+          // 空心魔环:彩色粗描边 + 细白内环(无实芯),弹幕游戏经典轮廓
+          ctx.strokeStyle = s.color; ctx.lineWidth = Math.max(2.5, R * 0.38);
+          ctx.beginPath(); ctx.arc(s.x, s.y, R * 0.82, 0, U.TAU); ctx.stroke();
+          ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.2;
+          ctx.beginPath(); ctx.arc(s.x, s.y, R * 0.4, 0, U.TAU); ctx.stroke();
+        } else if (s.style === "bolt" || s.style === "rune") {
+          // 菱形弹芯:bolt 沿速度方向(速度感),rune 随时间缓转(相位按坐标错开,非同步旋转)
+          const a = s.style === "bolt" ? Math.atan2(s.vy, s.vx) : now * 2.2 + s.x * 0.05 + s.y * 0.07;
+          ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(a);
+          ctx.fillStyle = s.color;
+          ctx.beginPath(); ctx.moveTo(R * 1.5, 0); ctx.lineTo(0, R * 0.75); ctx.lineTo(-R * 1.5, 0); ctx.lineTo(0, -R * 0.75); ctx.closePath(); ctx.fill();
+          ctx.fillStyle = "#fff";
+          ctx.beginPath(); ctx.moveTo(R * 0.7, 0); ctx.lineTo(0, R * 0.34); ctx.lineTo(-R * 0.7, 0); ctx.lineTo(0, -R * 0.34); ctx.closePath(); ctx.fill();
+          ctx.restore();
+        } else {
+          // 普通敌弹:白芯 + 彩色圆(原样)
+          ctx.fillStyle = "#fff";
+          ctx.beginPath(); ctx.arc(s.x, s.y, R * 0.6, 0, U.TAU); ctx.fill();
+          ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, U.TAU); ctx.fill();
+        }
       }
       // 敌弹标红:双层描红更醒目——外层半透明红晕(宽 7px)+ 内层亮红实芯(宽 3px);
       // 普通合成模式(不进 lighter 层),关闭时零开销

@@ -473,15 +473,16 @@
   };
 
   // ── Boss(8 种)。tier:难度级(每关按 5/10/15min 依 T1→T2→T3 递增出)。skill 为图鉴文案。
+  // shotStyle:Boss 弹幕专属视觉风格(ring 空心魔环 / bolt 高速光矛 / rune 符文菱形),普通敌弹不受影响
   const BOSSES = {
-    duke: { name: "肥胖公爵", icon: "☠", hp: 900, speed: 35, dmg: 32, r: 40, color: "#d65a8a", xp: 60, tier: 1, shape: "hex", skill: "召唤僵尸 + 环形弹幕" },
-    wraith: { name: "双生怨灵", icon: "☾", hp: 680, speed: 110, dmg: 15, r: 24, color: "#9b6bff", xp: 50, tier: 1, count: 2, shape: "diamond", skill: "环绕飞行 + 扇形弹幕(同伴死则狂暴加速)" },
-    queen: { name: "蜂后", icon: "☼", hp: 2200, speed: 30, dmg: 28, r: 46, color: "#ff6ab0", xp: 100, tier: 2, shape: "hex", skill: "召唤蜂群 + 环形/螺旋弹幕" },
-    magnetwarper: { name: "磁暴行者", icon: "⚡", hp: 1500, speed: 45, dmg: 20, r: 36, color: "#8e7bff", xp: 90, tier: 2, shape: "star", skill: "引力波把玩家吸向自身 + 贴身电击圈" },
-    twins: { name: "镜像双子", icon: "◐", hp: 1050, speed: 60, dmg: 15, r: 28, color: "#7df9ff", xp: 80, tier: 2, count: 2, shape: "triangle", skill: "追击 + 周期换位(杀其一,本体反噬 25% 并狂暴)" },
-    architect: { name: "架构师", icon: "⌬", hp: 1800, speed: 50, dmg: 38, r: 44, color: "#5ad1ff", xp: 120, tier: 3, shape: "square", skill: "环形弹幕 + 召唤炮台(炮台亦会射击)" },
-    inquisitor: { name: "审判者", icon: "✠", hp: 1650, speed: 60, dmg: 26, r: 30, color: "#b06bff", xp: 90, tier: 3, shape: "cross", skill: "传送贴脸 + 环形/扇形连射" },
-    colossus: { name: "弹幕巨像", icon: "◎", hp: 2700, speed: 0, dmg: 33, r: 50, color: "#ff6b4d", xp: 140, tier: 3, shape: "circle", skill: "不动 + 旋转扫射激光 + 召唤僵尸 + 螺旋弹幕" }
+    duke: { name: "肥胖公爵", icon: "☠", hp: 900, speed: 35, dmg: 32, r: 40, color: "#d65a8a", xp: 60, tier: 1, shape: "hex", shotStyle: "ring", skill: "召唤僵尸 + 环形弹幕" },
+    wraith: { name: "双生怨灵", icon: "☾", hp: 680, speed: 110, dmg: 15, r: 24, color: "#9b6bff", xp: 50, tier: 1, count: 2, shape: "diamond", shotStyle: "bolt", skill: "环绕飞行 + 扇形弹幕(同伴死则狂暴加速)" },
+    queen: { name: "蜂后", icon: "☼", hp: 2200, speed: 30, dmg: 28, r: 46, color: "#ff6ab0", xp: 100, tier: 2, shape: "hex", shotStyle: "ring", skill: "召唤蜂群 + 环形/螺旋弹幕" },
+    magnetwarper: { name: "磁暴行者", icon: "⚡", hp: 1500, speed: 45, dmg: 20, r: 36, color: "#8e7bff", xp: 90, tier: 2, shape: "star", shotStyle: "rune", skill: "引力波把玩家吸向自身 + 贴身电击圈" },
+    twins: { name: "镜像双子", icon: "◐", hp: 1050, speed: 60, dmg: 15, r: 28, color: "#7df9ff", xp: 80, tier: 2, count: 2, shape: "triangle", shotStyle: "bolt", skill: "追击 + 周期换位(杀其一,本体反噬 25% 并狂暴)" },
+    architect: { name: "架构师", icon: "⌬", hp: 1800, speed: 50, dmg: 38, r: 44, color: "#5ad1ff", xp: 120, tier: 3, shape: "square", shotStyle: "rune", skill: "环形弹幕 + 召唤炮台(炮台亦会射击)" },
+    inquisitor: { name: "审判者", icon: "✠", hp: 1650, speed: 60, dmg: 26, r: 30, color: "#b06bff", xp: 90, tier: 3, shape: "cross", shotStyle: "bolt", skill: "传送贴脸 + 环形/扇形连射" },
+    colossus: { name: "弹幕巨像", icon: "◎", hp: 2700, speed: 0, dmg: 33, r: 50, color: "#ff6b4d", xp: 140, tier: 3, shape: "circle", shotStyle: "ring", skill: "不动 + 旋转扫射激光 + 召唤僵尸 + 螺旋弹幕" }
   };
 
   // ── 难度曲线(t=分钟)。目标:开局轻松→5min Boss有压→5-10渐增→~10min峰值→10min+玩家成型反杀
@@ -509,13 +510,14 @@
   // 集群波只用小怪
   const SWARM_TYPES = ["swarmer", "swarmer", "swarmer", "runner", "zombie"];
 
-  // ── 难度 4 档(乘子叠在刷怪率/敌血/敌伤上)。设计:方差适中(比初版窄、比上一版稍宽);
-  // xpMul 与 spawnMul 反向联动,保持各难度总经验(spawn×xp)≈1.0 倍普通档;特殊掉落概率(dropMul)分档不变
+  // ── 难度 4 档。设计 v3:数量轴压缩(轻松/普通加怪保割草爽感,档差 2.27×→1.58×),伤害轴为主区分;
+  // 联动不变量:总经验(spawn×xp)≈0.90/0.92/1.05/0.99(轻松/普通较旧版 -8%),每分钟特殊掉落(spawn×drop)≈1.045/0.98/0.78/0.675(≈旧值);
+  // Boss 独立分档:bossDmgMul/bossHpMul 只作用于 Boss(接触/弹幕/激光,整体上调且档差压缩),普通敌仍用 dmgMul/hpMul
   const DIFFICULTY = {
-    chill: { name: "轻松", spawnMul: 0.75, hpMul: 0.8, dmgMul: 0.75, dropMul: 1.4, xpMul: 1.3 },
-    normal: { name: "普通", spawnMul: 1.0, hpMul: 1.0, dmgMul: 1.0, dropMul: 1.0, xpMul: 1.0 },
-    hard: { name: "困难", spawnMul: 1.3, hpMul: 1.35, dmgMul: 1.25, dropMul: 0.6, xpMul: 0.81 },
-    nightmare: { name: "噩梦", spawnMul: 1.7, hpMul: 1.65, dmgMul: 1.55, dropMul: 0.4, xpMul: 0.58 }
+    chill: { name: "轻松", spawnMul: 0.95, hpMul: 0.8, dmgMul: 0.75, dropMul: 1.1, xpMul: 0.95, bossDmgMul: 1.0, bossHpMul: 0.85 },
+    normal: { name: "普通", spawnMul: 1.15, hpMul: 1.0, dmgMul: 1.0, dropMul: 0.85, xpMul: 0.8, bossDmgMul: 1.15, bossHpMul: 1.08 },
+    hard: { name: "困难", spawnMul: 1.3, hpMul: 1.35, dmgMul: 1.3, dropMul: 0.6, xpMul: 0.81, bossDmgMul: 1.3, bossHpMul: 1.4 },
+    nightmare: { name: "噩梦", spawnMul: 1.5, hpMul: 1.65, dmgMul: 1.6, dropMul: 0.45, xpMul: 0.66, bossDmgMul: 1.45, bossHpMul: 1.7 }
   };
   const DIFFICULTY_ORDER = ["chill", "normal", "hard", "nightmare"];
 

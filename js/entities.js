@@ -133,12 +133,13 @@
     const t = state.time / 60;
     const diff = diffOf(state);
     const em = endlessMulOf(state);
-    const hp = def.hp * (1 + 0.20 * t + 0.006 * t * t) * diff.hpMul * em;
+    // Boss 用独立分档乘子(bossHpMul/bossDmgMul):整体上调且档差压缩,不随普通敌 dmgMul/hpMul
+    const hp = def.hp * (1 + 0.20 * t + 0.006 * t * t) * (diff.bossHpMul || diff.hpMul) * em;
     return Object.assign(makeEnemy(state, "brute", x, y), {
       id: _id++, type: bossType, color: def.color, ai: "boss", shape: def.shape || "circle",
       r: def.r, mass: 40,
       hp: hp, maxHp: hp,
-      speed: def.speed, dmg: def.dmg * diff.dmgMul * em * CU.dmgFactor(t), xp: def.xp,
+      speed: def.speed, dmg: def.dmg * (diff.bossDmgMul || diff.dmgMul) * em * CU.dmgFactor(t), xp: def.xp,
       bossType: bossType, isBoss: true, enrage: false,
       t1: U.rand(1, 3), t2: U.rand(2, 4), ct: 0, cdir: U.rand(0, U.TAU)
     });
@@ -424,7 +425,8 @@
   }
   function addEShot(state, x, y, vx, vy, dmg, color, r, srcType) {
     if (state.eshots.length > 240) state.eshots.shift();
-    state.eshots.push({ x: x, y: y, vx: vx, vy: vy, life: 4.0, dmg: dmg, color: color || "#ff7d8e", r: r || 6, srcType: srcType || null });
+    const bd = srcType && BOSSES[srcType]; // Boss 弹幕:标记来源并携带专属风格(ring/bolt/rune),渲染层据此分支
+    state.eshots.push({ x: x, y: y, vx: vx, vy: vy, life: 4.0, dmg: dmg, color: color || "#ff7d8e", r: r || 6, srcType: srcType || null, boss: !!bd, style: bd ? (bd.shotStyle || "ring") : null });
   }
 
   // ── 玩家更新

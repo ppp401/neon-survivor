@@ -74,8 +74,8 @@
   // 主路径 WebAudio:fetch → decodeAudioData → BufferSource(loop=true) 采样级无缝。
   //   - 解码后扫描头尾亚阈值样本(-60dB)夹出循环体(loopStart/loopEnd), 兼容不同
   //     浏览器对 LAME gapless 头的处理差异与 decode 重采样。
-  //   - 加长版约 5 分钟，单曲解码约 106MB；buffer 仅缓存当前曲，避免移动端
-  //     同时驻留两首造成约 212MB 的额外内存压力。
+  //   - 主界面约 3 分钟、地图约 8–9 分钟，最长单曲解码约 200MB；buffer 仅
+  //     缓存当前曲，避免移动端同时驻留两首造成额外内存压力。
   // 回退 HTMLAudio:file:// 下 fetch 被 CORS 拦(或无 fetch/解码失败)时走
   //   el.loop=true;新编码带 LAME gapless 头, Chrome/FF 自动裁编码器延迟, 缝隙最小。
   // 音乐走独立 musicGain 直连 destination(不进 SFX 的 MASTER_CAP), 音量语义

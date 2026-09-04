@@ -3,7 +3,7 @@
 //
 // ★ 部署/更新代码后,必须递增 CACHE 版本号(如 v2 → v3),否则老用户拿不到新版!
 //   详见 DEPLOY.md「Service Worker 缓存与版本更新」一节。
-const CACHE = "neon-survivor-v2.4.0";
+const CACHE = "neon-survivor-v2.5.0";
 const VERSION = CACHE.replace("neon-survivor-", "");
 // 同一文件也由主页面以经典 script 加载,确保标题展示值与 SW 缓存版本只有一个数据源。
 if (typeof window !== "undefined") window.SV_SW_VERSION = VERSION;
