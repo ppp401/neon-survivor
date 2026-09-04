@@ -88,6 +88,8 @@
 
   function mod(v, m) { return ((v % m) + m) % m; }
 
+  let eshotMark = false; // 敌方子弹标红(暂停界面开关):开启后每颗敌弹边缘描红,便于与己方弹幕区分
+
   const Renderer = {
     cam: cam,
     init: function (cv) {
@@ -118,6 +120,10 @@
       starColor = p.star || starColor;
       gridPattern = makeGrid();
     },
+
+    // 敌方子弹标红开关
+    setEshotMark: function (on) { eshotMark = !!on; },
+    getEshotMark: function () { return eshotMark; },
 
     // 重置相机到目标(开局)
     snapCam: function (x, y) { cam.x = x; cam.y = y; },
@@ -418,6 +424,19 @@
         if (e.poison > 0) { ctx.globalAlpha = 0.30 + 0.12 * (e.poisonStacks || 0); ctx.fillStyle = "#9bff5a"; drawShapePath(ctx, e.x, e.y, e.r, eshape); ctx.fill(); ctx.globalAlpha = 1; }
         // 诅咒印记:紫色咒环(贴合形状;引信进行中,玩家可见锁定了谁)
         if (e.hex > 0) { ctx.strokeStyle = "#d0a0ff"; ctx.lineWidth = 2; ctx.globalAlpha = 0.75; drawShapePath(ctx, e.x, e.y, e.r + 4, eshape); ctx.stroke(); ctx.globalAlpha = 1; }
+        // 时之诅咒炸弹羊:脉冲时钟环,剩余越少闪烁越快。
+        if (e.sheepBomb && !e.sheepBombDone) {
+          const left = U.clamp(e.sheep / Math.max(0.01, e.sheepBombMax || e.sheep), 0, 1);
+          const freq = 6 + (1 - left) * 22;
+          const pulse = 0.45 + 0.45 * Math.sin(state.time * freq + e.id);
+          const rr = e.r + 9 + pulse * 3;
+          ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.55 + pulse * 0.35;
+          ctx.strokeStyle = "#d6b3ff"; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.arc(e.x, e.y, rr, 0, U.TAU); ctx.stroke();
+          const hand = -Math.PI / 2 + (1 - left) * U.TAU;
+          ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + Math.cos(hand) * rr * 0.68, e.y + Math.sin(hand) * rr * 0.68); ctx.stroke();
+          ctx.restore();
+        }
         // 精英:金色轮廓(贴合形状)
         if (e.elite) {
           ctx.strokeStyle = "rgba(255,216,107,0.9)"; ctx.lineWidth = 2.5;
@@ -446,6 +465,12 @@
         const p = list[i];
         if (p.shockwave) continue; // 冲击波用描边环绘制,不走辉光(p.r 会变得很大)
         if (p.x < view.l || p.x > view.r || p.y < view.t || p.y > view.b) continue;
+        if (p.grid) {
+          const dx = Math.cos(p.gridDir), dy = Math.sin(p.gridDir), h = p.gridLen / 2;
+          ctx.globalAlpha = 0.38 + 0.25 * (p.life / p.maxLife); ctx.strokeStyle = p.color; ctx.lineWidth = p.gridWidth * 2.6;
+          ctx.beginPath(); ctx.moveTo(p.x - dx * h, p.y - dy * h); ctx.lineTo(p.x + dx * h, p.y + dy * h); ctx.stroke();
+          continue;
+        }
         ctx.globalAlpha = 0.9; ctx.drawImage(glow(p.color), p.x - p.r * 3, p.y - p.r * 3, p.r * 6, p.r * 6);
       }
       ctx.globalAlpha = 1;
@@ -455,7 +480,12 @@
       for (let i = 0; i < list.length; i++) {
         const p = list[i];
         if (p.x < view.l || p.x > view.r || p.y < view.t || p.y > view.b) continue;
-        if (p.shockwave) {
+        if (p.grid) {
+          const dx = Math.cos(p.gridDir), dy = Math.sin(p.gridDir), h = p.gridLen / 2;
+          const pulse = 0.7 + 0.3 * Math.sin((state.time || 0) * 24 + p.x * 0.03 + p.y * 0.02);
+          ctx.save(); ctx.globalAlpha = pulse * Math.min(1, p.life / 0.12); ctx.strokeStyle = "#ffffff"; ctx.lineWidth = p.gridWidth;
+          ctx.beginPath(); ctx.moveTo(p.x - dx * h, p.y - dy * h); ctx.lineTo(p.x + dx * h, p.y + dy * h); ctx.stroke(); ctx.restore();
+        } else if (p.shockwave) {
           ctx.save();
           ctx.globalAlpha = 0.5; ctx.strokeStyle = p.color; ctx.lineWidth = 3;
           ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, U.TAU); ctx.stroke();
@@ -492,6 +522,22 @@
         if (s.x < view.l || s.x > view.r || s.y < view.t || s.y > view.b) continue;
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 0.6, 0, U.TAU); ctx.fill();
         ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, U.TAU); ctx.fill(); ctx.fillStyle = "#fff";
+      }
+      // 敌弹标红:双层描红更醒目——外层半透明红晕(宽 7px)+ 内层亮红实芯(宽 3px);
+      // 普通合成模式(不进 lighter 层),关闭时零开销
+      if (eshotMark) {
+        ctx.globalAlpha = 0.4; ctx.strokeStyle = "#ff3b4d"; ctx.lineWidth = 7;
+        for (let i = 0; i < list.length; i++) {
+          const s = list[i];
+          if (s.x < view.l || s.x > view.r || s.y < view.t || s.y > view.b) continue;
+          ctx.beginPath(); ctx.arc(s.x, s.y, s.r + 4, 0, U.TAU); ctx.stroke();
+        }
+        ctx.globalAlpha = 1; ctx.strokeStyle = "#ff5d6e"; ctx.lineWidth = 3;
+        for (let i = 0; i < list.length; i++) {
+          const s = list[i];
+          if (s.x < view.l || s.x > view.r || s.y < view.t || s.y > view.b) continue;
+          ctx.beginPath(); ctx.arc(s.x, s.y, s.r + 2, 0, U.TAU); ctx.stroke();
+        }
       }
     },
 

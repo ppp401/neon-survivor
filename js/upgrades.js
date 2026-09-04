@@ -50,6 +50,7 @@
     switch (id) {
       case "meteor_evo": case "meteor_chain":
         if (s.burn) out.push("焦土 " + R(s.burn) + "/0.5s×" + (Math.round(s.burnDur * 10) / 10) + "s");
+        if (id === "meteor_chain") out.push("落地连锁×" + (s.chainHops || 0));
         break;
       case "lance":
         out.push("一次触碰受创一次");
@@ -60,40 +61,42 @@
       case "lance_vortex":
         out.push("卷伤 " + R(s.damage) + "/0.2s · 环绕激光 " + R(s.beamDmg || 0) + "/" + (Math.round((s.beamTick || 0.1) * 10) / 10) + "s");
         break;
-      case "spear_lance":
-        if (s.beamDmg) out.push("激光 " + R(s.beamDmg));
+      case "spear_evo":
+        if (s.armorBreak) out.push("破甲 " + (Math.round(s.armorBreak * 10) / 10) + "s(受伤+50%,命中刷新)");
         break;
       case "missile_chain":
-        out.push("闪电 " + R(s.damage * 0.6) + "/跳×" + (s.chainHops || 3));
+        out.push("命中闪电 " + R(s.damage * 0.6) + "/跳×" + (s.chainHops || 3));
+        out.push("击杀追击 " + (s.chase || 0) + " 次");
         break;
       case "frost_poison":
         if (s.freeze) out.push("冻结 " + (Math.round(s.freeze * 10) / 10) + "s(受伤+50%)");
+        if (s.dot) out.push("命中上毒 " + R(s.dot) + "/0.5s×" + (Math.round(s.dotDur * 10) / 10) + "s");
         break;
       case "shotgun_grenade":
-        if (s.splash) out.push("溅射 " + R(s.damage * s.splashMul));
+        if (s.splash) out.push("每颗命中溅射 " + R(s.damage * s.splashMul) + "(半径" + R(s.splash) + ")");
         break;
       case "grenade_evo":
         out.push("子爆 " + R(s.damage * 0.55) + "×" + (typeof s.cluster === "number" ? s.cluster : 2));
         break;
       case "railgun_evo": case "railgun_grenade":
         if (s.explode) out.push("贯穿爆 " + R(s.damage) + "·半径" + R(s.explode));
+        if (id === "railgun_grenade") out.push("每次贯穿触发 · 首次分裂" + (s.cluster || 0) + "颗");
         break;
       case "detonate": case "detonate_evo": case "crescent_detonate":
-        if (s.explodeDmg) out.push("殉爆 " + R(s.explodeDmg));
+        if (s.explodeDmg) out.push("命中殉爆 " + R(s.explodeDmg) + "(半径" + R(s.explodeR) + ",概率" + Math.round((s.explodeChance || 0) * 100) + "%)" + (s.chainHops ? " · 连爆" + s.chainHops + "跳" : ""));
         break;
       case "shockwave_frost":
-        if (s.shatter) out.push("碎裂 " + R(s.damage * 0.5));
         if (s.freeze) out.push("冻结 " + (Math.round(s.freeze * 10) / 10) + "s");
+        if (s.shatter) out.push("再次命中碎裂50%伤害(半径" + R(s.shatter) + ")");
         break;
       case "timestop_evo":
         if (s.shatter) out.push("碎裂 " + R(s.damage * 0.5));
-        break;
-      case "polymorph_timestop":
-        if (s.freeze) out.push("冻结 " + (Math.round(s.freeze * 10) / 10) + "s");
+        if (s.freeze) out.push("落地冻结 " + (Math.round(s.freeze * 10) / 10) + "s");
         break;
       case "blade_aura":
         if (s.splash) out.push("溅射 " + R(s.damage * s.splashMul));
         if (s.pull) out.push("吸力 " + R(s.pull));
+        out.push("刃触0.25s · 圈伤0.4s");
         break;
       case "crescent_evo":
         if (s.leaveTrail) out.push("弧灼 " + R(s.damage * 0.25) + "/0.5s");
@@ -101,9 +104,26 @@
       case "chain_evo":
         out.push("每跳伤害 ×1.1");
         break;
-      case "hex": case "hex_evo": case "hex_poison":
+      case "hex_poison":
+        out.push("毒 " + R(s.dot) + "/0.5s×" + (Math.round(s.dotDur * 10) / 10) + "s");
+        out.push("每跳缩短引信 " + s.fuseCut + "s");
+        out.push("引爆传播诅咒+毒");
         if (s.frac) out.push("引爆 +" + Math.round(s.frac * 100) + "%maxHp(Boss÷3)");
         break;
+      case "hex": case "hex_evo":
+        if (s.frac) out.push("引爆 +" + Math.round(s.frac * 100) + "%maxHp(Boss÷3)");
+        if (s.delay) out.push("引信 " + (Math.round(s.delay * 10) / 10) + "s · 引爆传播最多" + (s.spread || 0) + "个");
+        break;
+      case "missile_evo": out.push("击杀后继续追击(伤害×0.85)"); break;
+      case "boomerang_evo": out.push("去返贯穿"); break;
+      case "shotgun_evo": case "polymorph_evo": out.push("每弹穿透 " + (s.pierce || 0) + " 次"); break;
+      case "sentry_evo": out.push("炮弹穿透 " + (s.pierce || 0) + " 次"); break;
+      case "frost_evo": out.push("冻结 " + (Math.round(s.freeze * 10) / 10) + "s(受伤+50%)"); break;
+      case "poison_evo": out.push("持续 " + (Math.round(s.dotDur * 10) / 10) + "s · 传染并减速" + Math.round(s.slow * 100) + "%/" + (Math.round(s.slowDur * 10) / 10) + "s"); break;
+      case "vortex_evo": out.push("卷伤每0.2s×" + (Math.round(s.life * 10) / 10) + "s · 吸力" + R(s.pull)); break;
+      case "shockwave_evo": out.push("命中冻结 " + (Math.round(s.freeze * 10) / 10) + "s"); break;
+      case "boomerang_sentry": out.push("每塔" + (Math.round(s.fireCd * 100) / 100) + "s发射 · 去返穿透" + (s.pierce || 0) + "次"); break;
+      case "blade_evo": out.push("每敌命中间隔0.25s"); break;
     }
     return out;
   }
@@ -112,6 +132,13 @@
   function summary(w, state) {
     const def = CFG.weaponDef(w.id);
     const s = SV.Weapons.stats(w, state);
+    const F = function (v, n) { const m = Math.pow(10, n == null ? 2 : n); return Math.round(v * m) / m; };
+    // 复合机制用固定结构把触发关系说完整;所有数字仍来自 Weapons.stats()。
+    if (w.id === "spear_evo") return "CD " + F(s.cooldown) + "s · 破甲" + F(s.armorBreak, 1) + "s(受伤+50%,命中刷新)";
+    if (w.id === "spear_lance") return "贯刺" + F(s.damage) + " · CD" + F(s.cooldown) + "s · 破甲" + F(s.armorBreak, 1) + "s(+50%) · 光栅" + F(s.gridDmg) + "/" + F(s.gridTick, 1) + "s×" + F(s.gridLife, 1) + "s · 长" + F(s.gridLen) + " · 最多" + s.gridMax + "条";
+    if (w.id === "polymorph_timestop") return s.count + "变形弹 · 变羊" + F(s.dur, 1) + "s · 结束/死亡爆炸" + F(s.bombDmg) + "(半径" + F(s.bombRadius) + ") · 冻结" + F(s.freeze, 1) + "s";
+    if (w.id === "shockwave_frost") return "冻结" + F(s.freeze, 1) + "s · 再次命中碎裂50%伤害(半径" + F(s.shatter) + ")";
+    if (w.id === "hex_poison") return extraSummary(w.id, s).join(" · ");
     const CN = CFG.COUNT_NOUN;
     const noun = CN[w.id] || CN[w.id.replace(/_evo$/, "")] || "";
     const p = [];

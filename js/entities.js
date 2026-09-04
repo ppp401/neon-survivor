@@ -118,9 +118,10 @@
       trailInterval: def.trailInterval || 0, trailDur: def.trailDur || 0, trailDmg: def.trailDmg || 0,
       revealed: false, _shieldedByAura: false, _shieldDr: 0, _speedBuff: 1, _speedBuffT: 0,
       flash: 0, slow: 0, slowF: 0, frozen: 0, bladeCd: 0,
-      poison: 0, poisonDmg: 0, poisonTick: 0,
-      hex: 0, hexDmg: 0, hexFrac: 0, hexSpread: 0,
-      sheep: 0, armorBreak: 0,
+      poison: 0, poisonDmg: 0, poisonTick: 0, poisonWid: "", poisonHexCut: 0,
+      hex: 0, hexDmg: 0, hexFrac: 0, hexSpread: 0, hexWid: "", hexPoisonDmg: 0, hexPoisonDur: 0, hexFuseCut: 0,
+      sheep: 0, armorBreak: 0, sheepBomb: false, sheepBombDone: false, sheepBombMax: 0,
+      sheepBombDmg: 0, sheepBombRadius: 0, sheepBombFreeze: 0, sheepBombWid: "",
       // ai 局部状态
       t1: 0, t2: 0, cstate: "walk", cdir: 0, ct: 0,
       isBoss: false
@@ -283,14 +284,44 @@
       let s = 0;
       for (let j = 0; j < sn.length && s < spread; j++) {
         const o = sn[j];
-        if (o !== e && o.hp > 0 && !(o.hex > 0)) { o.hex = 0.8; o.hexDmg = e.hexDmg; o.hexFrac = e.hexFrac; o.hexSpread = 0; o.hexWid = e.hexWid; s++; }
+        if (o !== e && o.hp > 0 && !(o.hex > 0)) {
+          o.hex = 0.8; o.hexDmg = e.hexDmg; o.hexFrac = e.hexFrac; o.hexSpread = 0; o.hexWid = e.hexWid;
+          // 腐朽天灾的爆炸传播同时带毒;传播印记的 spread=0,不会继续扩散。
+          if (e.hexPoisonDmg > 0) {
+            o.poisonStacks = Math.min(3, (o.poisonStacks || 0) + 1); o.poison = e.hexPoisonDur;
+            o.poisonDmg = e.hexPoisonDmg * (1 + 0.4 * (o.poisonStacks - 1)); o.poisonTick = 0; o.poisonWid = e.hexWid;
+            o.poisonHexCut = e.hexFuseCut || 0; o.hexPoisonDmg = e.hexPoisonDmg; o.hexPoisonDur = e.hexPoisonDur; o.hexFuseCut = e.hexFuseCut;
+          }
+          s++;
+        }
       }
     }
-    e.hex = 0; e.hexSpread = 0;
+    e.hex = 0; e.hexSpread = 0; e.hexPoisonDmg = 0; e.hexPoisonDur = 0; e.hexFuseCut = 0;
+  }
+
+  // 时之诅咒:变羊自然结束或宿主提前死亡时仅爆炸一次。控制时长对 Boss 继续套 CC_BOSS_MUL。
+  function sheepBombExplode(state, e) {
+    if (!e.sheepBomb || e.sheepBombDone) return;
+    e.sheepBombDone = true; e.sheepBomb = false;
+    const radius = e.sheepBombRadius || 90;
+    const near = SV.Spatial.queryCircle(e.x, e.y, radius);
+    for (let i = 0; i < near.length; i++) {
+      const o = near[i];
+      if (o.hp <= 0 || U.dist2(e.x, e.y, o.x, o.y) > radius * radius) continue;
+      let vuln = o.frozen > 0 ? 1.5 : (o.sheep > 0 ? 1.3 : 1);
+      if (o.armorBreak > 0) vuln += 0.5;
+      damageEnemy(state, o, e.sheepBombDmg, { text: false, wid: e.sheepBombWid, vuln: vuln });
+      const freeze = o.isBoss ? e.sheepBombFreeze * C.CC_BOSS_MUL : e.sheepBombFreeze;
+      o.frozen = Math.max(o.frozen || 0, freeze);
+    }
+    SV.Effects.explosion(e.x, e.y, "#d6b3ff", 20);
+    SV.Effects.ring(e.x, e.y, "#d6b3ff", 8, radius, 0.35, 4);
+    SV.Effects.shake(4, 0.2);
   }
 
   // 击杀结算
   function killEnemy(state, e) {
+    if (e.sheepBomb && !e.sheepBombDone) sheepBombExplode(state, e);
     if (e.hex > 0) hexDetonate(state, e, false); // 被提前击杀:诅咒立刻蔓延(不被抢杀浪费)
     SV.Effects.death(e.x, e.y, e.color);
     SV.Audio.die(!!e.isBoss);
@@ -585,15 +616,19 @@
       if (e.slow > 0) e.slow -= dt;
       if (e.frozen > 0) e.frozen -= dt;
       if (e.sheep > 0) e.sheep -= dt;
+      if (e.sheepBomb && !e.sheepBombDone && e.sheep <= 0) sheepBombExplode(state, e);
       if (e.armorBreak > 0) e.armorBreak -= dt;
       if (e.bladeCd > 0) e.bladeCd -= dt;
 
       // 剧毒 DoT(毒尽则叠层清零)
       if (e.poison > 0) {
         e.poison -= dt; e.poisonTick -= dt;
-        if (e.poisonTick <= 0) { e.poisonTick = 0.5; damageEnemy(state, e, e.poisonDmg, { text: false, wid: e.poisonWid }); }
+        if (e.poisonTick <= 0) {
+          e.poisonTick = 0.5; damageEnemy(state, e, e.poisonDmg, { text: false, wid: e.poisonWid });
+          if (e.poisonHexCut > 0 && e.hex > 0 && e.poisonWid === e.hexWid) e.hex -= e.poisonHexCut;
+        }
       } else if (e.poisonStacks) {
-        e.poisonStacks = 0;
+        e.poisonStacks = 0; e.poisonHexCut = 0;
       }
 
       // 诅咒:倒计时引爆 %+maxHp + 向周围蔓延(对群友好)

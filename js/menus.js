@@ -5,6 +5,7 @@
 
   let screens = {};
   let onActFn = null;
+  let charSelStage = "ruins"; // 选角界面当前所属地图(时长成绩按 图×难度 区分)
 
   const STAGE_ICON = { ruins: "◈", crimson: "▲", frozen: "❄", void: "✸" };
 
@@ -116,6 +117,7 @@
 
     // ── 选角界面(4 名角色,点选即进选关)
     showCharSelect: function (sel) {
+      charSelStage = sel.stage || charSelStage;
       this.setDiffHighlight(sel.diff);
       // 图标网格:每个角色一个紧凑图标块(选中金色描边)
       const wrap = document.getElementById("charCards");
@@ -154,21 +156,19 @@
       html += '<div class="cd-body">';
       html += '<div class="cd-desc">' + ch.desc + "</div>";
       html += '<div class="cd-chips">' + chips + "</div>";
-      const cs = SV.Storage.charSummary(id);
-      if (cs && cs.stages > 0) {
-        // 按难度分档列出各自最佳成绩(用户要求:各难度的最佳成绩写清楚)
-        const byDiff = SV.Storage.charSummaryByDiff ? SV.Storage.charSummaryByDiff(id) : {};
-        const order = SV.Config.DIFFICULTY_ORDER || Object.keys(SV.Config.DIFFICULTY);
-        let dh = "";
-        for (let i = 0; i < order.length; i++) {
-          const dn = (SV.Config.DIFFICULTY[order[i]] || {}).name || order[i];
-          const dd = byDiff[order[i]];
-          dh += (i ? " · " : "") + (dd && dd.bestTime > 0
-            ? dn + " " + SV.Util.fmtTime(dd.bestTime) + (dd.clears > 0 ? "(" + dd.clears + "✓)" : "")
-            : dn + " —");
-        }
-        html += '<div class="cd-best">✓' + cs.clears + " 通关 · " + dh + "</div>";
+      // 按难度分档列出「当前所选地图」的最佳成绩(时长随地图变化;无尽桶已并入同难度聚合)
+      const cs = SV.Storage.charStageSummary ? SV.Storage.charStageSummary(id, charSelStage) : { clears: 0, byDiff: {} };
+      const stage = SV.Config.STAGES[charSelStage] || SV.Config.STAGES.ruins;
+      const order = SV.Config.DIFFICULTY_ORDER || Object.keys(SV.Config.DIFFICULTY);
+      let dh = "";
+      for (let i = 0; i < order.length; i++) {
+        const dn = (SV.Config.DIFFICULTY[order[i]] || {}).name || order[i];
+        const dd = cs.byDiff[order[i]];
+        dh += (i ? " · " : "") + (dd && dd.bestTime > 0
+          ? dn + " " + SV.Util.fmtTime(dd.bestTime) + (dd.clears > 0 ? "(" + dd.clears + "✓)" : "")
+          : dn + " —");
       }
+      html += '<div class="cd-best">' + stage.name + " ✓" + cs.clears + " 通关 · " + dh + "</div>";
       html += "</div>";
       wrap.innerHTML = html;
     },
@@ -281,6 +281,13 @@
         btns[i].classList.toggle("on", !!enabled);
       }
     },
+    setEshotToggle: function (on) {
+      const btns = document.querySelectorAll(".eshot-toggle");
+      for (let i = 0; i < btns.length; i++) {
+        btns[i].textContent = on ? "🔴 敌弹标红:开" : "🔴 敌弹标红:关";
+        btns[i].classList.toggle("on", !!on);
+      }
+    },
     // 把存档音量回填到所有音量滑块(标题屏 + 暂停屏)
     setVolUI: function (music, sfx) {
       const ms = document.querySelectorAll(".vol-music");
@@ -297,6 +304,7 @@
       if (SV.Audio) this.setSoundToggle(SV.Audio.isMuted());
       if (SV.Effects) this.setFxToggle(SV.Effects.isReduced());
       if (SV.Auto) this.setAutoToggle(!!SV.Auto.enabled);
+      if (SV.Renderer && SV.Renderer.getEshotMark) this.setEshotToggle(SV.Renderer.getEshotMark());
       if (SV.Audio) this.setVolUI(SV.Audio.getMusicVol(), SV.Audio.getSfxVol());
       let html = "";
       // 角色(被动技能说明)

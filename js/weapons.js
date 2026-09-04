@@ -13,8 +13,9 @@
       explode: 0, vortex: false, vrad: 0, pull: 0, vtick: 0, btick: 0, tc: 0,
       chainHops: 0, chainRange: 0, splash: 0, splashMul: 0, explodeEvery: false, cluster: false, clustered: false,
       beamLen: 0, beamWidth: 0, beamDmg: 0, beamTick: 0, beamSpin: 0, chaseKills: 0, meteor: 0, burn: 0, burnDur: 0, shockwave: null,
-      sheep: false, sheepDur: 0, sheepPierce: 0, sheepFreeze: 0,
-      timestop: 0, tsFreeze: 0, shatter: false };
+      sheep: false, sheepDur: 0, sheepPierce: 0, sheepFreeze: 0, sheepBomb: false, sheepBombDmg: 0, sheepBombRadius: 0,
+      timestop: 0, tsFreeze: 0, shatter: false,
+      grid: false, gridDir: 0, gridLen: 0, gridTick: 0, gridLife: 0, gridEvery: 0, gridWidth: 0 };
   }
   function pReset(p) {
     p.vx = 0; p.vy = 0; p.r = 5; p.damage = 10; p.life = 1; p.maxLife = 1; p.color = "#fff";
@@ -23,8 +24,9 @@
     // 特殊机制字段必须清零,否则回收的投射物会携带上一世的残留(如 shockwave/chainHops/cluster)
     p.chainHops = 0; p.chainRange = 0; p.splash = 0; p.splashMul = 0; p.explodeEvery = false; p.cluster = false; p.clustered = false;
     p.beamLen = 0; p.beamWidth = 0; p.beamDmg = 0; p.beamTick = 0; p.beamSpin = 0; p.chaseKills = 0; p.meteor = 0; p.burn = 0; p.burnDur = 0; p.shockwave = null;
-    p.sheep = false; p.sheepDur = 0; p.sheepPierce = 0; p.sheepFreeze = 0;
+    p.sheep = false; p.sheepDur = 0; p.sheepPierce = 0; p.sheepFreeze = 0; p.sheepBomb = false; p.sheepBombDmg = 0; p.sheepBombRadius = 0;
     p.timestop = 0; p.tsFreeze = 0; p.shatter = false;
+    p.grid = false; p.gridDir = 0; p.gridLen = 0; p.gridTick = 0; p.gridLife = 0; p.gridEvery = 0; p.gridWidth = 0;
   }
   const proj = SV.Pool.create(pFactory, pReset);
   const beams = []; // {pts,life,max,color,width}
@@ -72,6 +74,12 @@
     if (base.length != null) s.length = base.length * m.areaMul;
     if (base.expand != null) s.expand = base.expand * m.areaMul;
     applyCharWeaponSpec(s, def, state); // 角色武器专精
+    // 新融合的副伤害与主伤害使用同一伤害倍率,摘要展示的也是实际生效值。
+    if (base.damage > 0) {
+      const damageScale = s.damage / base.damage;
+      if (base.gridDmg != null) s.gridDmg = base.gridDmg * damageScale;
+      if (base.bombDmg != null) s.bombDmg = base.bombDmg * damageScale;
+    }
     return s;
   }
 
@@ -577,7 +585,7 @@
   function fireShockwave(state, w, def, s) {
     const p = state.player;
     const base = aimFrom(p);
-    const opts = { knock: s.knock, freeze: def.evo && s.freeze, shatter: s.shatter };
+    const opts = { knock: s.knock, freeze: def.evo && s.freeze, shatter: s.shatter, shatterMul: s.shatterMul };
     for (let k = 0; k < s.count; k++) {
       const dir = s.count > 1 ? base + k * U.TAU / s.count : base;
       swingOnce(state, w, def, s, dir, opts);
@@ -596,23 +604,26 @@
     const cand = [];
     for (let i = 0; i < near.length; i++) {
       const e = near[i];
-      if (e.hp <= 0) continue;
+      if (e.hp <= 0 || e.hex > 0) continue; // 已有印记不能重标,避免不断重置引信
       if (useView && (e.x < cam.x - hw || e.x > cam.x + hw || e.y < cam.y - hh || e.y > cam.y + hh)) continue; // 屏外不锁
       cand.push(e);
     }
-    // Boss 优先,再按 maxHp 降序(血量最高的优先,%maxHp 才能打在 Boss 身上);未标记的优先于已标记
+    // Boss 优先,再按 maxHp 降序(血量最高的优先,%maxHp 才能打在 Boss 身上)
     cand.sort(function (a, b) {
       const ab = a.isBoss ? 1 : 0, bb = b.isBoss ? 1 : 0;
       if (ab !== bb) return bb - ab;
       if (a.maxHp !== b.maxHp) return b.maxHp - a.maxHp;
-      const ah = a.hex > 0 ? 1 : 0, bh = b.hex > 0 ? 1 : 0;
-      return ah - bh;
+      return 0;
     });
     let marked = 0;
     for (let i = 0; i < cand.length && marked < s.count; i++) {
       const e = cand[i];
       e.hex = s.delay; e.hexDmg = s.damage; e.hexFrac = s.frac; e.hexSpread = s.spread; e.hexWid = w.id;
-      if (s.dot) { e.poisonStacks = Math.min(3, (e.poisonStacks || 0) + 1); e.poison = s.dotDur; e.poisonDmg = s.dot * (1 + 0.4 * ((e.poisonStacks || 1) - 1)); e.poisonTick = 0; e.poisonWid = w.id; } // 融合:腐朽天灾
+      if (s.dot) {
+        e.poisonStacks = Math.min(3, (e.poisonStacks || 0) + 1); e.poison = s.dotDur;
+        e.poisonDmg = s.dot * (1 + 0.4 * ((e.poisonStacks || 1) - 1)); e.poisonTick = 0; e.poisonWid = w.id;
+        e.poisonHexCut = s.fuseCut || 0; e.hexPoisonDmg = s.dot; e.hexPoisonDur = s.dotDur; e.hexFuseCut = s.fuseCut || 0;
+      } // 融合:腐朽天灾
       SV.Effects.text(e.x, e.y - e.r - 6, "诅", "#d0a0ff", 13);
       marked++;
     }
@@ -620,7 +631,7 @@
   }
 
   // ── 扇形挥砍(近战通用):以 dir 为中心、s.arc 张角、s.radius 半径内的敌人各命中一次 + 挥砍视觉
-  // opts: { knock, freeze, shatter, armorBreak, explodeChance, explodeR, explodeDmg, chainHops, onHit }
+  // opts: { knock, freeze, shatter, armorBreak, explodeChance, explodeR, explodeDmg, chainHops, onHit, hitIds }
   function swingOnce(state, w, def, s, dir, opts) {
     opts = opts || {};
     const p = state.player;
@@ -631,11 +642,14 @@
     for (let i = 0; i < near.length; i++) {
       const e = near[i];
       if (e.hp <= 0) continue;
+      if (opts.hitIds && opts.hitIds[e.id]) continue;
       if (U.dist2(p.x, p.y, e.x, e.y) > r * r) continue;
       const ang = U.angleTo(p.x, p.y, e.x, e.y);
       const diff = Math.abs(Math.atan2(Math.sin(ang - dir), Math.cos(ang - dir)));
       if (diff > half) continue;
+      const wasFrozen = e.frozen > 0; // 必须在本次冻结前保存:冰碎共振首击只冻结
       dmgEnemy(e, s.damage, w.id);
+      if (opts.hitIds) opts.hitIds[e.id] = true;
       SV.Effects.hit(e.x, e.y, def.color);
       if (opts.knock) {
         const a = U.angleTo(p.x, p.y, e.x, e.y);
@@ -643,7 +657,7 @@
         e.x += Math.cos(a) * kb; e.y += Math.sin(a) * kb;
       }
       if (opts.freeze) ccFreeze(e, opts.freeze);
-      if (opts.shatter && e.frozen > 0) splashAt(state, e.x, e.y, opts.shatter, s.damage * 0.5, def.color, 10, w.id);
+      if (opts.shatter && wasFrozen) splashAt(state, e.x, e.y, opts.shatter, s.damage * (opts.shatterMul || 0.5), def.color, 10, w.id);
       if (opts.armorBreak) e.armorBreak = Math.max(e.armorBreak || 0, opts.armorBreak);
       if (opts.explodeChance && Math.random() < opts.explodeChance) explodeAt(state, e.x, e.y, opts.explodeR, opts.explodeDmg, def.color, w.id, opts.chainHops || 0);
       if (opts.onHit) opts.onHit(e);
@@ -691,10 +705,10 @@
   // ── 殉爆重击(多向扇形挥砍,命中按概率以敌为圆心爆炸;evo 必爆且连环)
   function fireDetonate(state, w, def, s) {
     const base = aimFrom(state.player);
-    const opts = { explodeChance: s.explodeChance, explodeR: s.explodeR, explodeDmg: s.explodeDmg, chainHops: s.chainHops || 0 };
+    const opts = { explodeChance: s.explodeChance, explodeR: s.explodeR, explodeDmg: s.explodeDmg, chainHops: s.chainHops || 0, hitIds: {} };
     const cnt = s.count || 1;
     for (let k = 0; k < cnt; k++) {
-      const dir = cnt > 1 ? base + (k - (cnt - 1) / 2) * 0.7 : base;
+      const dir = cnt > 1 ? base + k * U.TAU / cnt : base;
       swingOnce(state, w, def, s, dir, opts);
     }
     SV.Audio.shoot();
@@ -837,6 +851,17 @@
         else if (pr.explode && pr.pierce <= 0) explodeGrenade(state, pr); // 榴弹到时爆炸
         return false;
       }
+      // 贯星长矛光栅:静止的短时横向切割线,每 tick 对线上每敌至多结算一次。
+      if (pr.grid) {
+        pr.gridTick -= dt;
+        if (pr.gridTick <= 0) {
+          pr.gridTick += pr.gridEvery || 0.2;
+          const dx = Math.cos(pr.gridDir), dy = Math.sin(pr.gridDir);
+          const x0 = pr.x - dx * pr.gridLen / 2, y0 = pr.y - dy * pr.gridLen / 2;
+          beamDamage(state, x0, y0, dx, dy, pr.gridLen, pr.gridWidth / 2, pr.damage, pr.color, pr.weaponId);
+        }
+        return true;
+      }
       // 冲击波:扩张环,前沿带内伤害 + 径向击退(命中各一次),长到 max 为止
       if (pr.shockwave) {
         const sw = pr.shockwave;
@@ -967,9 +992,14 @@
         if (pr.sheep) {
           if (!pr.hitIds) pr.hitIds = [];
           pr.hitIds.push(e.id);
+          dmgEnemy(e, pr.damage, pr.weaponId);
           ccSheep(e, pr.sheepDur);
           if (pr.sheepFreeze) ccFreeze(e, pr.sheepFreeze);
-          dmgEnemy(e, pr.damage, pr.weaponId);
+          if (pr.sheepBomb) {
+            e.sheepBomb = true; e.sheepBombDone = false; e.sheepBombMax = e.sheep;
+            e.sheepBombDmg = pr.sheepBombDmg; e.sheepBombRadius = pr.sheepBombRadius;
+            e.sheepBombFreeze = pr.tsFreeze; e.sheepBombWid = pr.weaponId;
+          }
           SV.Effects.text(e.x, e.y - e.r - 6, "咩", pr.color, 13);
           if (pr.sheepPierce > 0) { pr.sheepPierce--; return false; } // 进化/融合:穿透继续
           return true;                                            // 基础:命中即消耗(单体)
@@ -1228,20 +1258,43 @@
       pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
       pr.r = 8; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
       pr.homing = true; pr.seek = 4.5; pr.target = best; pr.weaponId = w.id;
-      pr.sheep = true; pr.sheepDur = s.dur; pr.sheepFreeze = s.freeze; pr.sheepPierce = s.pierce || 1; pr.hitIds = [];
+      pr.sheep = true; pr.sheepDur = s.dur; pr.sheepPierce = s.pierce || 1; pr.hitIds = [];
+      pr.sheepBomb = true; pr.sheepBombDmg = s.bombDmg; pr.sheepBombRadius = s.bombRadius; pr.tsFreeze = s.freeze;
       fired++;
     }
     if (fired) { SV.Audio.hit(); SV.Effects.shake(4, 0.2); }
   }
-  // ── 贯星长矛(融合:前突贯穿 + 沿途激光束,远近通吃)
+  // ── 贯星长矛(融合:窄线贯刺命中沿途全员,命中点建立与矛路垂直的持续光栅)
   function fusionSpearLance(state, w, def, s) {
     const p = state.player;
     const dir = aimFrom(p);
-    swingOnce(state, w, def, s, dir, {});
     const dx = Math.cos(dir), dy = Math.sin(dir);
-    beamDamage(state, p.x, p.y, dx, dy, s.beamLen, s.beamWidth / 2, s.beamDmg, def.color, w.id);
-    beams.push({ pts: [[p.x, p.y], [p.x + dx * s.beamLen, p.y + dy * s.beamLen]], life: 0.1, max: 0.1, color: def.color, width: s.beamWidth });
-    SV.Audio.shoot();
+    const mx = p.x + dx * s.radius / 2, my = p.y + dy * s.radius / 2;
+    const near = SV.Spatial.queryCircle(mx, my, s.radius / 2 + 60);
+    const hits = [];
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (e.hp <= 0) continue;
+      const ex = e.x - p.x, ey = e.y - p.y;
+      const along = ex * dx + ey * dy;
+      if (along < 0 || along > s.radius) continue;
+      const side = Math.abs(ex * dy - ey * dx);
+      if (side > e.r + s.width / 2) continue;
+      dmgEnemy(e, s.damage, w.id);
+      e.armorBreak = Math.max(e.armorBreak || 0, s.armorBreak);
+      SV.Effects.hit(e.x, e.y, def.color);
+      hits.push({ e: e, along: along });
+    }
+    // "最靠前"按矛尖方向的投影排序,只保留推进最远的四个节点。
+    hits.sort(function (a, b) { return b.along - a.along; });
+    for (let i = 0; i < hits.length && i < s.gridMax; i++) {
+      const pr = mkProj(), e = hits[i].e;
+      pr.x = e.x; pr.y = e.y; pr.vx = 0; pr.vy = 0; pr.r = s.gridWidth / 2;
+      pr.damage = s.gridDmg; pr.life = s.gridLife; pr.maxLife = s.gridLife; pr.color = def.color; pr.weaponId = w.id;
+      pr.grid = true; pr.gridDir = dir + Math.PI / 2; pr.gridLen = s.gridLen; pr.gridTick = 0; pr.gridLife = s.gridLife; pr.gridEvery = s.gridTick; pr.gridWidth = s.gridWidth;
+    }
+    beams.push({ pts: [[p.x, p.y], [p.x + dx * s.radius, p.y + dy * s.radius]], life: 0.16, max: 0.16, color: def.color, width: s.width });
+    SV.Audio.shoot(); SV.Effects.shake(2, 0.1);
   }
 
   function init(state, startWeapon) {

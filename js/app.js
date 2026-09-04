@@ -3,6 +3,8 @@
 (function () {
   "use strict";
   function go() {
+    const versionEl = document.getElementById("titleVersion");
+    if (versionEl) versionEl.textContent = window.SV_SW_VERSION || "";
     SV.Game.boot();
     // 运行时 PNG 图标(iOS apple-touch-icon + 浏览器 favicon);失败不阻断游戏
     try { if (SV.Icons && SV.Icons.apply) SV.Icons.apply(); } catch (e) {}

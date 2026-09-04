@@ -9,6 +9,7 @@
     totalKills: 0, totalRuns: 0, totalEvolutions: 0,
     soundOn: true, reducedFx: false,
     autoMode: false,                 // 全自动模式开关(SV.Auto)
+    eshotMark: false,                // 敌方子弹标红(边缘描红,便于与己方弹幕区分)
     musicVol: 1.0, sfxVol: 1.0,   // 音乐/音效音量(0..1);默认均满档
     lastStage: "ruins", lastDiff: "normal", lastChar: "bulwark"
   };
@@ -54,6 +55,7 @@
     set: function (k, v) { load()[k] = v; scheduleFlush(); },
     setSound: function (on) { this.set("soundOn", !!on); },
     setReducedFx: function (on) { this.set("reducedFx", !!on); },
+    setEshotMark: function (on) { this.set("eshotMark", !!on); },
     setSelection: function (stageId, diff) { load().lastStage = stageId; load().lastDiff = diff; writeNow(); },
     setChar: function (id) { load().lastChar = id; writeNow(); },
 
@@ -106,6 +108,22 @@
         if (!out[p[1]]) out[p[1]] = { bestTime: 0, clears: 0 };
         if (b.time > out[p[1]].bestTime) out[p[1]].bestTime = b.time;
         if (b.cleared) out[p[1]].clears++;
+      }
+      return out;
+    },
+
+    // 某角色在某张地图的成绩(选角界面用):{ clears, byDiff: { diffId -> {bestTime, clears} } }
+    // 无尽桶(:endless)并入同难度聚合(时长取 max、通关计数累加)
+    charStageSummary: function (charId, stageId) {
+      const bests = load().bests;
+      const out = { clears: 0, byDiff: {} };
+      for (const k in bests) {
+        const p = k.split(":");
+        if (p[0] !== stageId || p[2] !== charId) continue;
+        const b = bests[k];
+        if (!out.byDiff[p[1]]) out.byDiff[p[1]] = { bestTime: 0, clears: 0 };
+        if (b.time > out.byDiff[p[1]].bestTime) out.byDiff[p[1]].bestTime = b.time;
+        if (b.cleared) { out.byDiff[p[1]].clears++; out.clears++; }
       }
       return out;
     },

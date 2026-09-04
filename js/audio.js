@@ -74,7 +74,8 @@
   // 主路径 WebAudio:fetch → decodeAudioData → BufferSource(loop=true) 采样级无缝。
   //   - 解码后扫描头尾亚阈值样本(-60dB)夹出循环体(loopStart/loopEnd), 兼容不同
   //     浏览器对 LAME gapless 头的处理差异与 decode 重采样。
-  //   - buffer 仅缓存当前曲(+上一曲), 90s 立体声解码约 32MB/曲, 不全量预解码。
+  //   - 加长版约 5 分钟，单曲解码约 106MB；buffer 仅缓存当前曲，避免移动端
+  //     同时驻留两首造成约 212MB 的额外内存压力。
   // 回退 HTMLAudio:file:// 下 fetch 被 CORS 拦(或无 fetch/解码失败)时走
   //   el.loop=true;新编码带 LAME gapless 头, Chrome/FF 自动裁编码器延迟, 缝隙最小。
   // 音乐走独立 musicGain 直连 destination(不进 SFX 的 MASTER_CAP), 音量语义
@@ -92,7 +93,7 @@
   let musicGain = null;
   let curBgm = null;
   let bgmMode = "none";               // "webaudio" | "html" | "none"(解析后定格)
-  const _bgmBufs = {};                // id -> AudioBuffer(LRU 最多留 2 曲)
+  const _bgmBufs = {};                // id -> AudioBuffer(LRU 仅留当前曲)
   const _bgmOrder = [];               // LRU 序
   let _bgmSrc = null;                 // 当前 BufferSource
   let _bgmToken = 0;                  // 防陈旧 onended 误清状态
@@ -153,7 +154,7 @@
     const i = _bgmOrder.indexOf(id);
     if (i >= 0) _bgmOrder.splice(i, 1);
     _bgmOrder.push(id);
-    while (_bgmOrder.length > 2) {   // 只留当前 + 上一曲(title↔game 来回免重解码)
+    while (_bgmOrder.length > 1) {   // 加长曲较大，只留当前曲
       const old = _bgmOrder.shift();
       if (old !== id) delete _bgmBufs[old];
     }

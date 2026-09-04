@@ -196,6 +196,13 @@
       SV.HUD.toast(v ? "已开启省电模式" : "已关闭省电模式");
     }
     else if (act === "toggleAuto") { if (SV.Auto && SV.Auto.toggle) SV.Auto.toggle(); }
+    else if (act === "toggleEshotMark") {
+      const v = !SV.Renderer.getEshotMark();
+      SV.Renderer.setEshotMark(v);
+      SV.Storage.setEshotMark(v);
+      SV.Menus.setEshotToggle(v);
+      SV.HUD.toast(v ? "敌弹标红已开启" : "敌弹标红已关闭");
+    }
   }
 
   function refreshTitleBest() {
@@ -280,6 +287,7 @@
     SV.Menus.setFxToggle(SV.Effects.isReduced());
     SV.Menus.setVolUI(SV.Audio.getMusicVol(), SV.Audio.getSfxVol());
     if (SV.Menus && SV.Menus.setAutoToggle && SV.Auto) SV.Menus.setAutoToggle(!!SV.Storage.get("autoMode"));
+    if (SV.Renderer && SV.Renderer.setEshotMark) SV.Renderer.setEshotMark(!!SV.Storage.get("eshotMark"));
     SV.Menus.onAct(handleAct);
     if (SV.Auto && SV.Auto.init) SV.Auto.init();   // 全自动模式:包装升级入口、绑定开关、还原偏好
 

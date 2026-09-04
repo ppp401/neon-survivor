@@ -101,7 +101,7 @@
         <label class="vol-cell">🎵 音乐<input type="range" class="vol-slider vol-music" min="0" max="100" value="100"></label>
         <label class="vol-cell">🔊 音效<input type="range" class="vol-slider vol-sfx" min="0" max="100" value="100"></label>
       </div>
-      <div class="author-row">by XuXing &amp; GLM</div>
+      <div class="author-row">by XuXing &amp; GLM &amp; GPT · <span id="titleVersion"></span></div>
     </div>
   </div>
 
@@ -165,6 +165,7 @@
           <button class="mini-btn btn-sound-toggle" data-act="toggleSound">🔊 音效:开</button>
           <button class="mini-btn btn-fx-toggle" data-act="toggleFx">⚡ 省电:关</button>
           <button class="mini-btn auto-toggle" data-act="toggleAuto">🤖 全自动:关</button>
+          <button class="mini-btn eshot-toggle" data-act="toggleEshotMark">🔴 敌弹标红:关</button>
           <div class="side-divider"></div>
           <label class="vol-cell">🎵 音乐<input type="range" class="vol-slider vol-music" min="0" max="100" value="100"></label>
           <label class="vol-cell">🔊 音效<input type="range" class="vol-slider vol-sfx" min="0" max="100" value="100"></label>
@@ -193,6 +194,7 @@
   </div>
 
   <!-- 脚本:严格按依赖顺序加载(经典 script,file:// 可用) -->
+  <script src="sw.js"></script>
   <script>window.SV = window.SV || {};</script>
   <script src="js/util.js"></script>
   <script src="js/config.js"></script>
