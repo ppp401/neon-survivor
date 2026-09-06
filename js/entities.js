@@ -115,7 +115,8 @@
       shape: def.shape || "circle", shimmer: !!def.shimmer,
       auraR: def.auraR || 0, auraDr: def.auraDr || 0, healRate: def.healRate || 0, auraSpeed: def.auraSpeed || 0,
       stealth: !!def.stealth, burstCount: def.burstCount || 0, burstType: def.burstType || "swarmer",
-      trailInterval: def.trailInterval || 0, trailDur: def.trailDur || 0, trailDmg: def.trailDmg || 0,
+      trailInterval: def.trailInterval || 0, trailDur: def.trailDur || 0,
+      trailDmg: (def.trailDmg || 0) * diff.dmgMul * df * em,
       revealed: false, _shieldedByAura: false, _shieldDr: 0, _speedBuff: 1, _speedBuffT: 0,
       flash: 0, slow: 0, slowF: 0, frozen: 0, bladeCd: 0,
       poison: 0, poisonDmg: 0, poisonTick: 0, poisonWid: "", poisonHexCut: 0,
@@ -139,7 +140,7 @@
       id: _id++, type: bossType, color: def.color, ai: "boss", shape: def.shape || "circle",
       r: def.r, mass: 40,
       hp: hp, maxHp: hp,
-      speed: def.speed, dmg: def.dmg * (diff.bossDmgMul || diff.dmgMul) * em * CU.dmgFactor(t), xp: def.xp,
+      speed: def.speed, dmg: def.dmg * (diff.bossDmgMul || diff.dmgMul) * em * CU.dmgFactor(t) * (def.tier === 3 ? C.T3_BOSS_DAMAGE_MUL : 1), xp: def.xp,
       bossType: bossType, isBoss: true, enrage: false,
       t1: U.rand(1, 3), t2: U.rand(2, 4), ct: 0, cdir: U.rand(0, U.TAU)
     });
@@ -271,8 +272,8 @@
 
   // 诅咒引爆:对 e 结算 固定伤害+百分比maxHp 伤害(可选,引信到期 e 还活着时) + 向周围蔓延 + 视觉;清印记
   function hexDetonate(state, e, damageToo) {
-    // 百分比项对 Boss ×1/3(防 %maxHp 对 Boss 过强;固定项不受影响)
-    const frac = (e.hexFrac || 0) * (e.isBoss ? 1 / 3 : 1);
+    // 百分比项对 Boss ×1/4(防 %maxHp 对 Boss 过强;固定项不受影响)
+    const frac = (e.hexFrac || 0) * (e.isBoss ? 1 / 4 : 1);
     const dmg = (e.hexDmg || 0) + e.maxHp * frac;
     if (damageToo) {
       damageEnemy(state, e, dmg, { text: false, wid: e.hexWid });
@@ -287,6 +288,11 @@
         const o = sn[j];
         if (o !== e && o.hp > 0 && !(o.hex > 0)) {
           o.hex = 0.8; o.hexDmg = e.hexDmg; o.hexFrac = e.hexFrac; o.hexSpread = 0; o.hexWid = e.hexWid;
+          if (e.hexEchoDmg > 0) {
+            damageEnemy(state, o, e.hexEchoDmg, { text: false, wid: e.hexWid });
+            o.hexEchoDmg = e.hexEchoDmg;
+            SV.Effects.text(o.x, o.y - o.r - 6, "月", "#ba8cff", 13);
+          }
           // 腐朽天灾的爆炸传播同时带毒;传播印记的 spread=0,不会继续扩散。
           if (e.hexPoisonDmg > 0) {
             o.poisonStacks = Math.min(3, (o.poisonStacks || 0) + 1); o.poison = e.hexPoisonDur;
@@ -297,7 +303,7 @@
         }
       }
     }
-    e.hex = 0; e.hexSpread = 0; e.hexPoisonDmg = 0; e.hexPoisonDur = 0; e.hexFuseCut = 0;
+    e.hex = 0; e.hexSpread = 0; e.hexPoisonDmg = 0; e.hexPoisonDur = 0; e.hexFuseCut = 0; e.hexEchoDmg = 0;
   }
 
   // 时之诅咒:变羊自然结束或宿主提前死亡时仅爆炸一次。控制时长对 Boss 继续套 CC_BOSS_MUL。
@@ -314,6 +320,12 @@
       damageEnemy(state, o, e.sheepBombDmg, { text: false, wid: e.sheepBombWid, vuln: vuln });
       const freeze = o.isBoss ? e.sheepBombFreeze * C.CC_BOSS_MUL : e.sheepBombFreeze;
       o.frozen = Math.max(o.frozen || 0, freeze);
+    }
+    if (e.sheepBombSpreadChance > 0 && Math.random() < e.sheepBombSpreadChance) {
+      for (let i = 0; i < near.length; i++) {
+        const o = near[i];
+        if (o !== e && !o.isBoss && o.hp > 0 && o.sheep <= 0) { o.sheep = e.sheepBombSpreadDur; break; }
+      }
     }
     SV.Effects.explosion(e.x, e.y, "#d6b3ff", 20);
     SV.Effects.ring(e.x, e.y, "#d6b3ff", 8, radius, 0.35, 4);
@@ -626,6 +638,10 @@
       if (e.sheepBomb && !e.sheepBombDone && e.sheep <= 0) sheepBombExplode(state, e);
       if (e.armorBreak > 0) e.armorBreak -= dt;
       if (e.bladeCd > 0) e.bladeCd -= dt;
+      if (e._judgeLock > 0) e._judgeLock -= dt;
+      if (e._resonanceT > 0) e._resonanceT -= dt;
+      if (e._resonanceLock > 0) e._resonanceLock -= dt;
+      if (e._corrodeT > 0) e._corrodeT -= dt; else e._corrode = 0;
 
       // 剧毒 DoT(毒尽则叠层清零)
       if (e.poison > 0) {

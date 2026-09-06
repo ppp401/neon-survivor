@@ -10,11 +10,12 @@
     e.vx = Math.cos(a) * spd; e.vy = Math.sin(a) * spd;
   }
   // Boss 弹幕/激光伤害缩放:dmgFactor(t) × bossDmgMul(难度独立分档,整体上调且档差压缩) × endlessMul
-  function dmgScale(st) {
+  function dmgScale(st, e) {
     const t = st.time / 60;
     const diff = SV.Config.DIFFICULTY[st.difficulty] || SV.Config.DIFFICULTY.normal;
     const em = (st.endless && st.stage) ? SV.Config.CURVES.endlessMul(Math.max(0, (st.time - st.stage.goalMin) / 60)) : 1;
-    return SV.Config.CURVES.dmgFactor(t) * (diff.bossDmgMul || diff.dmgMul) * em;
+    const tierMul = e && e.bossType && SV.Config.BOSSES[e.bossType].tier === 3 ? SV.Config.CONST.T3_BOSS_DAMAGE_MUL : 1;
+    return SV.Config.CURVES.dmgFactor(t) * (diff.bossDmgMul || diff.dmgMul) * em * tierMul;
   }
 
   const Beh = {
@@ -112,7 +113,7 @@
       else if (d > 420) { e.vx = Math.cos(a) * e.speed * 0.6; e.vy = Math.sin(a) * e.speed * 0.6; }
       else { e.vx *= 0.82; e.vy *= 0.82; }
       e.t1 -= dt;
-      if (e.t1 <= 0 && d < 600) { e.t1 = 3.4; e.flash = 0.2; const spd = 420; E.addEShot(SV.Game.state, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, e.projDmg, e.color, 7, "sniper"); }
+      if (e.t1 <= 0 && d < 480) { e.t1 = 3.4; e.flash = 0.2; const spd = 420; E.addEShot(SV.Game.state, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, e.projDmg, e.color, 7, "sniper"); }
     },
     regen: function (e, p, dt) {
       toPlayer(e, p, e.speed);
@@ -216,7 +217,7 @@
         }
         if (e.t2 <= 0) {
           e.t2 = 0.9;
-          if (U.dist(e.x, e.y, p.x, p.y) < 115) E.damagePlayer(st, 11 * dmgScale(st), false, "magnetwarper");
+          if (U.dist(e.x, e.y, p.x, p.y) < 115) E.damagePlayer(st, 11 * dmgScale(st, e), false, "magnetwarper");
         }
       } else if (e.bossType === "twins") {
         // 镜像双子:追敌 + 周期换位;击杀其一 → 本体反噬 25%(killEnemy 处理)
@@ -257,7 +258,7 @@
           const px = p.x - e.x, py = p.y - e.y;
           const proj = px * dx + py * dy;
           const perp = Math.abs(-py * dx + px * dy);
-          if (proj > 0 && proj < 600 && perp < 16 + p.r) E.damagePlayer(st, 13 * dmgScale(st), false, "colossus");
+          if (proj > 0 && proj < 600 && perp < 16 + p.r) E.damagePlayer(st, 13 * dmgScale(st, e), false, "colossus");
           SV.Weapons.beams.push({ pts: [[e.x, e.y], [e.x + dx * 600, e.y + dy * 600]], life: 0.08, max: 0.08, color: e.color, width: 14 });
           if (e.ct <= 0) e.cstate = "walk";
           e.t2 -= dt;
@@ -277,24 +278,24 @@
 
   function burst(st, e, n, spd, dmg, r) {
     const off = U.rand(0, U.TAU);
-    const d = dmg * dmgScale(st), src = e.bossType || e.type;
+    const d = dmg * dmgScale(st, e), src = e.bossType || e.type;
     for (let k = 0; k < n; k++) { const a = off + k / n * U.TAU; E.addEShot(st, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, d, e.color, r, src); }
   }
   function aimedSpread(st, e, p, n, spreadRad, spd, dmg) {
     const base = U.angleTo(e.x, e.y, p.x, p.y);
-    const d = dmg * dmgScale(st), src = e.bossType || e.type;
+    const d = dmg * dmgScale(st, e), src = e.bossType || e.type;
     for (let k = 0; k < n; k++) { const a = base + (k - (n - 1) / 2) * spreadRad; E.addEShot(st, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, d, e.color, 6, src); }
   }
   // 从任意点发射环形弹幕(非体心,增加弹幕来源多样性)。srcType 由调用方传入(Boss 体内或换位点等)
   function ringFrom(st, x, y, n, spd, dmg, color, r, srcType) {
     const off = U.rand(0, U.TAU);
-    const d = dmg * dmgScale(st);
+    const d = dmg * dmgScale(st, { bossType: srcType });
     for (let k = 0; k < n; k++) { const a = off + k / n * U.TAU; E.addEShot(st, x, y, Math.cos(a) * spd, Math.sin(a) * spd, d, color, r || 6, srcType || null); }
   }
   // 螺旋弹幕:每次发射旋转相位(e.sp 专用字段),多次发射绘出螺旋。n=每圈弹数
   function spiralBurst(st, e, n, spd, dmg, r) {
     const ph = e.sp || 0;
-    const d = dmg * dmgScale(st), src = e.bossType || e.type;
+    const d = dmg * dmgScale(st, e), src = e.bossType || e.type;
     for (let k = 0; k < n; k++) { const a = ph + k / n * U.TAU; E.addEShot(st, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, d, e.color, r || 6, src); }
     e.sp = ph + 0.5;
   }

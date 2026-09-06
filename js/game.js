@@ -110,7 +110,11 @@
   }
 
   function togglePause() {
-    if (Game.mode === "playing") { Game.mode = "paused"; SV.Menus.populatePause(Game.state); SV.Menus.show("pause"); }
+    if (Game.mode === "playing") {
+      Game.mode = "paused";
+      if (SV.Input && SV.Input.cancelPointer) SV.Input.cancelPointer();
+      SV.Menus.populatePause(Game.state); SV.Menus.show("pause");
+    }
     else if (Game.mode === "paused") { Game.mode = "playing"; SV.Menus.hideAll(); }
   }
 

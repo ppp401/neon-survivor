@@ -46,6 +46,7 @@
   // 多伤害来源武器的补充说明(暂停面板用):把每种伤害成分的数值分别说清楚
   function extraSummary(id, s) {
     const R = Math.round;
+    const F10 = function (v) { return Math.round((v || 0) * 10) / 10; };
     const out = [];
     switch (id) {
       case "meteor_evo": case "meteor_chain":
@@ -108,10 +109,10 @@
         out.push("毒 " + R(s.dot) + "/0.5s×" + (Math.round(s.dotDur * 10) / 10) + "s");
         out.push("每跳缩短引信 " + s.fuseCut + "s");
         out.push("引爆传播诅咒+毒");
-        if (s.frac) out.push("引爆 +" + Math.round(s.frac * 100) + "%maxHp(Boss÷3)");
+        if (s.frac) out.push("引爆 +" + Math.round(s.frac * 100) + "%maxHp(Boss÷4)");
         break;
       case "hex": case "hex_evo":
-        if (s.frac) out.push("引爆 +" + Math.round(s.frac * 100) + "%maxHp(Boss÷3)");
+        if (s.frac) out.push("引爆 +" + Math.round(s.frac * 100) + "%maxHp(Boss÷4)");
         if (s.delay) out.push("引信 " + (Math.round(s.delay * 10) / 10) + "s · 引爆传播最多" + (s.spread || 0) + "个");
         break;
       case "missile_evo": out.push("击杀后继续追击(伤害×0.85)"); break;
@@ -124,6 +125,25 @@
       case "shockwave_evo": out.push("命中冻结 " + (Math.round(s.freeze * 10) / 10) + "s"); break;
       case "boomerang_sentry": out.push("每塔" + (Math.round(s.fireCd * 100) / 100) + "s发射 · 去返穿透" + (s.pierce || 0) + "次"); break;
       case "blade_evo": out.push("每敌命中间隔0.25s"); break;
+      case "blade_boomerang": out.push("环刃轮流离阵追敌并返航 · 环触间隔" + F10(s.hitCd) + "s"); break;
+      case "blade_frost": out.push("每敌第" + s.frostHits + "击冰爆" + R(s.burstDmg) + "(半径" + R(s.burstR) + ") · 冻结" + F10(s.freeze) + "s"); break;
+      case "missile_aura": out.push("移动引力场半径" + R(s.fieldR) + " · 场伤" + R(s.fieldDmg) + "/" + F10(s.fieldTick) + "s"); break;
+      case "missile_railgun": out.push("制导" + F10(s.calibrate) + "s后高速贯穿" + s.pierce + "次 · 击杀追击" + s.chase + "次"); break;
+      case "chain_sentry": out.push("每塔" + F10(s.fireCd) + "s发射 · 电弹连跳" + s.chainHops + "次"); break;
+      case "aura_poison": out.push("停留叠加腐蚀至" + s.maxStacks + "层 · 每层伤害+" + Math.round(s.stackMul * 100) + "%"); break;
+      case "shotgun_shockwave": out.push(s.resonanceHits + "次命中触发共振爆" + R(s.burstDmg) + "(半径" + R(s.burstR) + ")"); break;
+      case "shotgun_spear": out.push("贯刺点喷出" + s.pelletCount + "枚碎弹 · 每轮最多" + s.pelletCap + "枚"); break;
+      case "boomerang_crescent": out.push("去程与返程各可命中一次 · 无限贯穿"); break;
+      case "grenade_meteor": out.push("母爆" + R(s.damage) + "后召来" + s.childCount + "颗小陨石×" + R(s.childDmg)); break;
+      case "railgun_timestop": out.push("光轨伤" + R(s.damage) + " · 静滞走廊" + R(s.corridorDmg) + "/" + F10(s.corridorTick) + "s · 冻结" + F10(s.freeze) + "s"); break;
+      case "vortex_meteor": out.push("卷伤" + R(s.damage) + "/0.2s · 沿途焦土" + R(s.burn) + "/0.5s"); break;
+      case "vortex_detonate": out.push("消失爆炸" + R(s.boomBase) + "+每卷入1敌人" + R(s.boomPer) + " · 最多计" + s.captureMax + "个"); break;
+      case "sentry_hex": out.push("集火" + s.judgeHits + "次触发裁决" + R(s.judgeDmg) + "+" + Math.round(s.judgeFrac * 100) + "%maxHp(Boss÷4)"); break;
+      case "shockwave_polymorph": out.push("首波变羊" + F10(s.sheep) + "s · 再次冲击触发碰撞爆" + R(s.collideDmg)); break;
+      case "hex_crescent": out.push("月牙刻印 · 引爆" + R(s.hexDmg) + "+" + Math.round(s.frac * 100) + "%maxHp并回斩传播"); break;
+      case "detonate_polymorph": out.push("变羊结束/死亡爆炸" + R(s.bombDmg) + " · " + Math.round(s.spreadChance * 100) + "%扩散一次"); break;
+      case "spear_timestop": out.push("原路径" + F10(s.echoDelay) + "s后重演" + R(s.echoDmg) + "伤害并冻结" + F10(s.freeze) + "s"); break;
+      case "lance_chain": out.push("每束每" + F10(s.tick) + "s扫击 · 命中外跳" + s.chainHops + "次闪电"); break;
     }
     return out;
   }
@@ -225,7 +245,7 @@
     return a && b;
   }
 
-  // 协同提示:某武器的进化体与已拥有武器(基底或进化,未进化也算)存在融合组合 → 提示文案
+  // 协同提示:只说明存在路线。组合增多后不在普通武器卡上泄漏某一个随机命中的融合名。
   function synergyOf(state, baseId) {
     const evoId = baseId + "_evo";
     for (let i = 0; i < CFG.FUSIONS.length; i++) {
@@ -237,7 +257,7 @@
       const otherBase = other.replace(/_evo$/, "");
       for (let j = 0; j < state.weapons.length; j++) {
         const w = state.weapons[j];
-        if (w.id === other || w.id === otherBase) return "⚭ 可合成「" + fu.name + "」";
+        if (w.id === other || w.id === otherBase) return "⚭ 有协同进化";
       }
     }
     return null;
@@ -252,7 +272,7 @@
       else if (fu.w2 === evoId) other = fu.w1;
       else continue;
       for (let j = 0; j < state.weapons.length; j++) {
-        if (state.weapons[j].id === other && state.weapons[j].evolved) return "⚭ 进化后可合成「" + fu.name + "」";
+        if (state.weapons[j].id === other && state.weapons[j].evolved) return "⚭ 进化后可协同进化";
       }
     }
     return null;
@@ -293,7 +313,9 @@
     for (let i = 0; i < CFG.FUSIONS.length; i++) {
       const fu = CFG.FUSIONS[i];
       if (canFuse(state, fu) && weaponAllowed(state, CFG.weaponDef(fu.to))) {
-        pool.push({ c: { kind: "fuse", id: fu.to, combo: fu, name: fu.name + " ⚭", desc: fu.desc, trait: traitLabel(fu.to), icon: fu.icon, color: fu.color, rarity: "legend" }, weight: 300 });
+        const left = CFG.weaponDef(fu.w1), right = CFG.weaponDef(fu.w2);
+        const source = "⚭ 来源：" + (left ? left.name : fu.w1) + " + " + (right ? right.name : fu.w2);
+        pool.push({ c: { kind: "fuse", id: fu.to, combo: fu, name: fu.name + " ⚭", desc: fu.desc, trait: traitLabel(fu.to), icon: fu.icon, color: fu.color, rarity: "legend", synergy: source }, weight: 300 });
       }
     }
     // 2) 进化

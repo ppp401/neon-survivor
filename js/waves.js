@@ -33,7 +33,7 @@
     if (Math.random() >= chance) return;
     e.elite = true;
     e.hp *= 4; e.maxHp *= 4;
-    e.dmg *= 1.5; e.boomDmg *= 1.5; e.projDmg *= 1.5;
+    e.dmg *= 1.5; e.boomDmg *= 1.5; e.projDmg *= 1.5; e.trailDmg *= 1.5;
     e.r *= 1.4;
     e.speed *= 1.05;
     e.xp *= 3;

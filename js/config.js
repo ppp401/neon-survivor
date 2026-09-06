@@ -45,6 +45,8 @@
     SHEEP_SPEED: 90,
     // 控制类效果(冻结/变羊/减速/时停)对 Boss 的时长倍率(大幅削减)
     CC_BOSS_MUL: 0.25,
+    // T3 Boss 自身伤害倍率(接触/弹幕/激光统一使用)
+    T3_BOSS_DAMAGE_MUL: 1.15,
     // 刷怪
     SPAWN_RING_PAD: 70, // 屏外环形生成余量
     SWARM_EVERY: 90, // 集群波间隔(秒)
@@ -118,7 +120,7 @@
     rarity: { common: "#cdd3ff", rare: "#5ad1ff", epic: "#c06bff", legend: "#ffb14d" }
   };
 
-  // ── 武器(16 种)。每个 def 暴露 stats(level) 返回该等级基础数值(未应用被动)。
+  // ── 武器(21 种)。每个 def 暴露 stats(level) 返回该等级基础数值(未应用被动)。
   const WEAPONS = {
     blade: {
       name: "旋转光刃", icon: "✺", color: "#8ef0ff", max: 8, kind: "orbit",
@@ -186,8 +188,8 @@
       desc: "抛出回旋镖,去返皆伤敌(自动瞄准最近敌人)。",
       tags: ["ranged"],
       stats: function (lv) {
-        // 全级小幅削弱(伤害/冷却);射程=speed*life/2 随级成长:L1 154px(大幅 -45%),L8≈278px 不变
-        return { damage: 12 + (lv - 1) * 3.4, count: 1 + (lv >= 3 ? 1 : 0) + (lv >= 6 ? 1 : 0), cooldown: Math.max(0.7, 1.7 - (lv - 1) * 0.085), speed: 280 + (lv - 1) * 10, life: 1.1 + (lv - 1) * 0.07, spin: 14 };
+        // 弹速/射程成长强化:L1 小幅提升至 300,L8 大幅提升至 450;life 仍随等级成长
+        return { damage: 12 + (lv - 1) * 3.4, count: 1 + (lv >= 3 ? 1 : 0) + (lv >= 6 ? 1 : 0), cooldown: Math.max(0.7, 1.7 - (lv - 1) * 0.085), speed: 300 + (lv - 1) * (150 / 7), life: 1.1 + (lv - 1) * 0.07, spin: 14 };
       }
     },
     grenade: {
@@ -252,10 +254,10 @@
     },
     hex: {
       name: "诅咒", icon: "✟", color: "#b06bff", max: 8, kind: "hex",
-      desc: "锁定视野内血量最高的敌人(优先Boss),延迟引爆:固定伤害 + 百分比最大生命伤害(对Boss百分比降至1/3),目标被提前击杀则诅咒蔓延。",
+      desc: "锁定视野内血量最高的敌人(优先Boss),延迟引爆:固定伤害 + 百分比最大生命伤害(对Boss百分比降至1/4),目标被提前击杀则诅咒蔓延。",
       tags: ["spell"],
       stats: function (lv) {
-        return { damage: 10 + (lv - 1) * 3, frac: Math.min(0.12, 0.05 + (lv - 1) * 0.01), count: 1 + Math.floor((lv - 1) / 2), spread: 2 + Math.floor((lv - 1) / 3), delay: 1.6, cooldown: Math.max(0.9, 1.8 - (lv - 1) * 0.1) };
+        return { damage: (10 + (lv - 1) * 3) * 0.75, frac: Math.min(0.12, 0.05 + (lv - 1) * 0.01), count: 1 + Math.floor((lv - 1) / 2), spread: 2 + Math.floor((lv - 1) / 3), delay: 1.6, cooldown: Math.max(0.9, 1.8 - (lv - 1) * 0.1) };
       }
     },
     crescent: {
@@ -332,7 +334,7 @@
   const WEAPON_EVOS = {
     blade_evo: Object.assign({}, WEAPONS.blade, { name: EVOLUTIONS.blade.name, color: EVOLUTIONS.blade.color, icon: EVOLUTIONS.blade.icon, evo: true, stats: function (lv) { const s = WEAPONS.blade.stats(8); return { damage: s.damage + 20, count: 8, radius: s.radius * 1.5, spin: s.spin + 1.0 }; } }),
     missile_evo: Object.assign({}, WEAPONS.missile, { name: EVOLUTIONS.missile.name, color: EVOLUTIONS.missile.color, icon: EVOLUTIONS.missile.icon, evo: true, desc: "少而强的穿透核弹:击杀后继续追猎(伤害递减),靠飞行时限自然收敛。", stats: function (lv) { const s = WEAPONS.missile.stats(8); return Object.assign({}, s, { damage: 130, cooldown: 1.9, count: 3, chase: 99 }); } }),
-    chain_evo: Object.assign({}, WEAPONS.chain, { name: EVOLUTIONS.chain.name, color: EVOLUTIONS.chain.color, icon: EVOLUTIONS.chain.icon, evo: true, stats: function (lv) { const s = WEAPONS.chain.stats(8); return Object.assign({}, s, { damage: s.damage + 8, chains: 99, range: s.range + 60 }); } }),
+    chain_evo: Object.assign({}, WEAPONS.chain, { name: EVOLUTIONS.chain.name, color: EVOLUTIONS.chain.color, icon: EVOLUTIONS.chain.icon, evo: true, stats: function (lv) { const s = WEAPONS.chain.stats(8); return Object.assign({}, s, { damage: s.damage + 8, chains: 8, range: s.range + 60 }); } }),
     aura_evo: Object.assign({}, WEAPONS.aura, { name: EVOLUTIONS.aura.name, color: EVOLUTIONS.aura.color, icon: EVOLUTIONS.aura.icon, evo: true, stats: function (lv) { const s = WEAPONS.aura.stats(8); return { damage: s.damage + 10, radius: s.radius * 1.3, tick: 0.1, pull: 210 }; } }),
     frost_evo: Object.assign({}, WEAPONS.frost, { name: EVOLUTIONS.frost.name, color: EVOLUTIONS.frost.color, icon: EVOLUTIONS.frost.icon, evo: true, stats: function (lv) { const s = WEAPONS.frost.stats(8); return Object.assign({}, s, { damage: s.damage + 4, freeze: 0.6, freezeVuln: 1.5, slow: 0.8 }); } }),
     boomerang_evo: Object.assign({}, WEAPONS.boomerang, { name: EVOLUTIONS.boomerang.name, color: EVOLUTIONS.boomerang.color, icon: EVOLUTIONS.boomerang.icon, evo: true, stats: function (lv) { const s = WEAPONS.boomerang.stats(8); return Object.assign({}, s, { damage: s.damage + 10, count: 5, pierce: true }); } }),
@@ -345,7 +347,7 @@
     sentry_evo: Object.assign({}, WEAPONS.sentry, { name: EVOLUTIONS.sentry.name, color: EVOLUTIONS.sentry.color, icon: EVOLUTIONS.sentry.icon, evo: true, stats: function (lv) { const s = WEAPONS.sentry.stats(8); return Object.assign({}, s, { damage: s.damage + 4, count: s.count + 1, fireCd: 0.5, pierce: 1, spin: s.spin + 0.6, interceptR: s.interceptR + 8 }); } }),
     meteor_evo: Object.assign({}, WEAPONS.meteor, { name: EVOLUTIONS.meteor.name, color: EVOLUTIONS.meteor.color, icon: EVOLUTIONS.meteor.icon, evo: true, stats: function (lv) { const s = WEAPONS.meteor.stats(8); return Object.assign({}, s, { damage: s.damage + 6, count: s.count + 2, radius: Math.round(s.radius * 1.25), burn: 10, burnDur: 2.2 }); } }),
     shockwave_evo: Object.assign({}, WEAPONS.shockwave, { name: EVOLUTIONS.shockwave.name, color: EVOLUTIONS.shockwave.color, icon: EVOLUTIONS.shockwave.icon, evo: true, stats: function (lv) { const s = WEAPONS.shockwave.stats(8); return Object.assign({}, s, { damage: s.damage + 5, count: s.count + 1, radius: Math.round(s.radius * 1.25), knock: s.knock + 28, freeze: 0.4 }); } }),
-    hex_evo: Object.assign({}, WEAPONS.hex, { name: EVOLUTIONS.hex.name, color: EVOLUTIONS.hex.color, icon: EVOLUTIONS.hex.icon, evo: true, stats: function (lv) { const s = WEAPONS.hex.stats(8); return Object.assign({}, s, { damage: s.damage + 6, count: s.count + 2, spread: s.spread + 2, frac: Math.min(0.15, s.frac + 0.03), delay: Math.max(0.8, s.delay - 0.4) }); } }),
+    hex_evo: Object.assign({}, WEAPONS.hex, { name: EVOLUTIONS.hex.name, color: EVOLUTIONS.hex.color, icon: EVOLUTIONS.hex.icon, evo: true, stats: function (lv) { const s = WEAPONS.hex.stats(8); return Object.assign({}, s, { damage: s.damage + 4.5, count: s.count + 2, spread: s.spread + 2, frac: Math.min(0.15, s.frac + 0.03), delay: Math.max(0.8, s.delay - 0.4) }); } }),
     crescent_evo: Object.assign({}, WEAPONS.crescent, { name: EVOLUTIONS.crescent.name, color: EVOLUTIONS.crescent.color, icon: EVOLUTIONS.crescent.icon, evo: true, stats: function (lv) { const s = WEAPONS.crescent.stats(8); return { damage: s.damage - 14, count: s.count + 1, radius: Math.round(s.radius * 1.2), arc: s.arc + 0.4, cooldown: s.cooldown, leaveTrail: true }; } }),
     detonate_evo: Object.assign({}, WEAPONS.detonate, { name: EVOLUTIONS.detonate.name, color: EVOLUTIONS.detonate.color, icon: EVOLUTIONS.detonate.icon, evo: true, stats: function (lv) { const s = WEAPONS.detonate.stats(8); return Object.assign({}, s, { damage: s.damage + 6, count: (s.count || 1) + 1, explodeChance: 0.9, explodeDmg: s.explodeDmg + 8, explodeR: s.explodeR + 10, chainHops: 2 }); } }),
     spear_evo: Object.assign({}, WEAPONS.spear, { name: EVOLUTIONS.spear.name, color: EVOLUTIONS.spear.color, icon: EVOLUTIONS.spear.icon, evo: true, desc: EVOLUTIONS.spear.desc, stats: function (lv) { const s = WEAPONS.spear.stats(8); return { damage: s.damage - 6, cooldown: 0.8, radius: Math.round(s.radius * 1.3), arc: s.arc, armorBreak: 1.5 }; } }),
@@ -357,31 +359,71 @@
     railgun_grenade: Object.assign({}, WEAPONS.railgun, { name: "轨道轰炸", color: "#ff5d73", icon: "☄", evo: true, kind: "fusion", fuse: ["railgun_evo", "grenade_evo"], stats: function (lv) { const s = WEAPONS.railgun.stats(8); return Object.assign({}, s, { damage: s.damage + 52, cooldown: 1.6, explode: 58, cluster: 2 }); } }),
     frost_poison: Object.assign({}, WEAPONS.frost, { name: "冰霜瘟疫", color: "#a8f0ff", icon: "❅", evo: true, kind: "fusion", tags: ["spell"], fuse: ["frost_evo", "poison_evo"], stats: function (lv) { const s = WEAPONS.frost.stats(8); return Object.assign({}, s, { damage: s.damage + 10, dot: 30, dotDur: 4.5, slow: 0.8, freeze: 0.5 }); } }),
     boomerang_sentry: Object.assign({}, WEAPONS.sentry, { name: "风暴哨戒", color: "#7df9ff", icon: "✪", evo: true, kind: "fusion", fuse: ["boomerang_evo", "sentry_evo"], stats: function (lv) { const s = WEAPONS.sentry.stats(8); return Object.assign({}, s, { count: s.count + 2, damage: s.damage + 16, projSpeed: 380, pierce: 2, life: 1.6 }); } }),
-    lance_vortex: Object.assign({}, WEAPONS.vortex, { name: "裂空风暴", color: "#ff6b9d", icon: "⇶", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["lance_evo", "vortex_evo"], stats: function (lv) { const s = WEAPONS.vortex.stats(8); return Object.assign({}, s, { damage: s.damage + 1, life: s.life * 4 / 3, vrad: s.radius * 1.1, pull: s.pull + 60, beamDmg: 11, beamTick: 0.1, beamLen: 200, beamWidth: 12, beamSpin: 2.2 }); } }),
+    lance_vortex: Object.assign({}, WEAPONS.vortex, { name: "裂空风暴", color: "#ff6b9d", icon: "⇶", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["lance_evo", "vortex_evo"], stats: function () { return { damage: 6, cooldown: 2.4, count: 2, speed: 140, life: 4, radius: 90, vrad: 90, pull: 260, beamDmg: 9, beamTick: 0.12, beamLen: 300, beamWidth: 12, beamSpin: 1.8 }; } }),
     shotgun_grenade: Object.assign({}, WEAPONS.shotgun, { name: "爆裂霰弹", color: "#ffe066", icon: "≣", evo: true, kind: "fusion", fuse: ["shotgun_evo", "grenade_evo"], stats: function (lv) { const s = WEAPONS.shotgun.stats(8); return Object.assign({}, s, { damage: s.damage + 12, cooldown: 0.8, count: s.count + 2, cone: s.cone * 1.2, splash: 28, splashMul: 0.45 }); } }),
     meteor_chain: Object.assign({}, WEAPONS.meteor, { name: "陨雷审判", color: "#ffb14d", icon: "☄", evo: true, kind: "fusion", fuse: ["meteor_evo", "chain_evo"], stats: function (lv) { const s = WEAPONS.meteor.stats(8); return Object.assign({}, s, { damage: s.damage + 10, count: s.count + 2, radius: Math.round(s.radius * 1.2), burn: 18, burnDur: 2.6, chainHops: 4, chainRange: 180 }); } }),
     shockwave_frost: Object.assign({}, WEAPONS.shockwave, { name: "冰碎共振", color: "#a8f0ff", icon: "◎", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["shockwave_evo", "frost_evo"], stats: function (lv) { const s = WEAPONS.shockwave.stats(8); return Object.assign({}, s, { damage: s.damage + 32, count: s.count + 1, radius: Math.round(s.radius * 1.25), knock: s.knock + 22, freeze: 1.2, shatter: 60, shatterMul: 0.5 }); } }),
-    hex_poison: Object.assign({}, WEAPONS.hex, { name: "腐朽天灾", color: "#9bff5a", icon: "☣", evo: true, kind: "fusion", tags: ["spell"], fuse: ["hex_evo", "poison_evo"], stats: function (lv) { const s = WEAPONS.hex.stats(8); return Object.assign({}, s, { damage: s.damage + 4, count: s.count + 2, spread: s.spread + 2, frac: Math.min(0.15, s.frac + 0.03), dot: 10, dotDur: 2.5, fuseCut: 0.15 }); } }),
+    hex_poison: Object.assign({}, WEAPONS.hex, { name: "腐朽天灾", color: "#9bff5a", icon: "☣", evo: true, kind: "fusion", tags: ["spell"], fuse: ["hex_evo", "poison_evo"], stats: function (lv) { const s = WEAPONS.hex.stats(8); return Object.assign({}, s, { damage: s.damage + 3, count: s.count + 2, spread: s.spread + 2, frac: Math.min(0.15, s.frac + 0.03), dot: 10, dotDur: 2.5, fuseCut: 0.15 }); } }),
     crescent_detonate: Object.assign({}, WEAPONS.crescent, { name: "血月断头台", color: "#ff7a8a", icon: "☾", evo: true, kind: "fusion", tags: ["melee"], fuse: ["crescent_evo", "detonate_evo"], stats: function (lv) { const s = WEAPONS.crescent.stats(8); const d = WEAPONS.detonate.stats(8); return { damage: s.damage - 12, radius: Math.round(s.radius * 1.25), arc: s.arc + 0.4, count: s.count + 1, explodeChance: 1.0, explodeR: d.explodeR + 12, explodeDmg: d.explodeDmg - 8, chainHops: 2 }; } }),
     polymorph_timestop: Object.assign({}, WEAPONS.polymorph, { name: "时之诅咒", color: "#d6b3ff", icon: "◷", evo: true, kind: "fusion", tags: ["spell"], fuse: ["polymorph_evo", "timestop_evo"], stats: function (lv) { const pp = WEAPONS.polymorph.stats(8); return { damage: 48, cooldown: 3.5, speed: pp.speed, life: pp.life, count: 3, dur: 3.0, bombDmg: 60, bombRadius: 90, freeze: 1.4, pierce: 1 }; } }),
-    spear_lance: Object.assign({}, WEAPONS.spear, { name: "贯星长矛", color: "#ffd27a", icon: "➹", evo: true, kind: "fusion", tags: ["ranged", "melee"], fuse: ["spear_evo", "lance_evo"], stats: function () { return { damage: 100, cooldown: 0.8, radius: 251, width: 8, armorBreak: 1.5, gridDmg: 16, gridTick: 0.2, gridLife: 0.8, gridLen: 180, gridWidth: 7, gridMax: 4 }; } })
+    spear_lance: Object.assign({}, WEAPONS.spear, { name: "贯星长矛", color: "#ffd27a", icon: "➹", evo: true, kind: "fusion", tags: ["ranged", "melee"], fuse: ["spear_evo", "lance_evo"], stats: function () { return { damage: 100, cooldown: 0.8, radius: 251, width: 8, armorBreak: 1.5, gridDmg: 16, gridTick: 0.2, gridLife: 0.8, gridLen: 180, gridWidth: 7, gridMax: 4 }; } }),
+    blade_boomerang: Object.assign({}, WEAPONS.blade, { name: "回旋星环", color: "#73dcff", icon: "✧", evo: true, kind: "fusion", tags: ["melee", "ranged"], fuse: ["blade_evo", "boomerang_evo"], stats: function () { return { damage: 34, count: 6, radius: 155, spin: 3.4, hitCd: 0.28, launchCd: 0.7, launchDamage: 40, speed: 350, life: 1.6, maxAway: 2 }; } }),
+    blade_frost: Object.assign({}, WEAPONS.blade, { name: "极寒刀阵", color: "#a8f0ff", icon: "❉", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["blade_evo", "frost_evo"], stats: function () { return { damage: 32, count: 8, radius: 150, spin: 3.0, hitCd: 0.3, slow: 0.7, slowDur: 1, frostHits: 3, burstDmg: 48, burstR: 55, freeze: 0.6 }; } }),
+    missile_aura: Object.assign({}, WEAPONS.missile, { name: "引力弹群", color: "#bd8cff", icon: "◈", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["missile_evo", "aura_evo"], stats: function () { return { damage: 58, cooldown: 1.4, count: 3, speed: 280, seek: 5, life: 2.4, fieldR: 55, fieldPull: 140, fieldDmg: 9, fieldTick: 0.25 }; } }),
+    missile_railgun: Object.assign({}, WEAPONS.missile, { name: "制导天矛", color: "#ff7b68", icon: "➠", evo: true, kind: "fusion", tags: ["ranged"], fuse: ["missile_evo", "railgun_evo"], stats: function () { return { damage: 105, cooldown: 1.65, count: 2, speed: 700, seek: 6, life: 2.2, calibrate: 0.35, pierce: 6, chase: 2 }; } }),
+    chain_sentry: Object.assign({}, WEAPONS.sentry, { name: "雷网堡垒", color: "#b6a6ff", icon: "⌾", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["chain_evo", "sentry_evo"], stats: function () { return { damage: 24, count: 5, fireCd: 0.55, radius: 125, projSpeed: 400, spin: 1.5, interceptR: 34, chainHops: 3, chainRange: 150, chainMul: 0.65 }; } }),
+    aura_poison: Object.assign({}, WEAPONS.aura, { name: "蚀界黑洞", color: "#a7ff64", icon: "◉", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["aura_evo", "poison_evo"], stats: function () { return { damage: 8, radius: 175, tick: 0.15, pull: 160, stackMul: 0.18, maxStacks: 5, stackGrace: 1 }; } }),
+    shotgun_shockwave: Object.assign({}, WEAPONS.shotgun, { name: "震荡霰阵", color: "#d6ec8b", icon: "≋", evo: true, kind: "fusion", tags: ["ranged"], fuse: ["shotgun_evo", "shockwave_evo"], stats: function () { return { damage: 19, cooldown: 0.85, count: 12, speed: 350, life: 1.45, cone: 1.15, pierce: 1, resonanceHits: 3, resonanceWindow: 0.4, resonanceLock: 0.6, burstDmg: 34, burstR: 65, knock: 45 }; } }),
+    shotgun_spear: Object.assign({}, WEAPONS.spear, { name: "破阵枪", color: "#ffe28a", icon: "➷", evo: true, kind: "fusion", tags: ["melee", "ranged"], fuse: ["shotgun_evo", "spear_evo"], stats: function () { return { damage: 72, cooldown: 0.9, radius: 245, arc: 0.3, armorBreak: 1.2, pelletDamage: 18, pelletCount: 3, pelletCap: 12, pelletSpeed: 360, pelletLife: 0.5, pelletCone: 0.35 }; } }),
+    boomerang_crescent: Object.assign({}, WEAPONS.boomerang, { name: "月轮归刃", color: "#8fe8c8", icon: "☽", evo: true, kind: "fusion", tags: ["melee", "ranged"], fuse: ["boomerang_evo", "crescent_evo"], stats: function () { return { damage: 44, cooldown: 0.9, count: 3, speed: 340, life: 1.8, spread: 0.28, pierce: 99 }; } }),
+    grenade_meteor: Object.assign({}, WEAPONS.grenade, { name: "天火母弹", color: "#ff934d", icon: "☄", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["grenade_evo", "meteor_evo"], stats: function () { return { damage: 80, cooldown: 2.2, count: 1, radius: 105, speed: 300, life: 1.1, childCount: 3, childDmg: 55, childR: 65, childDelay: 0.15, burn: 8, burnDur: 1.8 }; } }),
+    railgun_timestop: Object.assign({}, WEAPONS.railgun, { name: "零时轨道", color: "#e2bfff", icon: "⟾", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["railgun_evo", "timestop_evo"], stats: function () { return { damage: 125, cooldown: 1.9, speed: 900, corridorWidth: 45, corridorLife: 1, corridorDmg: 14, corridorTick: 0.2, freeze: 0.6, length: 720 }; } }),
+    vortex_meteor: Object.assign({}, WEAPONS.vortex, { name: "炼狱风眼", color: "#ff9d55", icon: "♨", evo: true, kind: "fusion", tags: ["spell"], fuse: ["vortex_evo", "meteor_evo"], stats: function () { return { damage: 7, cooldown: 2.4, count: 2, speed: 130, life: 4, radius: 85, pull: 260, trailTick: 0.5, burn: 10, burnR: 55, burnDur: 1.5 }; } }),
+    vortex_detonate: Object.assign({}, WEAPONS.vortex, { name: "坍缩爆心", color: "#ff7f83", icon: "✹", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["vortex_evo", "detonate_evo"], stats: function () { return { damage: 5, cooldown: 2.2, count: 2, speed: 125, life: 3.8, radius: 90, pull: 280, captureMax: 6, boomBase: 65, boomPer: 10, boomR: 100, boomRPer: 5 }; } }),
+    sentry_hex: Object.assign({}, WEAPONS.sentry, { name: "裁决阵列", color: "#c99aff", icon: "⌬", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["sentry_evo", "hex_evo"], stats: function () { return { damage: 24, count: 5, fireCd: 0.55, radius: 125, projSpeed: 400, spin: 1.45, interceptR: 34, judgeHits: 5, judgeDmg: 48.75, judgeFrac: 0.05, judgeLock: 1.5 }; } }),
+    shockwave_polymorph: Object.assign({}, WEAPONS.shockwave, { name: "牧群冲击", color: "#fff0b0", icon: "♈", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["shockwave_evo", "polymorph_evo"], stats: function () { return { damage: 36, cooldown: 1.1, count: 3, radius: 190, expand: 650, knock: 55, sheep: 1.8, sheepMax: 4, collideDmg: 45, collideR: 60 }; } }),
+    hex_crescent: Object.assign({}, WEAPONS.crescent, { name: "蚀月刻印", color: "#ba8cff", icon: "☾", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["hex_evo", "crescent_evo"], stats: function () { return { damage: 42, cooldown: 1, count: 2, radius: 190, arc: 2.1, delay: 1.1, hexDmg: 31.5, frac: 0.08, spread: 2, echoDmg: 22.5 }; } }),
+    detonate_polymorph: Object.assign({}, WEAPONS.polymorph, { name: "爆裂羊群", color: "#ffb079", icon: "♉", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["detonate_evo", "polymorph_evo"], stats: function () { return { damage: 30, cooldown: 2, count: 3, speed: 280, life: 2.7, dur: 2.4, bombDmg: 75, bombRadius: 85, spreadChance: 0.4, spreadDur: 1.2 }; } }),
+    spear_timestop: Object.assign({}, WEAPONS.spear, { name: "时隙长枪", color: "#d7eaff", icon: "⇥", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["spear_evo", "timestop_evo"], stats: function () { return { damage: 78, cooldown: 0.9, radius: 260, width: 8, arc: 0.28, armorBreak: 1.2, echoDelay: 0.7, echoDmg: 58, freeze: 0.8 }; } }),
+    lance_chain: Object.assign({}, WEAPONS.lance, { name: "雷霆光轨", color: "#e6a6ff", icon: "ϟ", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["lance_evo", "chain_evo"], stats: function () { return { damage: 13, beams: 2, spin: 1.8, length: 330, width: 8, tick: 0.12, chainDmg: 10, chainHops: 3, chainRange: 155, chainMul: 0.75 }; } })
   };
-  // ── 协同进化组合表(升级池触发:两武器均已进化)。10 组(可互斥,提供不同 build 分支)。
+  // ── 协同进化组合表(升级池触发:两武器均已进化)。32 组,每把基础武器至少 3 条路线。
   const FUSIONS = [
     { w1: "blade_evo", w2: "aura_evo", to: "blade_aura", name: "湮灭之轮", desc: "刃刃溅射,黑洞聚怪,近身绞杀一切。", color: "#ffd0a0", icon: "☀" },
     { w1: "missile_evo", w2: "chain_evo", to: "missile_chain", name: "雷暴蜂群", desc: "分裂追踪弹命中触发连锁闪电,自动索敌+群体。", color: "#ff9a3c", icon: "⚡" },
     { w1: "railgun_evo", w2: "grenade_evo", to: "railgun_grenade", name: "轨道轰炸", desc: "贯穿即爆,首命中分裂子榴弹,整排开花。", color: "#ff5d73", icon: "☄" },
     { w1: "frost_evo", w2: "poison_evo", to: "frost_poison", name: "冰霜瘟疫", desc: "冰爆上毒,冻结目标受伤 +50%。", color: "#a8f0ff", icon: "❅" },
     { w1: "boomerang_evo", w2: "sentry_evo", to: "boomerang_sentry", name: "风暴哨戒", desc: "五座哨塔齐射去返回旋镖,穿透收割。", color: "#7df9ff", icon: "✪" },
-    { w1: "lance_evo", w2: "vortex_evo", to: "lance_vortex", name: "裂空风暴", desc: "龙卷聚怪,中心射出环绕激光,0.1s 一跳持续切割。", color: "#ff6b9d", icon: "⇶" },
+    { w1: "lance_evo", w2: "vortex_evo", to: "lance_vortex", name: "裂空风暴", desc: "龙卷聚怪,双向激光以龙卷为中心持续旋转切割。", color: "#ff6b9d", icon: "⇶" },
     { w1: "shotgun_evo", w2: "grenade_evo", to: "shotgun_grenade", name: "爆裂霰弹", desc: "锥形弹幕,每发命中溅射开花。", color: "#ffe066", icon: "≣" },
     { w1: "meteor_evo", w2: "chain_evo", to: "meteor_chain", name: "陨雷审判", desc: "陨石落地连锁闪电,轰炸整片敌群。", color: "#ffb14d", icon: "☄" },
     { w1: "shockwave_evo", w2: "frost_evo", to: "shockwave_frost", name: "冰碎共振", desc: "冲击波冻住敌人,冰冻目标被波及即碎裂。", color: "#a8f0ff", icon: "◎" },
     { w1: "hex_evo", w2: "poison_evo", to: "hex_poison", name: "腐朽天灾", desc: "诅咒附带剧毒,引爆时瘟疫蔓延。", color: "#9bff5a", icon: "☣" },
     { w1: "crescent_evo", w2: "detonate_evo", to: "crescent_detonate", name: "血月断头台", desc: "巨型挥砍,命中必爆且连环引爆,近战清场终技。", color: "#ff7a8a", icon: "☾" },
     { w1: "polymorph_evo", w2: "timestop_evo", to: "polymorph_timestop", name: "时之诅咒", desc: "变羊结束或提前死亡时引爆时间冻结。", color: "#d6b3ff", icon: "◷" },
-    { w1: "spear_evo", w2: "lance_evo", to: "spear_lance", name: "贯星长矛", desc: "贯刺沿途建立横向光栅,切割并封锁矛路。", color: "#ffd27a", icon: "➹" }
+    { w1: "spear_evo", w2: "lance_evo", to: "spear_lance", name: "贯星长矛", desc: "贯刺沿途建立横向光栅,切割并封锁矛路。", color: "#ffd27a", icon: "➹" },
+    { w1: "blade_evo", w2: "boomerang_evo", to: "blade_boomerang", name: "回旋星环", desc: "环刃轮流脱离星环,追敌后返航补位。", color: "#73dcff", icon: "✧" },
+    { w1: "blade_evo", w2: "frost_evo", to: "blade_frost", name: "极寒刀阵", desc: "刀刃累积寒气,第三击引发冻结冰爆。", color: "#a8f0ff", icon: "❉" },
+    { w1: "missile_evo", w2: "aura_evo", to: "missile_aura", name: "引力弹群", desc: "追踪弹携带移动引力场,沿途聚怪灼烧。", color: "#bd8cff", icon: "◈" },
+    { w1: "missile_evo", w2: "railgun_evo", to: "missile_railgun", name: "制导天矛", desc: "先制导校准,再化为高速贯穿天矛。", color: "#ff7b68", icon: "➠" },
+    { w1: "chain_evo", w2: "sentry_evo", to: "chain_sentry", name: "雷网堡垒", desc: "炮塔射出会跳跃的电弹,分区织成雷网。", color: "#b6a6ff", icon: "⌾" },
+    { w1: "aura_evo", w2: "poison_evo", to: "aura_poison", name: "蚀界黑洞", desc: "黑洞吸住敌人,停留越久腐蚀越深。", color: "#a7ff64", icon: "◉" },
+    { w1: "shotgun_evo", w2: "shockwave_evo", to: "shotgun_shockwave", name: "震荡霰阵", desc: "密集命中积累共振,从目标体内爆出冲击波。", color: "#d6ec8b", icon: "≋" },
+    { w1: "shotgun_evo", w2: "spear_evo", to: "shotgun_spear", name: "破阵枪", desc: "长枪贯阵,每个贯穿点继续喷出前向碎弹。", color: "#ffe28a", icon: "➷" },
+    { w1: "boomerang_evo", w2: "crescent_evo", to: "boomerang_crescent", name: "月轮归刃", desc: "宽弧月轮飞出后回归,来回各扫一次。", color: "#8fe8c8", icon: "☽" },
+    { w1: "grenade_evo", w2: "meteor_evo", to: "grenade_meteor", name: "天火母弹", desc: "母弹爆开后标定落点,连续召来小陨石。", color: "#ff934d", icon: "☄" },
+    { w1: "railgun_evo", w2: "timestop_evo", to: "railgun_timestop", name: "零时轨道", desc: "贯穿光轨把整条弹道冻结成静滞走廊。", color: "#e2bfff", icon: "⟾" },
+    { w1: "vortex_evo", w2: "meteor_evo", to: "vortex_meteor", name: "炼狱风眼", desc: "移动火龙卷拖出焦土,把敌人卷入火径。", color: "#ff9d55", icon: "♨" },
+    { w1: "vortex_evo", w2: "detonate_evo", to: "vortex_detonate", name: "坍缩爆心", desc: "卷入的敌人越多,龙卷消失时爆炸越强。", color: "#ff7f83", icon: "✹" },
+    { w1: "sentry_evo", w2: "hex_evo", to: "sentry_hex", name: "裁决阵列", desc: "炮塔集火刻下印记,五次命中后执行裁决。", color: "#c99aff", icon: "⌬" },
+    { w1: "shockwave_evo", w2: "polymorph_evo", to: "shockwave_polymorph", name: "牧群冲击", desc: "冲击波把敌人变羊并推飞,撞群后爆开。", color: "#fff0b0", icon: "♈" },
+    { w1: "hex_evo", w2: "crescent_evo", to: "hex_crescent", name: "蚀月刻印", desc: "月牙刻下诅咒,引爆时再斩向下一目标。", color: "#ba8cff", icon: "☾" },
+    { w1: "detonate_evo", w2: "polymorph_evo", to: "detonate_polymorph", name: "爆裂羊群", desc: "被变形的敌人成为会游走的限时炸弹。", color: "#ffb079", icon: "♉" },
+    { w1: "spear_evo", w2: "timestop_evo", to: "spear_timestop", name: "时隙长枪", desc: "长枪穿刺后,原路径延迟重演冻结一击。", color: "#d7eaff", icon: "⇥" },
+    { w1: "lance_evo", w2: "chain_evo", to: "lance_chain", name: "雷霆光轨", desc: "旋转激光扫中目标后向光束外跳出闪电。", color: "#e6a6ff", icon: "ϟ" }
   ];
+  // 协同进化只有一个完成态，不参与普通武器的 1-8 级升级。
+  for (const id in WEAPON_EVOS) if (WEAPON_EVOS[id].kind === "fusion") WEAPON_EVOS[id].max = 1;
   // 合并查询入口
   function weaponDef(id) { return WEAPON_EVOS[id] || WEAPONS[id]; }
 
@@ -401,7 +443,8 @@
   };
 
   // 武器「数量」字段的中文量词(用于升级文案/暂停摘要)
-  const COUNT_NOUN = { blade: "光刃", missile: "导弹", shotgun: "弹丸", boomerang: "回旋", sentry: "炮塔", grenade: "榴弹", meteor: "陨石", shockwave: "波", hex: "印记", polymorph: "变形弹", polymorph_timestop: "变形弹", timestop: "力场" };
+  const COUNT_NOUN = { blade: "光刃", missile: "导弹", shotgun: "弹丸", boomerang: "回旋", sentry: "炮塔", grenade: "榴弹", meteor: "陨石", shockwave: "波", hex: "印记", polymorph: "变形弹", polymorph_timestop: "变形弹", timestop: "力场",
+    blade_boomerang: "光刃", blade_frost: "光刃", missile_aura: "导弹", missile_railgun: "天矛", chain_sentry: "炮塔", shotgun_shockwave: "弹丸", boomerang_crescent: "月轮", grenade_meteor: "母弹", vortex_meteor: "龙卷", vortex_detonate: "龙卷", sentry_hex: "炮塔", shockwave_polymorph: "波", hex_crescent: "月牙", detonate_polymorph: "变形弹" };
   // 升级 delta 文案的字段→模板(N=变化量;count 用 COUNT_NOUN)
   const STAT_LABEL = {
     count: "count", damage: "伤害 +{N}", cooldown: "冷却 ↓{N}s", radius: "范围 +{N}",
@@ -454,7 +497,7 @@
     runner: { name: "飞刃虫", hp: 6, speed: 132, dmg: 6, xp: 1, r: 9, color: "#ff5d6c", ai: "fast", shape: "triangle", skill: "高速摇摆追击" },
     brute: { name: "重装兵", hp: 60, speed: 40, dmg: 18, xp: 5, r: 21, color: "#b06bff", ai: "tank", shape: "square", skill: "缓慢重装推进,高血量" },
     shooter: { name: "炮台", hp: 18, speed: 70, dmg: 6, projDmg: 8, xp: 3, r: 13, color: "#5ad1ff", ai: "shooter", shape: "pentagon", skill: "中距游走,远程射击(接触伤害较低)" },
-    bomber: { name: "自爆虫", hp: 14, speed: 96, dmg: 14, xp: 2, r: 14, color: "#ff9a3c", ai: "bomber", aoe: 62, shape: "blob", skill: "冲撞玩家,贴身自爆(AOE)" },
+    bomber: { name: "自爆虫", hp: 14, speed: 96, dmg: 14, xp: 2, r: 14, color: "#ff9a3c", ai: "bomber", aoe: 40, shape: "blob", skill: "冲撞玩家,贴身自爆(AOE)" },
     swarmer: { name: "食脑蛛", hp: 3, speed: 150, dmg: 4, xp: 1, r: 6, color: "#ffe14d", ai: "fast", shape: "triangle", skill: "成群高速蜂拥" },
     spawner: { name: "母虫巢", hp: 80, speed: 0, dmg: 8, xp: 12, r: 22, color: "#ff5dc0", ai: "spawner", shape: "hex", skill: "静止不动,持续孵化食脑蛛(接触伤害较低)" },
     charger: { name: "冲锋兽", hp: 30, speed: 60, chargeSpeed: 380, dmg: 14, xp: 4, r: 15, color: "#6ba8ff", ai: "charger", shape: "triangle", skill: "蓄力预警后高速冲刺" },
@@ -462,11 +505,11 @@
     blinker: { name: "闪烁者", hp: 16, speed: 80, dmg: 10, xp: 3, r: 12, color: "#c084fc", ai: "blink", shape: "diamond", skill: "追击中周期瞬移贴脸" },
     splitter: { name: "分裂者", hp: 42, speed: 68, dmg: 12, xp: 6, r: 18, color: "#8aff7d", ai: "splitter", shape: "blob", skill: "死亡分裂成 2 只食脑蛛" },
     shielder: { name: "盾甲兵", hp: 55, speed: 50, dmg: 16, xp: 7, r: 18, color: "#6b8aff", ai: "shield", dr: 0.55, shape: "hex", skill: "高额减伤(受伤 -55%)" },
-    sniper: { name: "狙击手", hp: 22, speed: 60, dmg: 6, projDmg: 16, xp: 6, r: 12, color: "#ff8aff", ai: "sniper", shape: "diamond", skill: "远程站桩,精确狙击(接触伤害较低)" },
+    sniper: { name: "狙击手", hp: 22, speed: 60, dmg: 6, projDmg: 11, xp: 6, r: 12, color: "#ff8aff", ai: "sniper", shape: "diamond", skill: "远程站桩,精确狙击(接触伤害较低)" },
     regen: { name: "自愈者", hp: 48, speed: 56, dmg: 14, xp: 6, r: 16, color: "#5affb0", ai: "regen", regenRate: 7, shape: "cross", skill: "持续回血" },
-    warden: { name: "光环盾卫", hp: 70, speed: 48, dmg: 14, xp: 8, r: 19, color: "#8aa0ff", ai: "shield_aura", shape: "hex", auraR: 140, auraDr: 0.40, skill: "给周围敌人套减伤护盾(减伤随时间提升,上限70%)" },
-    priest: { name: "血祭司", hp: 55, speed: 52, dmg: 12, xp: 8, r: 17, color: "#ff6b8a", ai: "heal_aura", shape: "star", auraR: 130, healRate: 4, skill: "治疗周围敌人(不治疗同类,治疗量随时间回升)" },
-    overdriver: { name: "狂热者", hp: 50, speed: 50, dmg: 12, xp: 7, r: 16, color: "#c084fc", ai: "speed_aura", shape: "triangle", auraR: 150, auraSpeed: 1.4, skill: "加速周围敌人(光环范围随时间扩大)" },
+    warden: { name: "光环盾卫", hp: 60, speed: 48, dmg: 14, xp: 8, r: 19, color: "#8aa0ff", ai: "shield_aura", shape: "hex", auraR: 140, auraDr: 0.40, skill: "给周围敌人套减伤护盾(减伤随时间提升,上限70%)" },
+    priest: { name: "血祭司", hp: 42, speed: 52, dmg: 12, xp: 8, r: 17, color: "#ff6b8a", ai: "heal_aura", shape: "star", auraR: 130, healRate: 4, skill: "治疗周围敌人(不治疗同类,治疗量随时间回升)" },
+    overdriver: { name: "狂热者", hp: 60, speed: 50, dmg: 12, xp: 7, r: 16, color: "#c084fc", ai: "speed_aura", shape: "triangle", auraR: 150, auraSpeed: 1.4, skill: "加速周围敌人(光环范围随时间扩大)" },
     burster: { name: "爆巢者", hp: 40, speed: 64, dmg: 12, xp: 6, r: 18, color: "#ff7a3c", ai: "chase", shape: "blob", burstCount: 5, burstType: "swarmer", skill: "死亡爆出一群食脑蛛" },
     stalker: { name: "潜伏者", hp: 35, speed: 78, dmg: 16, xp: 7, r: 15, color: "#a8e8ff", ai: "stalker", shape: "diamond", stealth: true, skill: "隐身接近,近身现身突袭(首击破隐)" },
     slimer: { name: "腐泥", hp: 28, speed: 58, dmg: 10, xp: 5, r: 14, color: "#9bff5a", ai: "slime", shape: "blob", trailInterval: 0.45, trailDur: 2.0, trailDmg: 8, skill: "摇摆追击,路径留下毒径" }
@@ -518,10 +561,10 @@
   // 联动不变量:总经验(spawn×xp)≈0.90/0.92/1.05/0.99(轻松/普通较旧版 -8%),每分钟特殊掉落(spawn×drop)≈1.045/0.98/0.78/0.675(≈旧值);
   // Boss 独立分档:bossDmgMul/bossHpMul 只作用于 Boss(接触/弹幕/激光,整体上调且档差压缩),普通敌仍用 dmgMul/hpMul
   const DIFFICULTY = {
-    chill: { name: "轻松", spawnMul: 0.95, hpMul: 0.8, dmgMul: 0.75, dropMul: 1.1, xpMul: 0.95, bossDmgMul: 1.0, bossHpMul: 0.85 },
-    normal: { name: "普通", spawnMul: 1.15, hpMul: 1.0, dmgMul: 1.0, dropMul: 0.85, xpMul: 0.8, bossDmgMul: 1.15, bossHpMul: 1.08 },
-    hard: { name: "困难", spawnMul: 1.3, hpMul: 1.35, dmgMul: 1.3, dropMul: 0.6, xpMul: 0.81, bossDmgMul: 1.3, bossHpMul: 1.4 },
-    nightmare: { name: "噩梦", spawnMul: 1.5, hpMul: 1.65, dmgMul: 1.6, dropMul: 0.45, xpMul: 0.66, bossDmgMul: 1.45, bossHpMul: 1.7 }
+    chill: { name: "轻松", spawnMul: 0.95, hpMul: 0.8, dmgMul: 0.68, dropMul: 1.1, xpMul: 0.95, bossDmgMul: 1.10, bossHpMul: 0.85 },
+    normal: { name: "普通", spawnMul: 1.15, hpMul: 1.0, dmgMul: 0.90, dropMul: 0.85, xpMul: 0.8, bossDmgMul: 1.27, bossHpMul: 1.08 },
+    hard: { name: "困难", spawnMul: 1.3, hpMul: 1.35, dmgMul: 1.17, dropMul: 0.6, xpMul: 0.81, bossDmgMul: 1.43, bossHpMul: 1.4 },
+    nightmare: { name: "噩梦", spawnMul: 1.5, hpMul: 1.65, dmgMul: 1.44, dropMul: 0.45, xpMul: 0.66, bossDmgMul: 1.60, bossHpMul: 1.7 }
   };
   const DIFFICULTY_ORDER = ["chill", "normal", "hard", "nightmare"];
 
@@ -583,7 +626,7 @@
   const STAGES = {
     ruins: { name: "霓虹废墟", goalMin: 20 * 60, half: 1700, palette: PAL.ruins, weights: wRuins, bosses: [["duke", 300], ["magnetwarper", 600], ["architect", 840]], finale: null, envField: null, bgm: "ruins" },
     crimson: { name: "血色荒原", goalMin: 20 * 60, half: 1500, palette: PAL.crimson, weights: wCrimson, bosses: [["wraith", 300], ["queen", 600], ["inquisitor", 840]], finale: null, envField: { type: "burn", interval: 12, dur: 4, r: 90, dps: 14, warm: 2 }, bgm: "crimson" },
-    frozen: { name: "冰封核心", goalMin: 20 * 60, half: 1600, palette: PAL.frozen, weights: wFrozen, bosses: [["duke", 300], ["twins", 600], ["colossus", 840]], finale: null, envField: { type: "freeze", interval: 15, dur: 1.5, slowF: 0.55 }, bgm: "frozen" },
+    frozen: { name: "冰封核心", goalMin: 20 * 60, half: 1600, palette: PAL.frozen, weights: wFrozen, bosses: [["duke", 300], ["twins", 600], ["colossus", 840]], finale: null, envField: { type: "freeze", interval: 15, dur: 1.5, slowF: 0.35 }, bgm: "frozen" },
     void: { name: "虚空深渊", goalMin: 20 * 60, half: 1900, palette: PAL.void, weights: wVoid, bosses: [["wraith", 300], ["magnetwarper", 600], ["colossus", 840]], finale: ["duke", "wraith", "inquisitor"], finaleMin: 18 * 60, envField: { type: "gravity", interval: 18, dur: 1.0, pull: 220 }, bgm: "void" }
   };
   const STAGE_ORDER = ["ruins", "crimson", "frozen", "void"];

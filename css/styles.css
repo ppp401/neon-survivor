@@ -61,6 +61,7 @@ canvas#game{ position:fixed; top:0; left:0; width:100vw; height:100vh; display:b
 .pip{ display:block; width:14px; height:3px; border-radius:2px; background:rgba(255,255,255,.14); }
 .pip.on{ background:var(--cyan); box-shadow:0 0 5px var(--cyan); }
 .pip.on.evo{ background:var(--gold); box-shadow:0 0 6px var(--gold); }
+.pip.on.fusion{ background:#ff5dc0; box-shadow:0 0 6px #ff5dc0; }
 .hud-btn{
   pointer-events:auto; cursor:pointer;
   width:34px; height:34px; border-radius:9px; font-size:14px; color:var(--ink);
@@ -373,6 +374,8 @@ body.touch .hint-row .kbd-only{ display:none; }
 
 /* 触屏触摸目标放大(iOS 推荐最小可触尺寸 44pt) */
 body.touch .hud-btn{ width:44px; height:44px; font-size:18px; border-radius:11px; }
+body.touch button,body.touch .hud-btn,body.touch [data-act]{ touch-action:manipulation; }
+body.touch .hud-btn{ touch-action:none; }
 body.touch .hud-top{ gap:8px; }
 body.touch .weapon-list{ max-width:34vw; }
 body.touch .big-btn{ padding:16px 44px; font-size:22px; }

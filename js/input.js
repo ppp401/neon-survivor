@@ -16,6 +16,7 @@
     _knob: null,
     _zone: null,                   // 触控全屏层(浮动摇杆事件源)
     _active: false,
+    _pointerId: null,              // Pointer Events 主路径:只捕获控制摇杆的这一指
     _touchId: null,                // 当前驱动摇杆的 touch identifier(多指追踪)
     _mouseActive: false,           // 桌面鼠标调试
     _originX: 0, _originY: 0,
@@ -41,10 +42,18 @@
         if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].indexOf(k) >= 0) e.preventDefault();
       });
       window.addEventListener("keyup", function (e) { self._keys[e.key.toLowerCase()] = false; });
-      window.addEventListener("blur", function () { self._keys = {}; self._active = false; self._mouseActive = false; self._resetStick(); });
+      window.addEventListener("blur", function () { self._keys = {}; self.cancelPointer(); });
 
       if (zoneEl) this._bindZone(zoneEl, stickEl);
       else if (stickEl) this._bindStick(stickEl);   // 退路:无 zone 时沿用旧固定摇杆
+      // 某些移动浏览器在第二指落下时会把第一指升级为系统多指手势并取消后续 click。
+      // 摇杆已按住时,第二指按下交互控件便立即转成一次 click；preventDefault 防抬手再触发重复点击。
+      if (window.PointerEvent) document.addEventListener("pointerdown", function (e) {
+        if (!self._active || e.pointerId === self._pointerId || !e.target || !e.target.closest) return;
+        const target = e.target.closest("button, [data-act], .card");
+        if (!target) return;
+        e.preventDefault(); e.stopPropagation(); target.click();
+      }, true);
       if (this.isTouch) document.body.classList.add("touch");
       // 横竖屏切换或软键盘弹出时重读安全区
       window.addEventListener("resize", function () { self._readSafeInset(); });
@@ -88,17 +97,40 @@
         return !!target.closest("button, .hud-btn, [data-act], input, .card, .vol-slider, a, .screen");
       }
 
-      // ── 触屏分支 ──
-      zone.addEventListener("touchstart", function (e) {
+      // ── Pointer Events 主路径。捕获只属于摇杆的 pointerId,第二指仍可独立命中 HUD。──
+      if (window.PointerEvent) {
+        zone.addEventListener("pointerdown", function (e) {
+          if (e.pointerType === "mouse" && e.button !== 0) return;
+          if (self._active || onInteractive(e.target)) return;
+          e.preventDefault();
+          self._pointerId = e.pointerId;
+          try { zone.setPointerCapture(e.pointerId); } catch (err) {}
+          self._begin(e.clientX, e.clientY, e.pointerId);
+        });
+        zone.addEventListener("pointermove", function (e) {
+          if (!self._active || e.pointerId !== self._pointerId) return;
+          e.preventDefault(); self._move(e.clientX, e.clientY);
+        });
+        const finishPointer = function (e) {
+          if (!self._active || e.pointerId !== self._pointerId) return;
+          e.preventDefault();
+          try { if (zone.hasPointerCapture(e.pointerId)) zone.releasePointerCapture(e.pointerId); } catch (err) {}
+          self._pointerId = null; self._end();
+        };
+        zone.addEventListener("pointerup", finishPointer);
+        zone.addEventListener("pointercancel", finishPointer);
+      } else {
+        // 旧 Android/iOS WebView 回退。
+        zone.addEventListener("touchstart", function (e) {
         if (self._active) return;                       // 已有手指控制摇杆
         if (onInteractive(e.target)) return;            // 点中按钮等:放弃
         const t = e.changedTouches[0];
         if (!t) return;
         e.preventDefault();
         self._begin(t.clientX, t.clientY, t.identifier);
-      }, { passive: false });
+        }, { passive: false });
 
-      zone.addEventListener("touchmove", function (e) {
+        zone.addEventListener("touchmove", function (e) {
         if (!self._active) return;
         for (let i = 0; i < e.changedTouches.length; i++) {
           const t = e.changedTouches[i];
@@ -108,9 +140,9 @@
             break;
           }
         }
-      }, { passive: false });
+        }, { passive: false });
 
-      const finishTouch = function (e) {
+        const finishTouch = function (e) {
         if (!self._active) return;
         for (let i = 0; i < e.changedTouches.length; i++) {
           if (e.changedTouches[i].identifier === self._touchId) {
@@ -119,12 +151,13 @@
             break;
           }
         }
-      };
-      zone.addEventListener("touchend", finishTouch, { passive: false });
-      zone.addEventListener("touchcancel", finishTouch, { passive: false });
+        };
+        zone.addEventListener("touchend", finishTouch, { passive: false });
+        zone.addEventListener("touchcancel", finishTouch, { passive: false });
+      }
 
       // ── 桌面鼠标分支(调试用:仅在显式添加 body.touch 时启用) ──
-      zone.addEventListener("mousedown", function (e) {
+      if (!window.PointerEvent) zone.addEventListener("mousedown", function (e) {
         if (self._active || self._mouseActive) return;
         if (onInteractive(e.target)) return;
         e.preventDefault();
@@ -166,8 +199,17 @@
     },
     _end: function () {
       this._active = false;
+      this._pointerId = null;
       this._touchId = null;
       this._resetStick();
+    },
+    cancelPointer: function () {
+      if (this._zone && this._pointerId != null) {
+        try { if (this._zone.hasPointerCapture(this._pointerId)) this._zone.releasePointerCapture(this._pointerId); } catch (e) {}
+      }
+      this._mouseActive = false;
+      this._end();
+      this.axis.x = 0; this.axis.y = 0;
     },
     _resetStick: function () {
       this._curX = 0; this._curY = 0;
