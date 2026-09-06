@@ -115,11 +115,11 @@
         if (s.frac) out.push("引爆 +" + Math.round(s.frac * 100) + "%maxHp(Boss÷4)");
         if (s.delay) out.push("引信 " + (Math.round(s.delay * 10) / 10) + "s · 引爆传播最多" + (s.spread || 0) + "个");
         break;
-      case "missile_evo": out.push("击杀后继续追击(伤害×0.85)"); break;
+      case "missile_evo": out.push("飞行时限内无限追击 · 伤害不衰减"); break;
       case "boomerang_evo": out.push("去返贯穿"); break;
       case "shotgun_evo": case "polymorph_evo": out.push("每弹穿透 " + (s.pierce || 0) + " 次"); break;
       case "sentry_evo": out.push("炮弹穿透 " + (s.pierce || 0) + " 次"); break;
-      case "frost_evo": out.push("冻结 " + (Math.round(s.freeze * 10) / 10) + "s(受伤+50%)"); break;
+      case "frost_evo": out.push("每敌第" + (s.freezeHits || 1) + "次命中冻结 " + (Math.round(s.freeze * 10) / 10) + "s(受伤+50%)"); break;
       case "poison_evo": out.push("持续 " + (Math.round(s.dotDur * 10) / 10) + "s · 传染并减速" + Math.round(s.slow * 100) + "%/" + (Math.round(s.slowDur * 10) / 10) + "s"); break;
       case "vortex_evo": out.push("卷伤每0.2s×" + (Math.round(s.life * 10) / 10) + "s · 吸力" + R(s.pull)); break;
       case "shockwave_evo": out.push("命中冻结 " + (Math.round(s.freeze * 10) / 10) + "s"); break;

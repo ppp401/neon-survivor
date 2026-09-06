@@ -37,13 +37,26 @@
     if (tr > 0) segs.push("毒径 " + fmtNum(tr) + "/跳");
     return segs.length ? segs.join(" · ") : "无攻击";
   }
+  function bossDmgSegs(def, cur) {
+    const labels = { projectile: "弹幕", shock: "电击", laser: "激光" };
+    const segs = ["接触 " + fmtNum(def.dmg || 0) + "→" + fmtNum(cur.contact || cur.dmg || 0)];
+    const attacks = def.attacks || {}, scaled = cur.attacks || {};
+    function range(vals) {
+      if (!vals || !vals.length) return "0";
+      let lo = vals[0], hi = vals[0];
+      for (let i = 1; i < vals.length; i++) { lo = Math.min(lo, vals[i]); hi = Math.max(hi, vals[i]); }
+      return lo === hi ? fmtNum(lo) : fmtNum(lo) + "~" + fmtNum(hi);
+    }
+    for (const kind in attacks) segs.push((labels[kind] || kind) + " " + range(attacks[kind]) + "→" + range(scaled[kind]));
+    return segs.join(" · ");
+  }
   function bestiaryRow(def, cur, withElite, dmgToMe, isBoss) {
     const initHp = def.hp;
     const curHp = cur.hp;
     let html = '<div class="ars-row" style="flex-direction:column;align-items:flex-start;gap:2px">';
     html += '<div style="display:flex;width:100%;justify-content:space-between;align-items:center">';
     html += '<span><canvas class="ars-ic" width="22" height="22" data-shape="' + (def.shape || "circle") + '" data-color="' + def.color + '"></canvas><span class="ars-name">' + def.name + "</span></span>";
-    html += '<span class="ars-lv">HP ' + fmtNum(initHp) + "→" + fmtNum(curHp) + " · " + (isBoss ? "接触 " + fmtNum(def.dmg) + "→" + fmtNum(cur.dmg) : enemyDmgSegs(def, cur)) + " · 经验 " + (cur.xp || def.xp) + "</span>";
+    html += '<span class="ars-lv">HP ' + fmtNum(initHp) + "→" + fmtNum(curHp) + " · " + (isBoss ? bossDmgSegs(def, cur) : enemyDmgSegs(def, cur)) + " · 经验 " + (cur.xp || def.xp) + "</span>";
     html += "</div>";
     let eff = def.skill || "";
     if (withElite) eff += " · <span style='color:#ffd86b'>精英变异:HP×4 / 伤×1.5 / 体型×1.4</span>";

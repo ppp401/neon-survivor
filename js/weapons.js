@@ -12,7 +12,7 @@
       pierce: 0, homing: false, seek: 4, target: null, hitIds: null, shape: "dot", rot: 0, spin: 0, weaponId: "", phase: 0,
       explode: 0, vortex: false, vrad: 0, pull: 0, vtick: 0, btick: 0, tc: 0,
       chainHops: 0, chainRange: 0, splash: 0, splashMul: 0, explodeEvery: false, cluster: false, clustered: false,
-      beamLen: 0, beamWidth: 0, beamDmg: 0, beamTick: 0, beamSpin: 0, chaseKills: 0, meteor: 0, burn: 0, burnDur: 0, shockwave: null,
+      beamLen: 0, beamWidth: 0, beamDmg: 0, beamTick: 0, beamSpin: 0, chaseKills: 0, chaseInfinite: false, chaseDecay: 0.85, meteor: 0, burn: 0, burnDur: 0, shockwave: null,
       sheep: false, sheepDur: 0, sheepPierce: 0, sheepFreeze: 0, sheepBomb: false, sheepBombDmg: 0, sheepBombRadius: 0,
       timestop: 0, tsFreeze: 0, shatter: false,
       grid: false, gridDir: 0, gridLen: 0, gridTick: 0, gridLife: 0, gridEvery: 0, gridWidth: 0,
@@ -28,7 +28,7 @@
     p.explode = 0; p.vortex = false; p.vrad = 0; p.pull = 0; p.vtick = 0; p.btick = 0; p.tc = 0;
     // 特殊机制字段必须清零,否则回收的投射物会携带上一世的残留(如 shockwave/chainHops/cluster)
     p.chainHops = 0; p.chainRange = 0; p.splash = 0; p.splashMul = 0; p.explodeEvery = false; p.cluster = false; p.clustered = false;
-    p.beamLen = 0; p.beamWidth = 0; p.beamDmg = 0; p.beamTick = 0; p.beamSpin = 0; p.chaseKills = 0; p.meteor = 0; p.burn = 0; p.burnDur = 0; p.shockwave = null;
+    p.beamLen = 0; p.beamWidth = 0; p.beamDmg = 0; p.beamTick = 0; p.beamSpin = 0; p.chaseKills = 0; p.chaseInfinite = false; p.chaseDecay = 0.85; p.meteor = 0; p.burn = 0; p.burnDur = 0; p.shockwave = null;
     p.sheep = false; p.sheepDur = 0; p.sheepPierce = 0; p.sheepFreeze = 0; p.sheepBomb = false; p.sheepBombDmg = 0; p.sheepBombRadius = 0;
     p.timestop = 0; p.tsFreeze = 0; p.shatter = false;
     p.grid = false; p.gridDir = 0; p.gridLen = 0; p.gridTick = 0; p.gridLife = 0; p.gridEvery = 0; p.gridWidth = 0;
@@ -231,7 +231,7 @@
       pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
       pr.r = 6; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
       pr.homing = true; pr.seek = 4.5; pr.target = tgt; pr.weaponId = w.id;
-      pr.chaseKills = s.chase || 0; // 处决追击:击杀后继续追猎
+      pr.chaseKills = s.chase || 0; pr.chaseInfinite = !!s.infiniteChase; pr.chaseDecay = s.chaseDecay == null ? 0.85 : s.chaseDecay; // 处决追击:击杀后继续追猎
     }
     SV.Audio.shoot();
   }
@@ -404,7 +404,15 @@
         dmgEnemy(e, s.damage, w.id);
         // 冰面残留:减速时长 +1.2s,减速更强
         ccSlow(e, s.slowDur + 1.2, 0.35);
-        if (def.evo && s.freeze) ccFreeze(e, s.freeze);
+        if (def.evo && s.freeze) {
+          if (s.freezeHits) {
+            // 冻结期间不为下一轮蓄层，避免高冷却缩减下形成永久冻结链。
+            if (!(e.frozen > 0)) {
+              e._zeroHits = (e._zeroHits || 0) + 1;
+              if (e._zeroHits >= s.freezeHits) { e._zeroHits = 0; ccFreeze(e, s.freeze); }
+            }
+          } else ccFreeze(e, s.freeze);
+        }
       }
     }
     SV.Effects.ring(p.x, p.y, def.color, 10, s.radius, 0.45, 4);
@@ -1072,8 +1080,10 @@
         dmgEnemy(e, pr.damage, pr.weaponId); SV.Effects.hit(e.x, e.y, pr.color); SV.Audio.hit();
         if (pr.resonance) resonanceHit(state, e, pr);
         // 处决追击:击杀目标后弹体不消失,伤害 ×0.85 递减,重锁继续追猎(导弹)
-        if (pr.chaseKills > 0 && e.hp <= 0) {
-          pr.chaseKills--; pr.damage *= 0.85; pr.target = null;
+        if ((pr.chaseInfinite || pr.chaseKills > 0) && e.hp <= 0) {
+          if (!pr.chaseInfinite) pr.chaseKills--;
+          pr.damage *= pr.chaseDecay;
+          pr.target = null;
           return false;
         }
         // 命中连锁(雷暴蜂群)

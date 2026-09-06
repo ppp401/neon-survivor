@@ -319,7 +319,7 @@
       for (let i = 0; i < state.weapons.length; i++) {
         const w = state.weapons[i];
         const def = SV.Config.weaponDef(w.id);
-        if (def.kind !== "aura") continue;
+        if (def.kind !== "aura" && !def.showPlayerRadius) continue;
         const s = SV.Weapons.stats(w, state);
         ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.16;
         ctx.drawImage(glow(def.color), p.x - s.radius, p.y - s.radius, s.radius * 2, s.radius * 2);

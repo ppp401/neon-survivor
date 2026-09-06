@@ -56,12 +56,13 @@ canvas#game{ position:fixed; top:0; left:0; width:100vw; height:100vh; display:b
 .timer{ font-size:26px; font-weight:800; letter-spacing:2px; text-shadow:0 0 14px var(--cyan); font-variant-numeric:tabular-nums; }
 .kills{ font-size:14px; color:var(--ink); opacity:.85; font-variant-numeric:tabular-nums; }
 .weapon-list{ display:flex; gap:6px; max-width:46vw; flex-wrap:wrap; justify-content:flex-end; }
-.wicon{ display:flex; flex-direction:column; gap:2px; align-items:center; padding:3px 4px; border-radius:6px; background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); }
-.wicon-glyph{ font-size:15px; line-height:1; filter:drop-shadow(0 0 4px currentColor); }
+.wicon{ position:relative; overflow:hidden; display:flex; flex-direction:column; gap:2px; align-items:center; padding:3px 4px; border-radius:6px; background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); }
+.wicon-glyph{ position:relative; z-index:1; font-size:15px; line-height:1; filter:drop-shadow(0 0 4px currentColor); }
 .pip{ display:block; width:14px; height:3px; border-radius:2px; background:rgba(255,255,255,.14); }
 .pip.on{ background:var(--cyan); box-shadow:0 0 5px var(--cyan); }
 .pip.on.evo{ background:var(--gold); box-shadow:0 0 6px var(--gold); }
-.pip.on.fusion{ background:#ff5dc0; box-shadow:0 0 6px #ff5dc0; }
+.pip.on.fusion{ position:absolute; z-index:0; inset:0; width:100%; height:100%; border-radius:5px; background:linear-gradient(135deg,rgba(255,93,192,.42),rgba(192,65,255,.72)); box-shadow:inset 0 0 10px rgba(255,255,255,.18),0 0 9px #ff5dc0; }
+.wicon.fusion{ border-color:#ff78cd; box-shadow:0 0 9px rgba(255,93,192,.65); }
 .hud-btn{
   pointer-events:auto; cursor:pointer;
   width:34px; height:34px; border-radius:9px; font-size:14px; color:var(--ink);

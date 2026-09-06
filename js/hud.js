@@ -42,7 +42,7 @@
       for (let i = 0; i < state.weapons.length; i++) {
         const w = state.weapons[i];
         const def = SV.Config.weaponDef(w.id);
-        html += '<div class="wicon" title="' + def.name + '">';
+        html += '<div class="wicon' + (def.kind === "fusion" ? " fusion" : "") + '" title="' + def.name + '">';
         html += '<span class="wicon-glyph" style="color:' + def.color + '">' + (def.icon || "◆") + "</span>";
         const max = def.max;
         for (let k = 0; k < max; k++) html += '<i class="pip' + (k < w.level ? " on" : "") + (def.kind === "fusion" ? " fusion" : (w.evolved ? " evo" : "")) + '"></i>';

@@ -63,7 +63,10 @@
   function previewBoss(bossType, state) {
     const def = BOSSES[bossType]; if (!def) return null;
     const e = makeBoss(state, bossType, 0, 0);
-    return { hp: Math.round(e.maxHp), speed: Math.round(e.speed), dmg: Math.round(e.dmg), xp: e.xp, def: def };
+    const scale = def.dmg > 0 ? e.dmg / def.dmg : 1;
+    const attacks = {}, src = def.attacks || {};
+    for (const kind in src) attacks[kind] = src[kind].map(function (d) { return Math.round(d * scale); });
+    return { hp: Math.round(e.maxHp), speed: Math.round(e.speed), dmg: Math.round(e.dmg), contact: Math.round(e.dmg), attacks: attacks, xp: e.xp, def: def };
   }
 
   function makePlayer() {

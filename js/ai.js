@@ -17,6 +17,11 @@
     const tierMul = e && e.bossType && SV.Config.BOSSES[e.bossType].tier === 3 ? SV.Config.CONST.T3_BOSS_DAMAGE_MUL : 1;
     return SV.Config.CURVES.dmgFactor(t) * (diff.bossDmgMul || diff.dmgMul) * em * tierMul;
   }
+  function bossAttack(e, kind, index) {
+    const def = SV.Config.BOSSES[e.bossType] || {};
+    const vals = (def.attacks && def.attacks[kind]) || [0];
+    return vals[Math.min(index || 0, vals.length - 1)] || 0;
+  }
 
   const Beh = {
     chase: function (e, p, dt) { toPlayer(e, p, e.speed); },
@@ -155,7 +160,7 @@
         toPlayer(e, p, e.speed);
         e.t1 -= dt; e.t2 -= dt;
         if (e.t1 <= 0) { e.t1 = 5; for (let i = 0; i < 3; i++) { const a = U.rand(0, U.TAU); E.addEnemy(st, "zombie", e.x + Math.cos(a) * 24, e.y + Math.sin(a) * 24); } }
-        if (e.t2 <= 0) { e.t2 = 3.5; spiralBurst(st, e, 12, 140, 12, 7); }
+        if (e.t2 <= 0) { e.t2 = 3.5; spiralBurst(st, e, 12, 140, bossAttack(e, "projectile", 0), 7); }
       } else if (e.bossType === "wraith") {
         const enraged = !!e.enrage;
         const R = 250, sp = 1.3 * (enraged ? 1.6 : 1);
@@ -165,11 +170,11 @@
         e.vx = Math.cos(a) * e.speed; e.vy = Math.sin(a) * e.speed;
         e.t1 -= dt;
         const rate = enraged ? 0.8 : 1.6;
-        if (e.t1 <= 0) { e.t1 = rate; aimedSpread(st, e, p, 3, 0.32, 260, 12); }
+        if (e.t1 <= 0) { e.t1 = rate; aimedSpread(st, e, p, 3, 0.32, 260, bossAttack(e, "projectile", 0)); }
       } else if (e.bossType === "architect") {
         toPlayer(e, p, e.speed);
         e.t1 -= dt; e.t2 -= dt;
-        if (e.t1 <= 0) { e.t1 = 2.2; spiralBurst(st, e, 10, 160, 14, 7); }
+        if (e.t1 <= 0) { e.t1 = 2.2; spiralBurst(st, e, 10, 160, bossAttack(e, "projectile", 1), 7); }
         if (e.t2 <= 0) {
           let turrets = 0; for (let i = 0; i < st.enemies.length; i++) if (st.enemies[i].type === "shooter") turrets++;
           if (turrets < 3) { e.t2 = 9; const a = U.rand(0, U.TAU); E.addEnemy(st, "shooter", e.x + Math.cos(a) * 60, e.y + Math.sin(a) * 60); }
@@ -177,12 +182,12 @@
         }
         // 偶发:从两个偏移点各射一环(弹幕来源脱离体心)
         e.t3 = (e.t3 || 0) - dt;
-        if (e.t3 <= 0) { e.t3 = 4.5; ringFrom(st, e.x - 50, e.y, 6, 150, 13, e.color, 6, "architect"); ringFrom(st, e.x + 50, e.y, 6, 150, 13, e.color, 6, "architect"); }
+        if (e.t3 <= 0) { e.t3 = 4.5; const d = bossAttack(e, "projectile", 0); ringFrom(st, e.x - 50, e.y, 6, 150, d, e.color, 6, "architect"); ringFrom(st, e.x + 50, e.y, 6, 150, d, e.color, 6, "architect"); }
       } else if (e.bossType === "queen") {
         toPlayer(e, p, e.speed);
         e.t1 -= dt; e.t2 -= dt;
         if (e.t1 <= 0) { e.t1 = 5; for (let i = 0; i < 4; i++) { const a = U.rand(0, U.TAU); E.addEnemy(st, "swarmer", e.x + Math.cos(a) * 22, e.y + Math.sin(a) * 22); } }
-        if (e.t2 <= 0) { e.t2 = 3; spiralBurst(st, e, 14, 150, 13, 6); }
+        if (e.t2 <= 0) { e.t2 = 3; spiralBurst(st, e, 14, 150, bossAttack(e, "projectile", 0), 6); }
       } else if (e.bossType === "inquisitor") {
         e.t1 -= dt; e.t2 -= dt;
         const d = U.dist(e.x, e.y, p.x, p.y);
@@ -196,16 +201,16 @@
           const ox = e.x, oy = e.y; // 传送前位置:留一环(弹幕脱离体心)
           e.x = p.x + Math.cos(ta) * tr; e.y = p.y + Math.sin(ta) * tr;
           e.flash = 0.25; SV.Effects.hit(e.x, e.y, e.color);
-          ringFrom(st, ox, oy, 10, 150, 14, e.color, 6, "inquisitor");
-          spiralBurst(st, e, 12, 160, 14, 7);
+          ringFrom(st, ox, oy, 10, 150, bossAttack(e, "projectile", 1), e.color, 6, "inquisitor");
+          spiralBurst(st, e, 12, 160, bossAttack(e, "projectile", 1), 7);
         }
-        if (e.t2 <= 0) { e.t2 = 1.4; aimedSpread(st, e, p, 3, 0.3, 280, 13); }
+        if (e.t2 <= 0) { e.t2 = 1.4; aimedSpread(st, e, p, 3, 0.3, 280, bossAttack(e, "projectile", 0)); }
       } else if (e.bossType === "magnetwarper") {
         // 磁暴行者:缓慢追敌 + 周期引力波(把玩家吸向自己)+ 贴身电击圈
         const pulling = e.cstate === "pull";
         if (!pulling) toPlayer(e, p, e.speed * 0.7);
         e.t1 -= dt; e.t2 -= dt;
-        if (e.t1 <= 0) { e.t1 = 6; e.cstate = "pull"; e.ct = 1.2; ringFrom(st, e.x, e.y, 12, 150, 13, e.color, 6, "magnetwarper"); }
+        if (e.t1 <= 0) { e.t1 = 6; e.cstate = "pull"; e.ct = 1.2; ringFrom(st, e.x, e.y, 12, 150, bossAttack(e, "projectile", 0), e.color, 6, "magnetwarper"); }
         if (e.cstate === "pull") {
           e.ct -= dt;
           e.vx = 0; e.vy = 0;
@@ -217,7 +222,7 @@
         }
         if (e.t2 <= 0) {
           e.t2 = 0.9;
-          if (U.dist(e.x, e.y, p.x, p.y) < 115) E.damagePlayer(st, 11 * dmgScale(st, e), false, "magnetwarper");
+          if (U.dist(e.x, e.y, p.x, p.y) < 115) E.damagePlayer(st, bossAttack(e, "shock", 0) * dmgScale(st, e), false, "magnetwarper");
         }
       } else if (e.bossType === "twins") {
         // 镜像双子:追敌 + 周期换位;击杀其一 → 本体反噬 25%(killEnemy 处理)
@@ -238,19 +243,20 @@
                 e.x = o.x; e.y = o.y; o.x = tx; o.y = ty;
                 e.flash = 0.2; o.flash = 0.2;
                 SV.Effects.hit(e.x, e.y, e.color); SV.Effects.hit(o.x, o.y, o.color);
-                ringFrom(st, e.x, e.y, 8, 150, 13, e.color, 6, "twins"); // 换位后两点各开一环
-                ringFrom(st, o.x, o.y, 8, 150, 13, o.color, 6, "twins");
+                const rd = bossAttack(e, "projectile", 1);
+                ringFrom(st, e.x, e.y, 8, 150, rd, e.color, 6, "twins"); // 换位后两点各开一环
+                ringFrom(st, o.x, o.y, 8, 150, rd, o.color, 6, "twins");
                 break;
               }
             }
           }
         }
-        if (e.t2 <= 0) { e.t2 = 2.2; aimedSpread(st, e, p, 3, 0.3, 240, 12); }
+        if (e.t2 <= 0) { e.t2 = 2.2; aimedSpread(st, e, p, 3, 0.3, 240, bossAttack(e, "projectile", 0)); }
       } else if (e.bossType === "colossus") {
         // 弹幕巨像:不动 + 周期旋转扫射激光(期间召唤小怪)
         e.vx = 0; e.vy = 0;
         e.t1 -= dt;
-        if (e.t1 <= 0) { e.t1 = 9; e.cstate = "sweep"; e.ct = 6; e.cdir = U.rand(0, U.TAU); spiralBurst(st, e, 14, 150, 14, 7); }
+        if (e.t1 <= 0) { e.t1 = 9; e.cstate = "sweep"; e.ct = 6; e.cdir = U.rand(0, U.TAU); spiralBurst(st, e, 14, 150, bossAttack(e, "projectile", 0), 7); }
         if (e.cstate === "sweep") {
           e.ct -= dt;
           e.cdir += 1.5 * dt;
@@ -258,7 +264,7 @@
           const px = p.x - e.x, py = p.y - e.y;
           const proj = px * dx + py * dy;
           const perp = Math.abs(-py * dx + px * dy);
-          if (proj > 0 && proj < 600 && perp < 16 + p.r) E.damagePlayer(st, 13 * dmgScale(st, e), false, "colossus");
+          if (proj > 0 && proj < 600 && perp < 16 + p.r) E.damagePlayer(st, bossAttack(e, "laser", 0) * dmgScale(st, e), false, "colossus");
           SV.Weapons.beams.push({ pts: [[e.x, e.y], [e.x + dx * 600, e.y + dy * 600]], life: 0.08, max: 0.08, color: e.color, width: 14 });
           if (e.ct <= 0) e.cstate = "walk";
           e.t2 -= dt;
@@ -268,7 +274,7 @@
           }
         } else {
           e.t2 -= dt;
-          if (e.t2 <= 0) { e.t2 = 3; spiralBurst(st, e, 10, 150, 14, 8); }
+          if (e.t2 <= 0) { e.t2 = 3; spiralBurst(st, e, 10, 150, bossAttack(e, "projectile", 0), 8); }
         }
       } else {
         toPlayer(e, p, e.speed);
