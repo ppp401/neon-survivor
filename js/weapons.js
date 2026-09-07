@@ -9,7 +9,7 @@
   // ── 投射物池
   function pFactory() {
     return { x: 0, y: 0, vx: 0, vy: 0, r: 5, damage: 10, life: 1, maxLife: 1, color: "#fff",
-      pierce: 0, homing: false, seek: 4, target: null, hitIds: null, shape: "dot", rot: 0, spin: 0, weaponId: "", phase: 0,
+      pierce: 0, homing: false, seek: 4, target: null, hitIds: null, shape: "dot", rot: 0, spin: 0, weaponId: "", visualStyle: "", phase: 0,
       explode: 0, vortex: false, vrad: 0, pull: 0, vtick: 0, btick: 0, tc: 0,
       chainHops: 0, chainRange: 0, splash: 0, splashMul: 0, explodeEvery: false, cluster: false, clustered: false,
       beamLen: 0, beamWidth: 0, beamDmg: 0, beamTick: 0, beamSpin: 0, chaseKills: 0, chaseInfinite: false, chaseDecay: 0.85, meteor: 0, burn: 0, burnDur: 0, shockwave: null,
@@ -24,7 +24,7 @@
   }
   function pReset(p) {
     p.vx = 0; p.vy = 0; p.r = 5; p.damage = 10; p.life = 1; p.maxLife = 1; p.color = "#fff";
-    p.pierce = 0; p.homing = false; p.seek = 4; p.target = null; p.hitIds = null; p.shape = "dot"; p.rot = 0; p.spin = 0; p.weaponId = ""; p.phase = 0;
+    p.pierce = 0; p.homing = false; p.seek = 4; p.target = null; p.hitIds = null; p.shape = "dot"; p.rot = 0; p.spin = 0; p.weaponId = ""; p.visualStyle = ""; p.phase = 0;
     p.explode = 0; p.vortex = false; p.vrad = 0; p.pull = 0; p.vtick = 0; p.btick = 0; p.tc = 0;
     // 特殊机制字段必须清零,否则回收的投射物会携带上一世的残留(如 shockwave/chainHops/cluster)
     p.chainHops = 0; p.chainRange = 0; p.splash = 0; p.splashMul = 0; p.explodeEvery = false; p.cluster = false; p.clustered = false;
@@ -284,7 +284,7 @@
       cx = best.x; cy = best.y;
       lastDmg *= (hopMul || 1);
     }
-    if (pts.length >= 2) { beams.push({ pts: pts, life: 0.12, max: 0.12, color: color, width: 3 }); SV.Audio.hit(); }
+    if (pts.length >= 2) { beams.push({ pts: pts, life: 0.12, max: 0.12, color: color, width: 3, weaponId: wid, visualStyle: "lightning" }); SV.Audio.hit(); }
   }
   function fireChain(state, w, def, s) {
     // 普通 chains 表示首击后的额外跳数；进化配置直接表示总命中数 8。
@@ -369,7 +369,7 @@
     for (let b = 0; b < beamsN; b++) { // 每帧补视觉(短寿命,随旋角流动;lance 光束走细化调暗渲染)
       const ang = (w.angle || 0) + b / beamsN * U.TAU;
       const dx = Math.cos(ang), dy = Math.sin(ang);
-      beams.push({ pts: [[p.x, p.y], [p.x + dx * s.length, p.y + dy * s.length]], life: 0.06, max: 0.06, color: def.color, width: s.width, lance: true, evo: !!def.evo });
+      beams.push({ pts: [[p.x, p.y], [p.x + dx * s.length, p.y + dy * s.length]], life: 0.06, max: 0.06, color: def.color, width: s.width, lance: true, evo: !!def.evo, weaponId: w.id, visualStyle: "laser" });
     }
   }
 
@@ -698,7 +698,7 @@
       hit = true;
     }
     if (hit) SV.Audio.hit();
-    swings.push({ x: p.x, y: p.y, dir: dir, arc: s.arc || 1.2, radius: r, life: 0.13, max: 0.13, color: def.color });
+    swings.push({ x: p.x, y: p.y, dir: dir, arc: s.arc || 1.2, radius: r, life: 0.13, max: 0.13, color: def.color, weaponId: w.id, visualStyle: def.kind });
   }
 
   // 以 (x,y) 为圆心的瞬时 AoE 爆炸(不入投射物池);hops>0 时向圈内最近敌人连环引爆(衰减、终止)
@@ -1368,7 +1368,7 @@
       pr.damage = s.gridDmg; pr.life = s.gridLife; pr.maxLife = s.gridLife; pr.color = def.color; pr.weaponId = w.id;
       pr.grid = true; pr.gridDir = dir + Math.PI / 2; pr.gridLen = s.gridLen; pr.gridTick = 0; pr.gridLife = s.gridLife; pr.gridEvery = s.gridTick; pr.gridWidth = s.gridWidth;
     }
-    beams.push({ pts: [[p.x, p.y], [p.x + dx * s.radius, p.y + dy * s.radius]], life: 0.16, max: 0.16, color: def.color, width: s.width });
+    beams.push({ pts: [[p.x, p.y], [p.x + dx * s.radius, p.y + dy * s.radius]], life: 0.16, max: 0.16, color: def.color, width: s.width, weaponId: w.id, visualStyle: "spear" });
     SV.Audio.shoot(); SV.Effects.shake(2, 0.1);
   }
 
@@ -1465,7 +1465,7 @@
     const pr = mkProj(); pr.x = p.x + dx * s.length / 2; pr.y = p.y + dy * s.length / 2; pr.r = s.corridorWidth / 2;
     pr.damage = s.corridorDmg; pr.life = s.corridorLife; pr.maxLife = pr.life; pr.color = def.color; pr.weaponId = w.id;
     pr.grid = true; pr.gridDir = a; pr.gridLen = s.length; pr.gridEvery = s.corridorTick; pr.gridTick = 0; pr.gridWidth = s.corridorWidth; pr.tsFreeze = 0.18;
-    beams.push({ pts: [[p.x, p.y], [p.x + dx * s.length, p.y + dy * s.length]], life: 0.18, max: 0.18, color: def.color, width: 9 });
+    beams.push({ pts: [[p.x, p.y], [p.x + dx * s.length, p.y + dy * s.length]], life: 0.18, max: 0.18, color: def.color, width: 9, weaponId: w.id, visualStyle: "rail" });
     SV.Audio.shoot();
   }
   function makeFusionVortex(state, w, def, s, k) {

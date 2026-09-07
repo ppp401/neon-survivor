@@ -293,7 +293,7 @@
       tags: ["spell"],
       stats: function (lv) {
         // 伤害大幅 +42~58%;cd L1 不变,L8 小幅降低
-        return { damage: 8.5 + (lv - 1) * 2, cooldown: Math.max(1.7, 3.6 - (lv - 1) * 0.24), count: 1 + Math.floor(lv / 2), dur: 2.8 + (lv - 1) * 0.35, speed: 260, life: 2.7 };
+        return { damage: 13 + (lv - 1) * 11.5, cooldown: Math.max(1.7, 3.6 - (lv - 1) * 0.24), count: 1 + Math.floor(lv / 2), dur: 2.8 + (lv - 1) * 0.35, speed: 260, life: 2.7 };
       }
     },
     timestop: {
@@ -426,6 +426,30 @@
   for (const id in WEAPON_EVOS) if (WEAPON_EVOS[id].kind === "fusion") WEAPON_EVOS[id].max = 1;
   // 合并查询入口
   function weaponDef(id) { return WEAPON_EVOS[id] || WEAPONS[id]; }
+
+  // 单一武器视觉描述源。普通进化剥离 _evo 后沿用家族轮廓；融合保留两个来源家族与颜色。
+  const WEAPON_VISUALS = {
+    blade:"rotor", missile:"rocket", chain:"bolt", aura:"halo", shotgun:"scatter", frost:"crystal", lance:"laser",
+    boomerang:"starblade", grenade:"fuseball", railgun:"needle", poison:"bio", vortex:"spiral", sentry:"turret",
+    meteor:"comet", shockwave:"wave", hex:"sigil", crescent:"moon", detonate:"burst", spear:"spear",
+    polymorph:"ramcloud", timestop:"clock"
+  };
+  function baseWeaponId(id) { return id && id.replace(/_evo$/, ""); }
+  function weaponVisual(id) {
+    const def = weaponDef(id) || {};
+    if (def.kind === "fusion" && def.fuse && def.fuse.length === 2) {
+      const a = baseWeaponId(def.fuse[0]), b = baseWeaponId(def.fuse[1]);
+      const da = weaponDef(def.fuse[0]) || WEAPONS[a] || {}, db = weaponDef(def.fuse[1]) || WEAPONS[b] || {};
+      return { family: "fusion", left: WEAPON_VISUALS[a] || "core", right: WEAPON_VISUALS[b] || "core", leftIcon: da.icon || "◆", rightIcon: db.icon || "◆", leftColor: da.color || def.color, rightColor: db.color || def.color, icon: def.icon || "◆", color: def.color };
+    }
+    const base = baseWeaponId(id);
+    return { family: WEAPON_VISUALS[base] || "core", icon: def.icon || "◆", color: def.color || "#fff", evolved: /_evo$/.test(id || "") || !!def.evo };
+  }
+  function weaponIconHTML(id, cls) {
+    const v = weaponVisual(id), cn = cls || "weapon-mark";
+    if (v.family === "fusion") return '<span class="' + cn + ' weapon-mark fusion-mark" data-left="' + v.left + '" data-right="' + v.right + '" style="--c1:' + v.leftColor + ';--c2:' + v.rightColor + '"><i>' + v.leftIcon + '</i><i>' + v.rightIcon + '</i></span>';
+    return '<span class="' + cn + ' weapon-mark family-' + v.family + (v.evolved ? ' evolved-mark' : '') + '" style="--c1:' + v.color + '"><i>' + v.icon + '</i></span>';
+  }
 
   // ── 被动(11 种,等级无上限、收益递减;5 级为进化解锁阈值)
   const PASSIVES = {
@@ -627,7 +651,7 @@
     ruins: { name: "霓虹废墟", goalMin: 20 * 60, half: 1700, palette: PAL.ruins, weights: wRuins, bosses: [["duke", 300], ["magnetwarper", 600], ["architect", 840]], finale: null, envField: null, bgm: "ruins" },
     crimson: { name: "血色荒原", goalMin: 20 * 60, half: 1500, palette: PAL.crimson, weights: wCrimson, bosses: [["wraith", 300], ["queen", 600], ["inquisitor", 840]], finale: null, envField: { type: "burn", interval: 12, dur: 4, r: 90, dps: 14, warm: 2 }, bgm: "crimson" },
     frozen: { name: "冰封核心", goalMin: 20 * 60, half: 1600, palette: PAL.frozen, weights: wFrozen, bosses: [["duke", 300], ["twins", 600], ["colossus", 840]], finale: null, envField: { type: "freeze", interval: 15, dur: 1.5, slowF: 0.35 }, bgm: "frozen" },
-    void: { name: "虚空深渊", goalMin: 20 * 60, half: 1900, palette: PAL.void, weights: wVoid, bosses: [["wraith", 300], ["magnetwarper", 600], ["colossus", 840]], finale: ["duke", "wraith", "inquisitor"], finaleMin: 18 * 60, envField: { type: "gravity", interval: 18, dur: 1.0, pull: 220 }, bgm: "void" }
+    void: { name: "虚空深渊", goalMin: 20 * 60, half: 1900, palette: PAL.void, weights: wVoid, bosses: [["wraith", 300], ["magnetwarper", 600], ["colossus", 840]], finale: ["duke", "wraith", "inquisitor"], finaleMin: 18 * 60, envField: { type: "gravity", interval: 18, dur: 1.0, pull: CONST.PLAYER_BASE_SPEED * 0.7 }, bgm: "void" }
   };
   const STAGE_ORDER = ["ruins", "crimson", "frozen", "void"];
 
@@ -640,6 +664,8 @@
     EVOLUTIONS: EVOLUTIONS,
     FUSIONS: FUSIONS,
     weaponDef: weaponDef,
+    weaponVisual: weaponVisual,
+    weaponIconHTML: weaponIconHTML,
     rollStartWeapon: rollStartWeapon,
     startWeaponLabel: startWeaponLabel,
     PASSIVES: PASSIVES,

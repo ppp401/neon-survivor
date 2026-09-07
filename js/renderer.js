@@ -215,6 +215,9 @@
 
       ctx.restore();
 
+      // 地图 Debuff 反馈使用屏幕空间，不随相机移动，也不进入 HUD 的交互层。
+      this._drawEnvDebuff(state);
+
       // 屏外 Boss 箭头(屏幕空间,独立于上面的 restore)
       this._drawBossArrows(state);
     },
@@ -480,7 +483,15 @@
       for (let i = 0; i < list.length; i++) {
         const p = list[i];
         if (p.x < view.l || p.x > view.r || p.y < view.t || p.y > view.b) continue;
-        if (p.grid) {
+        const vis = SV.Config.weaponVisual(p.weaponId || "");
+        p.visualStyle = p.visualStyle || vis.family;
+        const fam = p.visualStyle;
+        if (p.weaponId === "spear_timestop") {
+          const a = Math.atan2(p.vy, p.vx) || state.player.facing, fade = Math.min(1, p.life / 0.12);
+          ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(a); ctx.globalAlpha=.22*fade; ctx.fillStyle=p.color; ctx.fillRect(-p.r*2,-p.r,p.r*4,p.r*2);
+          ctx.globalAlpha=.75*fade;ctx.strokeStyle="#fff";ctx.lineWidth=1;ctx.setLineDash([8,7]);ctx.strokeRect(-p.r*2,-p.r,p.r*4,p.r*2);ctx.setLineDash([]);
+          for(let k=-2;k<=2;k++){ctx.beginPath();ctx.arc(k*p.r*.65,0,3,0,U.TAU);ctx.stroke();}ctx.restore();
+        } else if (p.grid) {
           const dx = Math.cos(p.gridDir), dy = Math.sin(p.gridDir), h = p.gridLen / 2;
           const pulse = 0.7 + 0.3 * Math.sin((state.time || 0) * 24 + p.x * 0.03 + p.y * 0.02);
           ctx.save(); ctx.globalAlpha = pulse * Math.min(1, p.life / 0.12); ctx.strokeStyle = "#ffffff"; ctx.lineWidth = p.gridWidth;
@@ -498,11 +509,39 @@
           ctx.beginPath();
           for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; ctx.lineTo(Math.cos(a) * p.r * 1.6, Math.sin(a) * p.r * 1.6); ctx.lineTo(Math.cos(a + Math.PI / 4) * p.r * 0.5, Math.sin(a + Math.PI / 4) * p.r * 0.5); }
           ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+        } else if (fam === "rocket" || fam === "scatter" || fam === "turret" || fam === "needle" || fam === "spear") {
+          const a=Math.atan2(p.vy,p.vx);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(a);ctx.fillStyle=p.color;ctx.strokeStyle="#fff";ctx.lineWidth=1;
+          const long=fam==="needle"||fam==="spear"?2.5:1.6;ctx.beginPath();ctx.moveTo(p.r*long,0);ctx.lineTo(-p.r,.72*p.r);ctx.lineTo(-.65*p.r,0);ctx.lineTo(-p.r,-.72*p.r);ctx.closePath();ctx.fill();ctx.stroke();
+          if(fam==="rocket"){ctx.fillStyle="#ffcf72";ctx.beginPath();ctx.moveTo(-p.r,0);ctx.lineTo(-p.r*2,.55*p.r);ctx.lineTo(-p.r*1.7,-.55*p.r);ctx.closePath();ctx.fill();}ctx.restore();
+        } else if (fam === "fuseball" || fam === "ramcloud") {
+          ctx.save();ctx.translate(p.x,p.y);ctx.fillStyle=p.color;ctx.strokeStyle="#fff";ctx.lineWidth=1.4;ctx.beginPath();
+          if(fam==="ramcloud"){for(let k=0;k<8;k++){const a=k*U.TAU/8,rr=p.r*(k&1?1.05:1.3);ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}ctx.closePath();ctx.fill();ctx.stroke();ctx.beginPath();ctx.arc(-p.r*.75,-p.r*.7,p.r*.45,.2,Math.PI*1.5);ctx.stroke();ctx.beginPath();ctx.arc(p.r*.75,-p.r*.7,p.r*.45,Math.PI*1.5,Math.PI*.8);ctx.stroke();}
+          else{ctx.arc(0,0,p.r,0,U.TAU);ctx.fill();ctx.stroke();ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(p.r*.5,-p.r*.7);ctx.quadraticCurveTo(p.r,-p.r*1.5,p.r*1.4,-p.r*1.1);ctx.stroke();ctx.setLineDash([]);}ctx.restore();
+        } else if (fam === "clock") {
+          ctx.save();ctx.translate(p.x,p.y);ctx.strokeStyle=p.color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,p.r,0,U.TAU);ctx.stroke();ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-p.r*.65);ctx.moveTo(0,0);ctx.lineTo(p.r*.5,p.r*.25);ctx.stroke();ctx.restore();
+        } else if (fam === "spiral") {
+          ctx.save();ctx.translate(p.x,p.y);ctx.rotate((state.time||0)*5);ctx.strokeStyle=p.color;ctx.lineWidth=2;for(let k=0;k<3;k++){ctx.beginPath();ctx.arc(0,0,p.r*(.45+k*.3),k*1.7,k*1.7+2.5);ctx.stroke();}ctx.restore();
         } else {
           ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.7, 0, U.TAU); ctx.fill();
           ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, U.TAU); ctx.fill();
         }
       }
+    },
+
+    _drawEnvDebuff: function(state) {
+      const env=state.stage&&state.stage.envField;if(!env)return;
+      let left=0;if(env.type==="freeze")left=state.player.slow||0;else if(env.type==="gravity")left=state._voidPull||0;if(left<=0)return;
+      const max=state._envDebuffMax||left, edge=U.clamp(left/Math.min(.45,max),0,1), pulse=1+.12*Math.sin((state.time||0)*11);
+      ctx.save();ctx.globalAlpha=edge*pulse;ctx.lineWidth=Math.max(10,Math.min(cssW,cssH)*.025);
+      if(env.type==="freeze"){
+        ctx.strokeStyle="rgba(130,226,255,.34)";ctx.strokeRect(5,5,cssW-10,cssH-10);ctx.strokeStyle="rgba(225,250,255,.75)";ctx.lineWidth=2;
+        const corners=[[18,18,1,1],[cssW-18,18,-1,1],[18,cssH-18,1,-1],[cssW-18,cssH-18,-1,-1]];
+        for(let c=0;c<corners.length;c++){const q=corners[c];for(let k=0;k<3;k++){const a=(k-1)*.55,dx=Math.cos(a)*q[2]*42,dy=Math.sin(a)*q[3]*42;ctx.beginPath();ctx.moveTo(q[0],q[1]);ctx.lineTo(q[0]+dx,q[1]+dy);ctx.stroke();}}
+      }else{
+        ctx.strokeStyle="rgba(172,100,255,.32)";ctx.strokeRect(5,5,cssW-10,cssH-10);const a=state._voidPullDir||0,dx=Math.cos(a),dy=Math.sin(a),px=-dy,py=dx;
+        ctx.strokeStyle="rgba(225,195,255,.8)";ctx.fillStyle="rgba(190,118,255,.32)";ctx.lineWidth=2;
+        for(let k=-2;k<=2;k++){const cx=cssW/2+px*k*52-dx*cssW*.34,cy=cssH/2+py*k*52-dy*cssH*.34;ctx.beginPath();ctx.moveTo(cx-dx*14+px*9,cy-dy*14+py*9);ctx.lineTo(cx+dx*14,cy+dy*14);ctx.lineTo(cx-dx*14-px*9,cy-dy*14-py*9);ctx.stroke();}
+      }ctx.restore();
     },
 
     // ── 敌方投射物(boss/炮台)。Boss 弹幕专属风格:ring 空心魔环 / bolt 高速光矛 / rune 符文菱形
@@ -594,7 +633,11 @@
       const beams = SV.Weapons.beams;
       for (let i = 0; i < beams.length; i++) {
         const b = beams[i];
-        ctx.globalAlpha = (b.lance ? 0.85 : 1) * (b.life / b.max); ctx.strokeStyle = "#ffffff"; ctx.lineWidth = b.width; this._strokePoly(b.pts);
+        ctx.globalAlpha = (b.lance ? 0.85 : 1) * (b.life / b.max); ctx.strokeStyle = "#ffffff"; ctx.lineWidth = b.width;
+        if (b.visualStyle === "rail") { ctx.setLineDash([18,5,3,5]); this._strokePoly(b.pts); ctx.setLineDash([]); }
+        else if (b.visualStyle === "lightning") { ctx.lineJoin="bevel"; this._strokePoly(b.pts); }
+        else if (b.visualStyle === "spear") { this._strokePoly(b.pts); const q=b.pts[b.pts.length-1],a=Math.atan2(q[1]-b.pts[0][1],q[0]-b.pts[0][0]);ctx.fillStyle="#fff";ctx.beginPath();ctx.moveTo(q[0],q[1]);ctx.lineTo(q[0]-Math.cos(a-.55)*14,q[1]-Math.sin(a-.55)*14);ctx.lineTo(q[0]-Math.cos(a+.55)*14,q[1]-Math.sin(a+.55)*14);ctx.closePath();ctx.fill(); }
+        else this._strokePoly(b.pts);
       }
       ctx.globalAlpha = 1;
     },
@@ -604,7 +647,7 @@
         const g = swings[i];
         if (g.x < view.l - g.radius || g.x > view.r + g.radius || g.y < view.t - g.radius || g.y > view.b + g.radius) continue;
         const t = g.life / g.max;
-        ctx.globalAlpha = 0.5 * t;
+        ctx.globalAlpha = (g.visualStyle === "crescent" ? 0.22 : 0.42) * t;
         ctx.fillStyle = g.color;
         ctx.beginPath();
         ctx.moveTo(g.x, g.y);
@@ -616,6 +659,8 @@
         ctx.beginPath();
         ctx.arc(g.x, g.y, g.radius, g.dir - g.arc / 2, g.dir + g.arc / 2);
         ctx.stroke();
+        if(g.visualStyle === "spear"){ctx.beginPath();ctx.moveTo(g.x,g.y);ctx.lineTo(g.x+Math.cos(g.dir)*g.radius,g.y+Math.sin(g.dir)*g.radius);ctx.stroke();}
+        else if(g.visualStyle === "shockwave"){ctx.globalAlpha=.35*t;ctx.lineWidth=7;ctx.stroke();}
       }
       ctx.globalAlpha = 1;
     },

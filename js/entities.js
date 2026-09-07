@@ -766,12 +766,14 @@
     } else if (env.type === "freeze") {
       // 减速时长随时间增长,上限为触发间隔的 1/3(避免无限冰冻)
       p.slow = Math.min(env.interval / 3, env.dur * (1 + 0.5 * t)); p.slowF = env.slowF;
+      state._envDebuffMax = p.slow; state._envDebuffPulse = 0.45;
       SV.HUD.toast("❄ 冰冻冲击!");
       SV.Effects.ring(p.x, p.y, "#a8f0ff", 10, 120, 0.4, 3);
     } else if (env.type === "gravity") {
       // 随机方向牵引,时长随时间增长,上限为触发间隔的 1/3
       state._voidPullDir = U.rand(0, U.TAU);
       state._voidPull = Math.min(env.interval / 3, env.dur * (1 + 0.5 * t));
+      state._envDebuffMax = state._voidPull; state._envDebuffPulse = 0.45;
       SV.HUD.toast("⛓ 引力牵引!");
     }
   }

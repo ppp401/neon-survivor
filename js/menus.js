@@ -256,7 +256,7 @@
           h += '<div class="ars-section"><div class="ars-title">武器伤害明细 · 总伤害 / 每分钟</div>';
           for (let i = 0; i < rows.length; i++) {
             const r = rows[i];
-            h += '<div class="ars-row"><span class="ars-ic" style="color:' + r.color + '">' + r.icon + "</span>" +
+            h += '<div class="ars-row">' + SV.Config.weaponIconHTML(r.id, "ars-ic") +
               '<span class="ars-name">' + r.name + "</span>" +
               '<span class="ars-lv">用时 ' + SV.Util.fmtTime(r.active) + "</span>" +
               '<span class="ars-eff">总伤 ' + fmtNum(r.total) + " · " + fmtNum(r.perMin) + "/min</span></div>";
@@ -340,7 +340,7 @@
         const w = state.weapons[i], def = SV.Config.weaponDef(w.id);
         const dm = weaponDmg(state, w.id);
         const trait = SV.Upgrades.traitLabel(w.id);
-        html += '<div class="ars-row"><span class="ars-ic" style="color:' + def.color + '">' + (def.icon || "◆") + "</span>" +
+        html += '<div class="ars-row">' + SV.Config.weaponIconHTML(w.id, "ars-ic") +
           '<span class="ars-name">' + def.name + (w.evolved ? ' <i class="evo-star">★</i>' : "") + "</span>" +
           (trait ? '<span class="ars-trait">' + trait + "</span>" : "") +
           '<span class="ars-lv">Lv ' + w.level + "/" + def.max + "</span>" +
@@ -355,7 +355,7 @@
       for (const id in state.passives) {
         const lv = state.passives[id];
         if (lv > 0) { anyP = true; const def = SV.Config.PASSIVES[id];
-          html += '<div class="ars-row"><span class="ars-ic" style="color:' + def.color + '">' + def.icon + "</span>" +
+          html += '<div class="ars-row">' + SV.Config.weaponIconHTML(id, "ars-ic") +
             '<span class="ars-name">' + def.name + "</span>" + '<span class="ars-lv">Lv ' + lv + "</span>" +
             '<span class="ars-eff">' + def.per + "</span></div>"; }
       }

@@ -43,7 +43,7 @@
         const w = state.weapons[i];
         const def = SV.Config.weaponDef(w.id);
         html += '<div class="wicon' + (def.kind === "fusion" ? " fusion" : "") + '" title="' + def.name + '">';
-        html += '<span class="wicon-glyph" style="color:' + def.color + '">' + (def.icon || "◆") + "</span>";
+        html += SV.Config.weaponIconHTML(w.id, "wicon-glyph");
         const max = def.max;
         for (let k = 0; k < max; k++) html += '<i class="pip' + (k < w.level ? " on" : "") + (def.kind === "fusion" ? " fusion" : (w.evolved ? " evo" : "")) + '"></i>';
         html += "</div>";
@@ -89,7 +89,7 @@
         const tag = c.kind === "evolve" ? "进化" : c.kind === "newweapon" ? "新武器" : (c.kind === "passive" ? "被动" : "强化");
         html += '<button class="card rarity-' + c.rarity + '" data-idx="' + i + '">';
         html += '<div class="card-tag">' + tag + "</div>";
-        html += '<div class="card-icon" style="color:' + c.color + '">' + c.icon + "</div>";
+        html += '<div class="card-icon">' + ((c.id && c.kind !== "passive") ? SV.Config.weaponIconHTML(c.kind === "evolve" ? SV.Config.EVOLUTIONS[c.id].to : c.id, "card-weapon-mark") : '<span style="color:' + c.color + '">' + c.icon + '</span>') + "</div>";
         html += '<div class="card-name">' + c.name + "</div>";
         if (c.trait) html += '<div class="card-trait">' + c.trait + "</div>";
         html += '<div class="card-desc">' + c.desc + "</div>";
