@@ -9,10 +9,20 @@
 
   const Game = {
     state: null,
-    mode: "menu" // menu | charselect | select | playing | paused | levelup | endlessprompt | gameover
+    mode: "menu" // menu | select | charselect | weaponselect | playing | paused | levelup | endlessprompt | gameover
   };
 
-  let selStage = "ruins", selDiff = "normal", selChar = "bulwark";
+  let selStage = "ruins", selDiff = "normal", selChar = "bulwark", selStartWeapon = null;
+
+  function resolveStartWeapon() {
+    const ch = SV.Config.CHARACTERS[selChar] || SV.Config.CHARACTERS.bulwark;
+    const remembered = selStartWeapon || (SV.Storage.getStartWeapon && SV.Storage.getStartWeapon(selChar));
+    const pool = SV.Config.startWeaponIds(ch);
+    const valid = SV.Config.validStartWeapon(ch, remembered);
+    selStartWeapon = valid ? remembered : pool[0];
+    if (!valid && SV.Storage.setStartWeapon) SV.Storage.setStartWeapon(selChar, selStartWeapon);
+    return selStartWeapon;
+  }
 
   // ── 复位一局(按所选角色/关卡/难度)
   function reset() {
@@ -36,6 +46,13 @@
     s.envTimer = (s.stage && s.stage.envField) ? s.stage.envField.interval : 0;
     s._voidPull = 0;
     s._voidPullDir = 0;
+    s.collectorXp = 0;
+    s.collectorCrystals = 0;
+    s.timeFractureClock = s.special === "lingerer" && ch.mechanics ? ch.mechanics.interval : 9;
+    s.timeFractureActive = 0;
+    s.overclockClock = s.special === "overclocker" && ch.mechanics ? ch.mechanics.interval : 8;
+    s.overclockActive = 0;
+    s.afterimages = [];
     s.passives = Object.assign({}, ch.startPassives); // 起手被动
     s.endless = false;
     s.level = 1;
@@ -47,6 +64,7 @@
     s.encountered = { enemy: {}, boss: {} }; // 图鉴(本局遇敌记录)
     s.weaponDamage = {};                     // 每武器累计伤害(键=canonical id)
     s.weaponActive = {};                     // 每武器累计活跃秒数(键=canonical id)
+    s.skillDamage = {};                      // 角色独立伤害技能累计伤害(不并入武器桶)
     s.enemyDamage = {};                      // 每敌人类型对玩家累计伤害(键=type/bossType)
     s.bossFlags = { count: 0, wraithEnrage: false };
     s._bossLoot = {};  // 多体 Boss 掉落去重(gid → 已掉过)
@@ -54,7 +72,7 @@
     s.hudAccum = 0;
     s.ended = false;
     SV.Entities.invalidateMods(s);    // 清跨局残留的 mods 缓存
-    const startW = SV.Config.rollStartWeapon(ch); // 起手武器(固定或按角色随机,每局重掷)
+    const startW = resolveStartWeapon();
     SV.Weapons.init(s, startW);
     s.everOwned = {}; s.everOwned[startW] = true; // 武器历史(记解析后的具体 id):防止融合/进化后被当新武器重发
     // 起手满血(含角色 hpMul)
@@ -83,6 +101,13 @@
   function showCharSelect() {
     Game.mode = "charselect";
     SV.Menus.showCharSelect({ stage: selStage, diff: selDiff, char: selChar });
+    showHud(false);
+  }
+
+  function showWeaponSelect() {
+    Game.mode = "weaponselect";
+    const wid = resolveStartWeapon();
+    SV.Menus.showWeaponSelect({ stage: selStage, diff: selDiff, char: selChar, weapon: wid });
     showHud(false);
   }
 
@@ -178,6 +203,7 @@
     else if (act === "toChar") showCharSelect(); // 选图屏「继续」→ 选角屏
     else if (act === "pickChar") { // 选角:只切选中 + 刷详情,留在本屏(不重建网格)
       selChar = el.getAttribute("data-char");
+      selStartWeapon = null;
       SV.Storage.setChar(selChar);
       SV.Menus.selectChar(selChar);
     }
@@ -187,7 +213,17 @@
       SV.Menus.setDiffHighlight(selDiff);
     }
     else if (act === "toStage") showSelect(); // 选角屏「返回选关」→ 选图屏
-    else if (act === "beginRun") startRun(); // 选角屏「开始游戏」→ 进入战斗
+    else if (act === "toWeapon") showWeaponSelect();
+    else if (act === "pickStartWeapon") {
+      const wid = el.getAttribute("data-weapon");
+      if (SV.Config.validStartWeapon(selChar, wid)) {
+        selStartWeapon = wid;
+        SV.Storage.setStartWeapon(selChar, wid);
+        SV.Menus.selectStartWeapon(selChar, wid);
+      }
+    }
+    else if (act === "toCharBack") showCharSelect();
+    else if (act === "beginRun") startRun();
     else if (act === "endlessYes") enterEndless();
     else if (act === "endlessNo") endRun(true);
     else if (act === "restart") startRun();
@@ -241,6 +277,7 @@
     if (s.time >= s.stage.goalMin && !s.endless) { openEndlessPrompt(); return; }
     SV.Waves.update(s, dt);
     SV.Entities.rebuildGrid(s);
+    SV.Entities.updateCharacterState(s, dt);
     SV.Weapons.updateAll(s, dt);
     if (SV.Auto && SV.Auto.enabled) SV.Auto.tick(s, dt);   // 全自动走位(grid 刚刷新、updatePlayer 未读 axis)
     SV.Entities.updatePlayer(s, dt);
@@ -281,6 +318,8 @@
     selStage = SV.Storage.get("lastStage") || "ruins";
     selDiff = SV.Storage.get("lastDiff") || "normal";
     selChar = SV.Storage.get("lastChar") || "bulwark";
+    if (!SV.Config.CHARACTERS[selChar]) selChar = "bulwark";
+    selStartWeapon = null;
     const canvas = document.getElementById("game");
     SV.Renderer.init(canvas);
     SV.Input.init(document.getElementById("stick"), document.getElementById("knob"), document.getElementById("stickZone"));

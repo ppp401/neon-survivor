@@ -58,31 +58,11 @@ canvas#game{ position:fixed; top:0; left:0; width:100vw; height:100vh; display:b
 .weapon-list{ display:flex; gap:6px; max-width:46vw; flex-wrap:wrap; justify-content:flex-end; }
 .wicon{ position:relative; overflow:hidden; display:flex; flex-direction:column; gap:2px; align-items:center; padding:3px 4px; border-radius:6px; background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); }
 .wicon-glyph{ position:relative; z-index:1; font-size:15px; line-height:1; filter:drop-shadow(0 0 4px currentColor); }
-/* 武器徽记：轮廓表达机制、颜色表达属性；融合徽记固定为双色双源。 */
-.weapon-mark{--c1:#fff;position:relative;display:inline-grid;place-items:center;width:1.35em;height:1.35em;color:var(--c1);filter:drop-shadow(0 0 5px var(--c1));isolation:isolate}
-.weapon-mark>i{font-style:normal;font-size:.78em;line-height:1;position:relative;z-index:2}
-.weapon-mark:before{content:"";position:absolute;inset:10%;border:2px solid currentColor;clip-path:polygon(50% 0,88% 25%,100% 65%,50% 100%,0 65%,12% 25%);opacity:.72}
-.family-rocket:before,.family-spear:before,.family-needle:before{clip-path:polygon(100% 50%,25% 12%,38% 40%,0 50%,38% 60%,25% 88%)}
-.family-bolt:before{clip-path:polygon(58% 0,15% 55%,45% 54%,30% 100%,88% 38%,55% 40%);background:currentColor;border:0}
-.family-halo:before{clip-path:none;border-radius:50%;box-shadow:inset 0 0 0 3px rgba(0,0,0,.75)}
-.family-scatter:before{clip-path:polygon(0 35%,72% 0,100% 18%,76% 50%,100% 82%,72% 100%,0 65%)}
-.family-crystal:before{clip-path:polygon(50% 0,62% 35%,100% 22%,70% 50%,100% 78%,62% 65%,50% 100%,38% 65%,0 78%,30% 50%,0 22%,38% 35%)}
-.family-laser:before{clip-path:polygon(0 43%,82% 43%,82% 20%,100% 50%,82% 80%,82% 57%,0 57%);background:currentColor;border:0}
-.family-starblade:before{clip-path:polygon(50% 0,63% 35%,100% 50%,63% 65%,50% 100%,37% 65%,0 50%,37% 35%)}
-.family-fuseball:before{clip-path:none;border-radius:50%;border-style:dashed}
-.family-bio:before{clip-path:polygon(50% 5%,65% 34%,95% 50%,65% 66%,50% 95%,35% 66%,5% 50%,35% 34%);border-radius:50%}
-.family-spiral:before{clip-path:none;border-radius:50%;border-left-color:transparent;border-bottom-color:transparent;transform:rotate(25deg)}
-.family-turret:before{clip-path:polygon(8% 35%,55% 35%,55% 20%,100% 42%,55% 60%,55% 88%,8% 88%)}
-.family-comet:before{clip-path:polygon(100% 15%,70% 55%,55% 100%,42% 64%,0 83%,35% 45%)}
-.family-wave:before{clip-path:polygon(0 65%,20% 35%,38% 66%,58% 28%,78% 65%,100% 35%,100% 62%,78% 90%,58% 53%,38% 91%,20% 60%,0 92%)}
-.family-sigil:before{clip-path:polygon(50% 0,62% 35%,100% 50%,62% 65%,50% 100%,38% 65%,0 50%,38% 35%);transform:rotate(45deg)}
-.family-moon:before{clip-path:none;border-radius:50%;border:0;background:currentColor;box-shadow:inset -.38em .08em 0 rgba(8,7,18,.94)}
-.family-burst:before{clip-path:polygon(50% 0,61% 34%,88% 12%,70% 42%,100% 50%,70% 58%,88% 88%,61% 66%,50% 100%,39% 66%,12% 88%,30% 58%,0 50%,30% 42%,12% 12%,39% 34%);background:currentColor;border:0}
-.family-ramcloud:before{clip-path:polygon(15% 75%,4% 55%,18% 36%,35% 38%,42% 18%,62% 15%,74% 35%,93% 42%,98% 65%,82% 82%,35% 85%);border-radius:45%}
-.family-clock:before{clip-path:none;border-radius:50%}.family-clock:after{content:"";position:absolute;width:2px;height:35%;background:currentColor;transform:translateY(-18%) rotate(-35deg);transform-origin:bottom}
-.evolved-mark:after{content:"";position:absolute;inset:0;border:1px dashed #fff;border-radius:50%;opacity:.7}
-.fusion-mark{width:1.65em;grid-template-columns:1fr 1fr;border:1px solid rgba(255,255,255,.75);border-radius:50%;overflow:hidden;background:linear-gradient(90deg,color-mix(in srgb,var(--c1) 35%,#090713) 0 50%,color-mix(in srgb,var(--c2) 35%,#090713) 50%)}
-.fusion-mark:before{inset:0;clip-path:none;border:0;border-left:1px solid #fff;left:50%;opacity:.65}.fusion-mark>i:first-child{color:var(--c1)}.fusion-mark>i:last-child{color:var(--c2)}
+/* 简洁单符号霓虹徽章：进化加星标，融合以渐变底框区分。 */
+.weapon-mark{--c1:#fff;position:relative;display:inline-grid;place-items:center;width:1.35em;height:1.35em;color:var(--c1);border:1px solid color-mix(in srgb,var(--c1) 38%,transparent);border-radius:.34em;background:rgba(8,7,18,.58);box-shadow:0 0 5px color-mix(in srgb,var(--c1) 35%,transparent);isolation:isolate}
+.weapon-mark>i{font-style:normal;font-size:.82em;line-height:1;position:relative;z-index:2;filter:drop-shadow(0 0 3px currentColor)}
+.evolved-mark:after{content:"★";position:absolute;right:-.2em;top:-.32em;color:#ffe98a;font-size:.36em;line-height:1;text-shadow:0 0 3px #ffd86b}
+.fusion-mark{border-color:color-mix(in srgb,var(--c1) 72%,#ff5dc0);background:linear-gradient(135deg,rgba(255,93,192,.22),color-mix(in srgb,var(--c1) 28%,rgba(8,7,18,.82)));box-shadow:0 0 6px color-mix(in srgb,var(--c1) 45%,#ff5dc0)}
 .card-weapon-mark{font-size:46px}.ars-ic.weapon-mark{font-size:20px;flex:0 0 26px}.wicon-glyph.weapon-mark{font-size:17px}
 .pip{ display:block; width:14px; height:3px; border-radius:2px; background:rgba(255,255,255,.14); }
 .pip.on{ background:var(--cyan); box-shadow:0 0 5px var(--cyan); }
@@ -292,8 +272,22 @@ body.touch .joystick.active{ border-color:var(--cyan); box-shadow:0 0 18px rgba(
 .char-detail .cd-title{ font-size:11px; color:var(--dim); letter-spacing:1px; }
 .char-detail .cd-body{ flex:1; display:flex; flex-direction:column; gap:6px; min-width:0; }
 .char-detail .cd-desc{ font-size:12px; color:var(--ink); line-height:1.45; }
+.char-detail .cd-ability{ font-size:11px; line-height:1.45; color:#e7dcff; padding:6px 8px; border-left:2px solid var(--purple); background:rgba(192,107,255,.08); }
+.char-detail .cd-ability span{ color:var(--dim); }
 .char-detail .cd-chips{ display:flex; flex-wrap:wrap; gap:4px; }
 .char-detail .cd-best{ font-size:11px; color:var(--gold); font-variant-numeric:tabular-nums; line-height:1.5; }
+
+/* 起手武器：霓虹军械终端 */
+.weapon-terminal{ max-width:900px; }
+.weapon-select-layout{ width:100%; display:grid; grid-template-columns:minmax(210px,280px) 1fr; gap:14px; min-height:300px; }
+.start-weapon-list{ display:grid; grid-template-columns:repeat(2,minmax(96px,1fr)); gap:8px; align-content:start; max-height:54vh; overflow:auto; padding:4px; }
+.start-weapon{ min-height:58px; display:flex; align-items:center; gap:8px; padding:8px; color:var(--ink); background:rgba(8,7,18,.78); border:1px solid rgba(255,255,255,.12); border-radius:10px; cursor:pointer; text-align:left; }
+.start-weapon:hover,.start-weapon.selected{ border-color:var(--weapon-color); box-shadow:0 0 12px color-mix(in srgb,var(--weapon-color) 55%,transparent); }
+.start-weapon.selected{ outline:2px solid var(--gold); }
+.start-weapon-icon{ font-size:24px; flex:0 0 34px; }
+.start-weapon-detail{ min-width:0; text-align:left; padding:16px; border:1px solid rgba(192,107,255,.35); border-radius:14px; background:linear-gradient(145deg,rgba(18,12,36,.94),rgba(6,16,29,.9)); display:flex; flex-direction:column; gap:10px; }
+.swd-head{ display:flex; align-items:center; gap:12px; }.swd-icon{ font-size:42px; }.swd-name{ font-size:22px; font-weight:800; }.swd-mechanic{ color:var(--dim); line-height:1.5; }
+.swd-level,.swd-evo{ display:flex; flex-direction:column; gap:3px; padding:8px 10px; border-radius:8px; background:rgba(255,255,255,.045); font-size:12px; }.swd-level b{ color:var(--cyan); }.swd-evo b{ color:var(--gold); }.swd-evo span,.swd-note{ color:var(--dim); }.swd-note{ margin-top:auto; font-size:11px; }
 
 /* 暂停面板:装备 + 基础数值 */
 .arsenal{ width:100%; max-height:46vh; overflow:auto; text-align:left; display:flex; flex-direction:column; gap:10px; padding:8px; }.ars-section{ background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:8px 10px; }
@@ -460,6 +454,11 @@ body.touch .vol-slider{ width:120px; height:28px; }
   .char-detail .cd-head{ min-width:70px; }
   .char-detail .cd-icon{ font-size:28px; }
   .char-detail .cd-name{ font-size:14px; }
+  .weapon-select-layout{ grid-template-columns:280px 1fr; min-height:0; max-height:66vh; }
+  .start-weapon-list{ display:flex; align-items:flex-start; overflow-x:auto; overflow-y:hidden; max-height:none; }
+  .start-weapon{ flex:0 0 116px; min-height:48px; height:48px; }
+  .start-weapon-detail{ padding:8px 10px; gap:5px; overflow:auto; }
+  .swd-name{ font-size:16px; }.swd-icon{ font-size:28px; }.swd-level,.swd-evo{ padding:4px 7px; }
   .char-detail .cd-desc{ font-size:11px; line-height:1.35; }
   .char-chip{ font-size: 9px; padding: 2px 5px; }
   .mini-btn{ padding: 7px 14px; font-size: 12px; }

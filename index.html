@@ -118,10 +118,25 @@
       </div>
       <div id="charCards" class="char-grid"></div>
       <div id="charDetail" class="char-detail"></div>
-      <div class="lv-hint">点击图标查看角色详情 · 每位角色拥有不同的起手武器与被动</div>
+      <div class="lv-hint">点击图标查看角色详情 · 角色主题只限制起手武器</div>
+      <div class="btn-row">
+        <button class="big-btn" data-act="toWeapon">▶ 下一步：选择武器</button>
+        <button class="mini-btn" data-act="toStage">◀ 返回选关</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 起手武器界面(第三步) -->
+  <div id="weaponSelectScreen" class="screen hidden">
+    <div class="screen-card wide weapon-terminal">
+      <h2>霓虹军械终端</h2>
+      <div class="weapon-select-layout">
+        <div id="startWeaponList" class="start-weapon-list"></div>
+        <div id="startWeaponDetail" class="start-weapon-detail"></div>
+      </div>
       <div class="btn-row">
         <button class="big-btn" data-act="beginRun">▶ 开始游戏</button>
-        <button class="mini-btn" data-act="toStage">◀ 返回选关</button>
+        <button class="mini-btn" data-act="toCharBack">◀ 返回选角</button>
       </div>
     </div>
   </div>

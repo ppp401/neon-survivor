@@ -341,24 +341,26 @@
         if (h.x < view.l || h.x > view.r || h.y < view.t || h.y > view.b) continue;
         if (h.kind === "scorch") {                        // 陨石焦土:实心灼烧盘(区别于地图灼烧的辉光环),无 warm 预警
           const a = Math.max(0, h.life / h.max);
-          ctx.globalAlpha = 0.22 * a; ctx.fillStyle = h.color;
-          ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, U.TAU); ctx.fill();
-          ctx.globalAlpha = 0.5 * a; ctx.strokeStyle = h.color; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, U.TAU); ctx.stroke();
+          ctx.globalAlpha = 0.20 * a; ctx.fillStyle = "#a84b18";
+          ctx.beginPath(); for(let k=0;k<14;k++){const q=k/14*U.TAU,rr=h.r*(.84+.12*Math.sin(k*4.7+h.x*.01));if(k)ctx.lineTo(h.x+Math.cos(q)*rr,h.y+Math.sin(q)*rr);else ctx.moveTo(h.x+Math.cos(q)*rr,h.y+Math.sin(q)*rr);}ctx.closePath();ctx.fill();
+          ctx.globalAlpha = 0.72 * a; ctx.strokeStyle = "#ffae42"; ctx.lineWidth = 2;
+          const cracks=SV.Effects.isReduced()?3:6;for(let k=0;k<cracks;k++){const q=k/cracks*U.TAU+.3;ctx.beginPath();ctx.moveTo(h.x+Math.cos(q)*h.r*.15,h.y+Math.sin(q)*h.r*.15);ctx.lineTo(h.x+Math.cos(q+.12)*h.r*.55,h.y+Math.sin(q+.12)*h.r*.55);ctx.lineTo(h.x+Math.cos(q-.04)*h.r*.9,h.y+Math.sin(q-.04)*h.r*.9);ctx.stroke();}
           continue;
         }
         if (h.warm > 0) {
-          // 预热预警:虚线脉冲环,提示"此处即将灼烧",尚不伤害
+          // 地图灼烧预热：红紫旋转虚线 + 向内收缩警戒刻度。
           const pulse = 0.5 + 0.5 * Math.sin(state.time * 10 + i);
-          ctx.globalAlpha = 0.30 + 0.30 * pulse; ctx.strokeStyle = h.color; ctx.lineWidth = 2;
-          ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, U.TAU); ctx.stroke(); ctx.setLineDash([]);
+          ctx.globalAlpha = 0.45 + 0.3 * pulse; ctx.strokeStyle = "#ff4f91"; ctx.lineWidth = 3;ctx.lineDashOffset=-(state.time||0)*24;
+          ctx.setLineDash([10, 7]); ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, U.TAU); ctx.stroke(); ctx.setLineDash([]);ctx.lineDashOffset=0;
+          const marks=SV.Effects.isReduced()?8:16;for(let k=0;k<marks;k++){const q=k/marks*U.TAU+(state.time||0)*.25,r0=h.r*(.72+.08*pulse),r1=h.r*.94;ctx.beginPath();ctx.moveTo(h.x+Math.cos(q)*r0,h.y+Math.sin(q)*r0);ctx.lineTo(h.x+Math.cos(q)*r1,h.y+Math.sin(q)*r1);ctx.stroke();}
           continue;
         }
         const a = Math.max(0, h.life / h.max);
-        ctx.globalAlpha = 0.18 * a;
-        ctx.drawImage(glow(h.color), h.x - h.r * 2, h.y - h.r * 2, h.r * 4, h.r * 4);
-        ctx.globalAlpha = 0.45 * a; ctx.strokeStyle = h.color; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, U.TAU); ctx.stroke();
+        ctx.globalAlpha = 0.28 * a;ctx.fillStyle="#54102f";ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,U.TAU);ctx.fill();
+        ctx.globalAlpha = 0.35 * a;ctx.drawImage(glow("#d92b82"),h.x-h.r*1.6,h.y-h.r*1.6,h.r*3.2,h.r*3.2);
+        ctx.globalAlpha = (0.62+0.22*Math.sin(state.time*8+i))*a;ctx.strokeStyle="#ff4f91";ctx.lineWidth=5;ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,U.TAU);ctx.stroke();
+        ctx.strokeStyle="#9b3cff";ctx.lineWidth=2;ctx.beginPath();ctx.arc(h.x,h.y,h.r-7,0,U.TAU);ctx.stroke();
+        const tex=SV.Effects.isReduced()?3:7;ctx.lineWidth=1.5;for(let k=0;k<tex;k++){const q=k/tex*U.TAU+.4;ctx.beginPath();ctx.moveTo(h.x+Math.cos(q)*h.r*.18,h.y+Math.sin(q)*h.r*.18);ctx.lineTo(h.x+Math.cos(q+1.2)*h.r*.72,h.y+Math.sin(q+1.2)*h.r*.72);ctx.stroke();}
       }
       ctx.globalAlpha = 1; ctx.restore();
     },
@@ -534,13 +536,18 @@
       const max=state._envDebuffMax||left, edge=U.clamp(left/Math.min(.45,max),0,1), pulse=1+.12*Math.sin((state.time||0)*11);
       ctx.save();ctx.globalAlpha=edge*pulse;ctx.lineWidth=Math.max(10,Math.min(cssW,cssH)*.025);
       if(env.type==="freeze"){
-        ctx.strokeStyle="rgba(130,226,255,.34)";ctx.strokeRect(5,5,cssW-10,cssH-10);ctx.strokeStyle="rgba(225,250,255,.75)";ctx.lineWidth=2;
-        const corners=[[18,18,1,1],[cssW-18,18,-1,1],[18,cssH-18,1,-1],[cssW-18,cssH-18,-1,-1]];
-        for(let c=0;c<corners.length;c++){const q=corners[c];for(let k=0;k<3;k++){const a=(k-1)*.55,dx=Math.cos(a)*q[2]*42,dy=Math.sin(a)*q[3]*42;ctx.beginPath();ctx.moveTo(q[0],q[1]);ctx.lineTo(q[0]+dx,q[1]+dy);ctx.stroke();}}
+        ctx.strokeStyle="rgba(95,202,255,.32)";ctx.strokeRect(5,5,cssW-10,cssH-10);
+        const corners=[[14,14,1,1],[cssW-14,14,-1,1],[14,cssH-14,1,-1],[cssW-14,cssH-14,-1,-1]],branches=SV.Effects.isReduced()?4:6;ctx.strokeStyle="rgba(225,250,255,.82)";ctx.lineWidth=1.7;
+        for(let c=0;c<corners.length;c++){const q=corners[c];for(let k=0;k<branches;k++){const a=-.75+k*1.5/(branches-1),dx=Math.cos(a)*q[2]*64,dy=Math.sin(a)*q[3]*64;ctx.beginPath();ctx.moveTo(q[0],q[1]);ctx.lineTo(q[0]+dx*.55,q[1]+dy*.55);ctx.lineTo(q[0]+dx,q[1]+dy);ctx.stroke();if(k%2===0){ctx.beginPath();ctx.moveTo(q[0]+dx*.55,q[1]+dy*.55);ctx.lineTo(q[0]+dx*.73-dy*.14,q[1]+dy*.73+dx*.14);ctx.stroke();}}}
+        // 折射光只贴边铺开，避免左上角出现缺乏语义的整块蓝色斜面。
+        ctx.globalAlpha*=.16;ctx.fillStyle="#9be7ff";
+        const band=Math.max(6,Math.min(cssW,cssH)*.018);
+        ctx.fillRect(0,0,cssW,band);ctx.fillRect(0,cssH-band,cssW,band);
+        ctx.fillRect(0,band,band,cssH-band*2);ctx.fillRect(cssW-band,band,band,cssH-band*2);
       }else{
-        ctx.strokeStyle="rgba(172,100,255,.32)";ctx.strokeRect(5,5,cssW-10,cssH-10);const a=state._voidPullDir||0,dx=Math.cos(a),dy=Math.sin(a),px=-dy,py=dx;
-        ctx.strokeStyle="rgba(225,195,255,.8)";ctx.fillStyle="rgba(190,118,255,.32)";ctx.lineWidth=2;
-        for(let k=-2;k<=2;k++){const cx=cssW/2+px*k*52-dx*cssW*.34,cy=cssH/2+py*k*52-dy*cssH*.34;ctx.beginPath();ctx.moveTo(cx-dx*14+px*9,cy-dy*14+py*9);ctx.lineTo(cx+dx*14,cy+dy*14);ctx.lineTo(cx-dx*14-px*9,cy-dy*14-py*9);ctx.stroke();}
+        const a=state._voidPullDir||0,dx=Math.cos(a),dy=Math.sin(a),px=-dy,py=dx,t=state.time||0;ctx.strokeStyle="rgba(205,150,255,.78)";ctx.lineWidth=2;
+        const tracks=SV.Effects.isReduced()?3:6;for(let k=0;k<tracks;k++){const off=(k-(tracks-1)/2)*48,phase=((t*150+k*83)%(cssW*1.2))-cssW*.6,cx=cssW/2+px*off+dx*phase,cy=cssH/2+py*off+dy*phase;ctx.beginPath();ctx.moveTo(cx-dx*90+px*12,cy-dy*90+py*12);ctx.quadraticCurveTo(cx+px*34,cy+py*34,cx+dx*90-px*8,cy+dy*90-py*8);ctx.stroke();}
+        ctx.globalAlpha*=.55;ctx.strokeStyle="rgba(151,73,255,.7)";ctx.lineWidth=5;ctx.beginPath();ctx.arc(cssW/2,cssH/2,Math.min(cssW,cssH)*.13,0,U.TAU);ctx.stroke();ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cssW/2,cssH/2,Math.min(cssW,cssH)*.19,0,U.TAU);ctx.stroke();
       }ctx.restore();
     },
 
@@ -700,8 +707,19 @@
       ctx.fillStyle = hpPct < 0.3 ? "#ff3d5a" : "#ff7d8e"; ctx.fillRect(bx, by, bw * hpPct, 4);
 
       // 旋转光刃 + 哨卫炮塔
+      this._drawCharacterAbility(state);
       this._drawBlades(state);
       this._drawSentries(state);
+    },
+    _drawCharacterAbility: function (state) {
+      const p=state.player,t=state.time||0;ctx.save();ctx.globalCompositeOperation="lighter";
+      if(state.special==="collector"){
+        const n=state.collectorCrystals||0;for(let i=0;i<n;i++){const a=t*2.4+i/Math.max(1,n)*U.TAU,x=p.x+Math.cos(a)*30,y=p.y+Math.sin(a)*30;ctx.globalAlpha=.8;ctx.fillStyle="#ffd86b";ctx.beginPath();ctx.moveTo(x,y-6);ctx.lineTo(x+4,y);ctx.lineTo(x,y+6);ctx.lineTo(x-4,y);ctx.closePath();ctx.fill();}
+      }
+      const ghosts=state.afterimages||[];for(let i=0;i<ghosts.length;i++){const g=ghosts[i],a=U.clamp(g.delay/g.max,0,1);ctx.globalAlpha=.18+.28*a;ctx.strokeStyle="#73dcff";ctx.lineWidth=2;drawShapePath(ctx,g.x,g.y,p.r*(1.2-a*.2),"star");ctx.stroke();ctx.beginPath();ctx.arc(g.x,g.y,70*(1-a*.35),0,U.TAU);ctx.stroke();}
+      if(state.overclockActive>0){ctx.globalAlpha=.45+.25*Math.sin(t*18);ctx.strokeStyle="#ffb25a";ctx.lineWidth=3;ctx.beginPath();ctx.arc(p.x,p.y,p.r*2.1,0,U.TAU);ctx.stroke();}
+      if(state.timeFractureActive>0){ctx.globalAlpha=.28;ctx.strokeStyle="#9be7ff";ctx.lineWidth=2;ctx.setLineDash([8,5]);ctx.beginPath();ctx.arc(p.x,p.y,58+t%1*16,0,U.TAU);ctx.stroke();ctx.setLineDash([]);}
+      ctx.restore();
     },
     _drawBlades: function (state) {
       const blades = state.player.blades;

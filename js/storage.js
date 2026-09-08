@@ -11,7 +11,8 @@
     autoMode: false,                 // 全自动模式开关(SV.Auto)
     eshotMark: false,                // 敌方子弹标红(边缘描红,便于与己方弹幕区分)
     musicVol: 1.0, sfxVol: 1.0,   // 音乐/音效音量(0..1);默认均满档
-    lastStage: "ruins", lastDiff: "normal", lastChar: "bulwark"
+    lastStage: "ruins", lastDiff: "normal", lastChar: "bulwark",
+    lastStartWeapons: {}       // charId -> 最近一次合法起手武器
   };
 
   let data = null;
@@ -23,7 +24,7 @@
     let d = Object.assign({}, DEFAULTS);
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) { const parsed = JSON.parse(raw); Object.assign(d, parsed); if (!d.bests) d.bests = {}; }
+      if (raw) { const parsed = JSON.parse(raw); Object.assign(d, parsed); if (!d.bests) d.bests = {}; if (!d.lastStartWeapons || typeof d.lastStartWeapons !== "object" || Array.isArray(d.lastStartWeapons)) d.lastStartWeapons = {}; }
     } catch (e) { /* 隐私模式/损坏:用默认值 */ }
     // 一次性迁移:清除旧格式(无 charId 段)的 best key——2 段(stage:diff)或 3 段且末段 endless
     if (d.bests) {
@@ -58,6 +59,8 @@
     setEshotMark: function (on) { this.set("eshotMark", !!on); },
     setSelection: function (stageId, diff) { load().lastStage = stageId; load().lastDiff = diff; writeNow(); },
     setChar: function (id) { load().lastChar = id; writeNow(); },
+    getStartWeapon: function (charId) { return load().lastStartWeapons[charId] || null; },
+    setStartWeapon: function (charId, weaponId) { load().lastStartWeapons[charId] = weaponId; writeNow(); },
 
     getBest: function (stageId, diff, charId, endless) {
       const b = load().bests[bkey(stageId, diff, charId, endless)];

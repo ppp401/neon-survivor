@@ -12,7 +12,7 @@
       pierce: 0, homing: false, seek: 4, target: null, hitIds: null, shape: "dot", rot: 0, spin: 0, weaponId: "", visualStyle: "", phase: 0,
       explode: 0, vortex: false, vrad: 0, pull: 0, vtick: 0, btick: 0, tc: 0,
       chainHops: 0, chainRange: 0, splash: 0, splashMul: 0, explodeEvery: false, cluster: false, clustered: false,
-      beamLen: 0, beamWidth: 0, beamDmg: 0, beamTick: 0, beamSpin: 0, chaseKills: 0, chaseInfinite: false, chaseDecay: 0.85, meteor: 0, burn: 0, burnDur: 0, shockwave: null,
+      beamLen: 0, beamWidth: 0, beamDmg: 0, beamTick: 0, beamSpin: 0, beamRef: null, chaseKills: 0, chaseInfinite: false, chaseDecay: 0.85, meteor: 0, burn: 0, burnDur: 0, shockwave: null,
       sheep: false, sheepDur: 0, sheepPierce: 0, sheepFreeze: 0, sheepBomb: false, sheepBombDmg: 0, sheepBombRadius: 0,
       timestop: 0, tsFreeze: 0, shatter: false,
       grid: false, gridDir: 0, gridLen: 0, gridTick: 0, gridLife: 0, gridEvery: 0, gridWidth: 0,
@@ -28,7 +28,8 @@
     p.explode = 0; p.vortex = false; p.vrad = 0; p.pull = 0; p.vtick = 0; p.btick = 0; p.tc = 0;
     // 特殊机制字段必须清零,否则回收的投射物会携带上一世的残留(如 shockwave/chainHops/cluster)
     p.chainHops = 0; p.chainRange = 0; p.splash = 0; p.splashMul = 0; p.explodeEvery = false; p.cluster = false; p.clustered = false;
-    p.beamLen = 0; p.beamWidth = 0; p.beamDmg = 0; p.beamTick = 0; p.beamSpin = 0; p.chaseKills = 0; p.chaseInfinite = false; p.chaseDecay = 0.85; p.meteor = 0; p.burn = 0; p.burnDur = 0; p.shockwave = null;
+    if (p.beamRef) { const bi = beams.indexOf(p.beamRef); if (bi >= 0) beams.splice(bi, 1); }
+    p.beamLen = 0; p.beamWidth = 0; p.beamDmg = 0; p.beamTick = 0; p.beamSpin = 0; p.beamRef = null; p.chaseKills = 0; p.chaseInfinite = false; p.chaseDecay = 0.85; p.meteor = 0; p.burn = 0; p.burnDur = 0; p.shockwave = null;
     p.sheep = false; p.sheepDur = 0; p.sheepPierce = 0; p.sheepFreeze = 0; p.sheepBomb = false; p.sheepBombDmg = 0; p.sheepBombRadius = 0;
     p.timestop = 0; p.tsFreeze = 0; p.shatter = false;
     p.grid = false; p.gridDir = 0; p.gridLen = 0; p.gridTick = 0; p.gridLife = 0; p.gridEvery = 0; p.gridWidth = 0;
@@ -57,19 +58,21 @@
   }
 
   function weaponDef(id) { return SV.Config.weaponDef(id); }
+  function characterDef(state) { return (state && SV.Config.CHARACTERS[state.charId]) || {}; }
+  function hardAttackInterval(state, seconds) {
+    const mech = characterDef(state).mechanics || {};
+    return seconds / (state.special === "overclocker" && state.overclockActive > 0 ? (mech.frequencyMul || 1.35) : 1);
+  }
 
   // 角色武器专精加成(每次调用现算,不缓存)。服务 arcanist(元素)/ranger(远程)。
   function applyCharWeaponSpec(s, def, state) {
-    const sp = state.special;
-    if (!sp || !def.tags) return;
-    const has = function (t) { return def.tags.indexOf(t) >= 0; };
-    if (sp === "arcanist") {
-      // 秘法亲和:法术池重分类后扩大(chain/frost/poison/meteor/hex + 变形/时停),对齐射手档位:+20% 伤 / +10% 范围
-      if (has("spell")) { if (s.damage != null) s.damage *= 1.20; if (s.radius != null) s.radius *= 1.10; }
-    } else if (sp === "ranger") {
-      // 游击射手:远程武器 +伤害 +攻速(近战已被 weaponPolicy 硬禁;另以拾取范围代偿)
-      if (has("ranged")) { if (s.damage != null) s.damage *= 1.15; if (s.cooldown != null) s.cooldown *= 0.90; }
-    }
+    const spec = characterDef(state).weaponSpec;
+    if (!spec || !def.tags || def.tags.indexOf(spec.tag) < 0) return;
+    const damageKeys = ["damage", "dot", "explodeDmg", "gridDmg", "bombDmg", "beamDmg", "launchDamage", "burstDmg", "fieldDmg", "pelletDamage", "childDmg", "corridorDmg", "burn", "boomBase", "boomPer", "judgeDmg", "collideDmg", "hexDmg", "echoDmg", "chainDmg"];
+    const areaKeys = ["radius", "length", "expand"];
+    for (let i = 0; i < damageKeys.length; i++) if (s[damageKeys[i]] != null) s[damageKeys[i]] *= spec.damageMul || 1;
+    for (let i = 0; i < areaKeys.length; i++) if (s[areaKeys[i]] != null) s[areaKeys[i]] *= spec.areaMul || 1;
+    if (s.cooldown != null) s.cooldown *= spec.cooldownMul || 1;
   }
 
   function stats(w, state) {
@@ -92,6 +95,14 @@
       const damageScale = s.damage / base.damage;
       const secondary = ["gridDmg", "bombDmg", "beamDmg", "launchDamage", "burstDmg", "fieldDmg", "pelletDamage", "childDmg", "corridorDmg", "burn", "boomBase", "boomPer", "judgeDmg", "collideDmg", "hexDmg", "echoDmg", "chainDmg"];
       for (let i = 0; i < secondary.length; i++) if (base[secondary[i]] != null) s[secondary[i]] = base[secondary[i]] * damageScale;
+    }
+    // 超频窗口：所有武器伤害×1.1，攻击间隔÷1.35。持续时间、控制时长和 DoT 跳频不改变。
+    if (state.special === "overclocker" && state.overclockActive > 0) {
+      const mech = characterDef(state).mechanics || {};
+      const damageKeys = ["damage", "dot", "explodeDmg", "gridDmg", "bombDmg", "beamDmg", "launchDamage", "burstDmg", "fieldDmg", "pelletDamage", "childDmg", "corridorDmg", "burn", "boomBase", "boomPer", "judgeDmg", "collideDmg", "hexDmg", "echoDmg", "chainDmg"];
+      const intervalKeys = ["cooldown", "tick", "fireCd", "hitCd", "launchCd", "beamTick", "gridTick", "corridorTick", "fieldTick"];
+      for (let i = 0; i < damageKeys.length; i++) if (s[damageKeys[i]] != null) s[damageKeys[i]] *= mech.damageMul || 1.1;
+      for (let i = 0; i < intervalKeys.length; i++) if (s[intervalKeys[i]] != null) s[intervalKeys[i]] /= mech.frequencyMul || 1.35;
     }
     return s;
   }
@@ -814,7 +825,7 @@
       for (let i = 0; i < s.count; i++) blades.push({ angle: (w.angle || 0) + i / s.count * U.TAU, x: 0, y: 0 });
     }
     w.angle = (w.angle || 0) + s.spin * dt;
-    const cdEvery = def.evo ? 0.25 : 0.3;
+    const cdEvery = hardAttackInterval(state, def.evo ? 0.25 : 0.3);
     for (let i = 0; i < blades.length; i++) {
       const b = blades[i];
       b.angle = (w.angle || 0) + i / blades.length * U.TAU;
@@ -941,7 +952,7 @@
           if (pr.captures && Object.keys(pr.captures).length < pr.captureMax) pr.captures[e.id] = true;
         }
         if (pr.vtick <= 0) {
-          pr.vtick = 0.2; SV.Effects.ring(pr.x, pr.y, pr.color, pr.vrad, 8, 0.2, 2); // 向内收缩的环(龙卷是吸引)
+          pr.vtick = hardAttackInterval(state, 0.2); SV.Effects.ring(pr.x, pr.y, pr.color, pr.vrad, 8, 0.2, 2); // 向内收缩的环(龙卷是吸引)
         }
         if (pr.vortexBurn) {
           pr.btick -= dt;
@@ -949,14 +960,13 @@
         }
         // 裂空风暴:双向激光以龙卷为中心旋转,不再像龙卷向外发射单束光线。
         if (pr.beamLen) {
+          pr.phase = (pr.phase || 0) + (pr.beamSpin || 2) * dt;
+          const dx = Math.cos(pr.phase), dy = Math.sin(pr.phase);
+          const half = pr.beamLen / 2;
           pr.btick -= dt;
           if (pr.btick <= 0) {
             pr.btick = pr.beamTick || 0.1;
-            pr.phase = (pr.phase || 0) + (pr.beamSpin || 2) * pr.btick;
-            const dx = Math.cos(pr.phase), dy = Math.sin(pr.phase);
-            const half = pr.beamLen / 2;
             beamDamage(state, pr.x - dx * half, pr.y - dy * half, dx, dy, pr.beamLen, pr.beamWidth / 2, pr.beamDmg || pr.damage, pr.color, pr.weaponId);
-            beams.push({ pts: [[pr.x - dx * half, pr.y - dy * half], [pr.x + dx * half, pr.y + dy * half]], life: 0.1, max: 0.1, color: pr.color, width: pr.beamWidth, lance: true, evo: true });
           }
         }
         const tgt = nearest(pr.x, pr.y, 99999);
@@ -1024,6 +1034,11 @@
         pr.x += pr.vx * dt / n; pr.y += pr.vy * dt / n;
         if (collideOne(state, pr)) { consumed = true; break; }
       }
+      // 持续光束在移动完成后贴住龙卷的新中心；角度仍由上方逐帧推进。
+      if (pr.beamRef) {
+        const dx = Math.cos(pr.phase), dy = Math.sin(pr.phase), half = pr.beamLen / 2;
+        pr.beamRef.pts = [[pr.x - dx * half, pr.y - dy * half], [pr.x + dx * half, pr.y + dy * half]];
+      }
       if (!consumed && sp > 1 && !pr.vortex && ((pr.tc = (pr.tc || 0) + 1) % 2 === 0)) SV.Effects.trail(pr.x, pr.y, pr.color);
       return !consumed;
     });
@@ -1055,6 +1070,7 @@
           if (pr.explode) { explodeGrenade(state, pr); if (!pr.explodeEvery) pr.explode = 0; } // railgun_evo 首爆一次;轨道轰炸每穿必爆
           if (pr.pierce > 0) pr.pierce--; // 仅在有界 pierce 时递减;star 恒不消亡
           if (pr.resonance) resonanceHit(state, e, pr);
+          if ((pr.chaseInfinite || pr.chaseKills > 0) && e.hp <= 0) { if (!pr.chaseInfinite) pr.chaseKills--; pr.damage *= pr.chaseDecay; pr.target = null; }
           return false;
         }
         // 榴弹:碰撞即爆炸并消耗
@@ -1079,17 +1095,16 @@
         // 普通命中
         dmgEnemy(e, pr.damage, pr.weaponId); SV.Effects.hit(e.x, e.y, pr.color); SV.Audio.hit();
         if (pr.resonance) resonanceHit(state, e, pr);
-        // 处决追击:击杀目标后弹体不消失,伤害 ×0.85 递减,重锁继续追猎(导弹)
+        // 命中连锁/溅射必须先结算:首目标被击杀也不能吞掉群攻效果。
+        if (pr.chainHops > 0) chainBurst(state, e.x, e.y, pr.damage * 0.6, pr.chainHops, pr.chainRange, pr.color, 1.1, pr.weaponId);
+        if (pr.splash) splashAt(state, pr.x, pr.y, pr.splash, pr.damage * pr.splashMul, pr.color, 10, pr.weaponId);
+        // 处决追击:击杀目标后弹体不消失,按武器倍率重锁继续追猎。
         if ((pr.chaseInfinite || pr.chaseKills > 0) && e.hp <= 0) {
           if (!pr.chaseInfinite) pr.chaseKills--;
           pr.damage *= pr.chaseDecay;
           pr.target = null;
           return false;
         }
-        // 命中连锁(雷暴蜂群)
-        if (pr.chainHops > 0) chainBurst(state, e.x, e.y, pr.damage * 0.6, pr.chainHops, pr.chainRange, pr.color, 1.1, pr.weaponId);
-        // 命中溅射(爆裂霰弹)
-        if (pr.splash) splashAt(state, pr.x, pr.y, pr.splash, pr.damage * pr.splashMul, pr.color, 10, pr.weaponId);
         return true;
       }
     }
@@ -1110,7 +1125,7 @@
     // 黑洞灼烧(aura 本体功能):周期对圈内全部敌人造成伤害
     w.cd = (w.cd || 0) - dt;
     if (w.cd <= 0) {
-      w.cd = 0.4;
+      w.cd = hardAttackInterval(state, 0.4);
       const disk = SV.Spatial.queryCircle(p.x, p.y, s.radius);
       for (let i = 0; i < disk.length; i++) {
         const e = disk[i];
@@ -1139,7 +1154,7 @@
         const e = nb[j];
         if (e.hp <= 0) continue;
         if (U.dist2(b.x, b.y, e.x, e.y) < (16 + e.r) * (16 + e.r) && e.bladeCd <= 0) {
-          dmgEnemy(e, s.damage, w.id); e.bladeCd = 0.25;
+          dmgEnemy(e, s.damage, w.id); e.bladeCd = hardAttackInterval(state, 0.25);
           splashAt(state, b.x, b.y, s.splash, s.damage * s.splashMul, def.color, 10, w.id);
           SV.Effects.hit(b.x, b.y, def.color); SV.Audio.hit();
         }
@@ -1148,16 +1163,17 @@
   }
   // 雷暴蜂群:分裂追踪弹 + 命中连锁闪电
   function fusionMissileChain(state, w, def, s) {
-    const p = state.player;
+    const p = state.player, locked = {};
     for (let k = 0; k < s.count; k++) {
-      const tgt = nearest(p.x, p.y, 99999);
+      const tgt = nearestUnlocked(p.x, p.y, locked) || nearest(p.x, p.y, 99999);
+      if (tgt) locked[tgt.id] = true;
       const ang = tgt ? U.angleTo(p.x, p.y, tgt.x, tgt.y) : p.facing;
       const pr = mkProj();
       pr.x = p.x; pr.y = p.y;
       pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
       pr.r = 6; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
       pr.homing = true; pr.seek = s.seek; pr.target = tgt; pr.weaponId = w.id;
-      pr.chaseKills = s.chase || 0;
+      pr.chaseKills = s.chase || 0; pr.chaseDecay = s.chaseDecay == null ? 1 : s.chaseDecay;
       pr.chainHops = s.chainHops || 0; pr.chainRange = s.chainRange || 0;
     }
     SV.Audio.shoot();
@@ -1208,6 +1224,8 @@
       pr.vortex = true; pr.vtick = 0; pr.weaponId = w.id;
       pr.beamLen = s.beamLen; pr.beamWidth = s.beamWidth; pr.beamDmg = s.beamDmg; pr.beamTick = s.beamTick || 0.1; pr.beamSpin = s.beamSpin;
       pr.btick = 0;
+      pr.beamRef = { pts: [[pr.x, pr.y], [pr.x, pr.y]], life: Infinity, max: Infinity, color: pr.color, width: pr.beamWidth, lance: true, evo: true };
+      beams.push(pr.beamRef);
     }
     SV.Audio.shoot();
   }
@@ -1373,10 +1391,12 @@
   }
 
   // ── 新协同进化。尽量复用既有投射物、光束、挥砍与状态管线。──
-  function spawnHoming(state, w, def, s, k) {
-    const p = state.player, tgt = nearest(p.x, p.y, 99999);
+  function spawnHoming(state, w, def, s, k, locked) {
+    const p = state.player, tgt = (locked && nearestUnlocked(p.x, p.y, locked)) || nearest(p.x, p.y, 99999);
     if (!tgt) return null;
-    const a = U.angleTo(p.x, p.y, tgt.x, tgt.y) + ((k || 0) - ((s.count || 1) - 1) / 2) * 0.12;
+    if (locked) locked[tgt.id] = true;
+    const step = (s.spread || 0.24) / Math.max(1, (s.count || 1) - 1);
+    const a = U.angleTo(p.x, p.y, tgt.x, tgt.y) + ((k || 0) - ((s.count || 1) - 1) / 2) * step;
     const pr = mkProj();
     pr.x = p.x; pr.y = p.y; pr.vx = Math.cos(a) * s.speed; pr.vy = Math.sin(a) * s.speed;
     pr.r = 7; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
@@ -1384,19 +1404,22 @@
     return pr;
   }
   function fusionMissileAura(state, w, def, s) {
+    const locked = {};
     for (let k = 0; k < s.count; k++) {
-      const pr = spawnHoming(state, w, def, s, k); if (!pr) continue;
+      const pr = spawnHoming(state, w, def, s, k, locked); if (!pr) continue;
       pr.fieldR = s.fieldR; pr.fieldPull = s.fieldPull; pr.fieldDmg = s.fieldDmg; pr.fieldEvery = s.fieldTick; pr.fieldTick = 0;
+      pr.chaseKills = s.chase || 0; pr.chaseDecay = s.chaseDecay == null ? 1 : s.chaseDecay;
     }
     SV.Audio.shoot();
   }
   function fusionMissileRailgun(state, w, def, s) {
+    const locked = {};
     for (let k = 0; k < s.count; k++) {
-      const pr = spawnHoming(state, w, def, s, k); if (!pr) continue;
+      const pr = spawnHoming(state, w, def, s, k, locked); if (!pr) continue;
       const a = Math.atan2(pr.vy, pr.vx);
       pr.vx = Math.cos(a) * s.speed * 0.36; pr.vy = Math.sin(a) * s.speed * 0.36;
       pr.calibrate = s.calibrate; pr.finalSpeed = s.speed;
-      pr.pierce = s.pierce; pr.hitIds = []; pr.chaseKills = s.chase;
+      pr.pierce = s.pierce; pr.hitIds = []; pr.chaseKills = s.chase; pr.chaseDecay = s.chaseDecay == null ? 1 : s.chaseDecay;
     }
     SV.Audio.shoot();
   }

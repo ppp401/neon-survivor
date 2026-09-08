@@ -98,6 +98,7 @@
     init: function () {
       screens.title = document.getElementById("titleScreen");
       screens.charselect = document.getElementById("charSelectScreen");
+      screens.weaponselect = document.getElementById("weaponSelectScreen");
       screens.select = document.getElementById("selectScreen");
       screens.pause = document.getElementById("pauseScreen");
       screens.gameover = document.getElementById("gameoverScreen");
@@ -128,7 +129,7 @@
     },
     hideAll: function () { for (const k in screens) if (screens[k]) screens[k].classList.add("hidden"); },
 
-    // ── 选角界面(4 名角色,点选即进选关)
+    // ── 选角界面(10 名角色，图标列表 + 常驻详情)
     showCharSelect: function (sel) {
       charSelStage = sel.stage || charSelStage;
       this.setDiffHighlight(sel.diff);
@@ -168,6 +169,7 @@
       html += '<div class="cd-title">' + ch.title + "</div></div>";
       html += '<div class="cd-body">';
       html += '<div class="cd-desc">' + ch.desc + "</div>";
+      if (ch.ability) html += '<div class="cd-ability"><b>' + ch.ability.trigger + "</b> · " + ch.ability.base + '<br><span>' + ch.ability.links + "</span></div>";
       html += '<div class="cd-chips">' + chips + "</div>";
       // 按难度分档列出「当前所选地图」的最佳成绩(时长随地图变化;无尽桶已并入同难度聚合)
       const cs = SV.Storage.charStageSummary ? SV.Storage.charStageSummary(id, charSelStage) : { clears: 0, byDiff: {} };
@@ -192,6 +194,56 @@
         tiles[i].classList.toggle("selected", tiles[i].getAttribute("data-char") === id);
       }
       this.renderCharDetail(id);
+    },
+
+    // ── 起手武器终端：固定详情面板，左侧列表只显示当前角色的合法起手池。
+    showWeaponSelect: function (sel) {
+      const ch = SV.Config.CHARACTERS[sel.char];
+      const ids = SV.Config.startWeaponIds(ch);
+      const wrap = document.getElementById("startWeaponList");
+      let html = "";
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i], d = SV.Config.WEAPONS[id];
+        html += '<button class="start-weapon' + (id === sel.weapon ? " selected" : "") + '" data-act="pickStartWeapon" data-weapon="' + id + '" style="--weapon-color:' + d.color + '">';
+        html += SV.Config.weaponIconHTML(id, "start-weapon-icon") + '<span>' + d.name + "</span></button>";
+      }
+      wrap.innerHTML = html;
+      this.renderStartWeaponDetail(sel.char, sel.weapon || ids[0]);
+      this.show("weaponselect");
+    },
+    selectStartWeapon: function (charId, wid) {
+      const wrap = document.getElementById("startWeaponList");
+      const bs = wrap ? wrap.children : [];
+      for (let i = 0; i < bs.length; i++) bs[i].classList.toggle("selected", bs[i].getAttribute("data-weapon") === wid);
+      this.renderStartWeaponDetail(charId, wid);
+    },
+    renderStartWeaponDetail: function (charId, wid) {
+      const wrap = document.getElementById("startWeaponDetail"), ch = SV.Config.CHARACTERS[charId], def = SV.Config.WEAPONS[wid];
+      if (!wrap || !ch || !def) return;
+      const st = { charId: charId, charMul: { hpMul: ch.hpMul, speedMul: ch.speedMul }, charMods: ch.charMods || {}, special: ch.special || null, passives: Object.assign({}, ch.startPassives), player: { hp: 100, maxHp: 100 } };
+      const s1 = SV.Weapons.stats({ id: wid, level: 1 }, st);
+      const s8 = SV.Weapons.stats({ id: wid, level: 8 }, st);
+      const evo = SV.Config.EVOLUTIONS[wid], req = evo && SV.Config.PASSIVES[evo.reqPassive];
+      function fmt(s) {
+        const p = [];
+        if (s.damage != null) p.push("伤害 " + Math.round(s.damage * 10) / 10);
+        if (s.dot != null) p.push("毒伤 " + Math.round(s.dot * 10) / 10 + "/跳");
+        if (s.cooldown != null) p.push("间隔 " + Math.round(s.cooldown * 100) / 100 + "s");
+        if (s.tick != null) p.push("间隔 " + Math.round(s.tick * 100) / 100 + "s");
+        if (s.count != null) p.push("数量 " + s.count);
+        if (s.radius != null) p.push("半径 " + Math.round(s.radius));
+        if (s.length != null) p.push("长度 " + Math.round(s.length));
+        return p.join(" · ") || def.desc;
+      }
+      const trait = SV.Upgrades.traitLabel(wid) || "通用";
+      let html = '<div class="swd-head">' + SV.Config.weaponIconHTML(wid, "swd-icon") + '<div><div class="swd-name" style="color:' + def.color + '">' + def.name + '</div><div class="ars-trait">' + trait + "</div></div></div>";
+      html += '<div class="swd-mechanic">' + def.desc + "</div>";
+      html += '<div class="swd-level"><b>L1 实际</b><span>' + fmt(s1) + "</span></div>";
+      html += '<div class="swd-level"><b>L8 终点</b><span>' + fmt(s8) + "</span></div>";
+      if (evo) html += '<div class="swd-evo"><b>进化：' + evo.name + "</b><span>" + def.name + " L8 + " + (req ? req.name : evo.reqPassive) + " L5</span><span>" + evo.desc + "</span></div>";
+      const spec = ch.special === "arcanist" && (def.tags || []).indexOf("spell") >= 0 ? "已计入星语法术专精" : ch.special === "ranger" && (def.tags || []).indexOf("ranged") >= 0 ? "已计入流光远程专精" : "已计入角色起手被动";
+      html += '<div class="swd-note">' + spec + " · 局内可获得全部基础武器</div>";
+      wrap.innerHTML = html;
     },
 
     // ── 无尽模式确认(通关后弹出)
@@ -330,7 +382,9 @@
           '<span class="ars-lv">HP ×' + ch.hpMul + " · 移速 ×" + ch.speedMul + "</span></div>";
         html += '<div class="ars-row" style="flex-direction:column;align-items:flex-start;gap:2px">' +
           '<span class="ars-eff" style="font-size:12px;color:var(--dim)">' + ch.desc + "</span>" +
-          '<span class="ars-eff" style="font-size:12px">起手:' + (startW.icon || "◆") + " " + startW.name + "</span></div>";
+          (ch.ability ? '<span class="ars-eff" style="font-size:12px"><b>' + ch.ability.trigger + "</b> · " + ch.ability.base + " · " + ch.ability.links + "</span>" : "") +
+          (ch.ability && ch.ability.damageName ? '<span class="ars-dmg" style="font-size:12px">⚔ ' + ch.ability.damageName + " 总伤 " + fmtNum((state.skillDamage && state.skillDamage[state.charId]) || 0) + " · " + fmtNum(state.time > 0 ? ((state.skillDamage && state.skillDamage[state.charId]) || 0) / state.time * 60 : 0) + "/min</span>" : "") +
+          '<span class="ars-eff" style="font-size:12px">本局起手:' + (state.weapons[0] ? SV.Config.weaponDef(state.weapons[0].id).icon + " " + SV.Config.weaponDef(state.weapons[0].id).name : (startW.icon || "◆") + " " + startW.name) + "</span></div>";
         html += "</div>";
       }
       // 武器
@@ -355,7 +409,7 @@
       for (const id in state.passives) {
         const lv = state.passives[id];
         if (lv > 0) { anyP = true; const def = SV.Config.PASSIVES[id];
-          html += '<div class="ars-row">' + SV.Config.weaponIconHTML(id, "ars-ic") +
+          html += '<div class="ars-row"><span class="ars-ic passive-mark" style="color:' + def.color + '">' + def.icon + '</span>' +
             '<span class="ars-name">' + def.name + "</span>" + '<span class="ars-lv">Lv ' + lv + "</span>" +
             '<span class="ars-eff">' + def.per + "</span></div>"; }
       }

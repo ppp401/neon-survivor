@@ -74,10 +74,11 @@
       const t = state.time / 60; // 分钟
       if (state.spawnPause > 0) state.spawnPause -= dt;
       const diff = CFG.DIFFICULTY[state.difficulty] || CFG.DIFFICULTY.normal;
+      const early = CU.earlySpawnFactor(t, state.difficulty);
 
       // 常规刷怪(套难度乘子)
       if (state.spawnPause <= 0 && state.enemies.length < C.MAX_ENEMIES) {
-        state.spawnAccum += dt * CU.spawnRate(t) * diff.spawnMul * ((state.charMods && state.charMods.enemySpawnMul) || 1);
+        state.spawnAccum += dt * CU.spawnRate(t) * diff.spawnMul * early * ((state.charMods && state.charMods.enemySpawnMul) || 1);
         while (state.spawnAccum >= 1) {
           state.spawnAccum -= 1;
           spawnAtRing(state, pickType(state, t));
@@ -89,7 +90,7 @@
       state.swarmTimer -= dt;
       if (state.swarmTimer <= 0) {
         state.swarmTimer += C.SWARM_EVERY;
-        const n = C.SWARM_COUNT + Math.floor(t);
+        const n = Math.max(1, Math.round((C.SWARM_COUNT + Math.floor(t)) * early));
         for (let i = 0; i < n; i++) spawnAtRing(state, U.choice(CFG.SWARM_TYPES));
       }
 

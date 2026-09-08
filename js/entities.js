@@ -48,6 +48,11 @@
   }
   function invalidateMods(state) { if (state) state._mods = null; }
 
+  function characterMechanics(state) {
+    const ch = state && SV.Config.CHARACTERS[state.charId];
+    return (ch && ch.mechanics) || {};
+  }
+
   // ── 怪物数值预览(图鉴用,纯计算,不创建实体、不碰缓存)。返回 {hp,speed,xp,...}
   // 伤害分项:contact 接触 / boom 自爆(bomber) / proj 弹幕(炮台/狙击) / trail 毒径每跳;dmg 为旧兼容字段(取最大者)
   function previewEnemy(type, state) {
@@ -80,6 +85,7 @@
       pickupRadius: C.PICKUP_RADIUS,
       regenAcc: 0, lsWindow: 0,
       bulwarkCd: 0,
+      phantomDist: 0, phantomX: 0, phantomY: 0,
       slow: 0, slowF: 0,
       blades: []
     };
@@ -113,7 +119,7 @@
       // 自爆虫:接触不直接造成伤害,只在爆炸时造成 AOE
       dmg: type === "bomber" ? 0 : def.dmg * diff.dmgMul * em * df,
       boomDmg: type === "bomber" ? def.dmg * diff.dmgMul * em * df : 0,
-      xp: Math.max(1, Math.round(def.xp * 1.5 * diff.xpMul)), projDmg: (def.projDmg || 0) * diff.dmgMul * df * em, aoe: def.aoe || 0,
+      xp: Math.max(1, Math.round(def.xp * 1.5 * diff.xpMul / CU.earlySpawnFactor(t, state.difficulty))), projDmg: (def.projDmg || 0) * diff.dmgMul * df * em, aoe: def.aoe || 0,
       dr: def.dr || 0, regenRate: def.regenRate || 0,
       shape: def.shape || "circle", shimmer: !!def.shimmer,
       auraR: def.auraR || 0, auraDr: def.auraDr || 0, healRate: def.healRate || 0, auraSpeed: def.auraSpeed || 0,
@@ -160,16 +166,18 @@
     if (!ignoreIframe && p.iframes > 0) return;
     const m = mods(state);
     let armorMul = m.armorMul;
+    const mech = characterMechanics(state);
     if (state.special === "bulwark") {
       // 站桩/缓行时大幅减伤,全速时回落到正常护甲
       const full = p.speed * m.speedMul;
       const norm = full > 0 ? Math.min(1, Math.hypot(p.vx, p.vy) / full) : 1;
-      armorMul *= 1 - (1 - norm) * 0.55;
+      armorMul *= 1 - (1 - norm) * (mech.stationaryDr == null ? 0.55 : mech.stationaryDr);
     } else if (state.special === "berserker") {
-      // 血怒坦度:血不满时受伤降低,血越少减伤越高(满血无减伤,空血 -50%)
+      // 血怒：失血越多额外减伤越高，空血上限 40%。
       const miss = p.maxHp > 0 ? 1 - p.hp / p.maxHp : 0;
-      if (miss > 0) armorMul *= 1 - miss * 0.5;
+      if (miss > 0) armorMul *= 1 - miss * (mech.maxDamageReduction == null ? 0.4 : mech.maxDamageReduction);
     }
+    if (state.special === "overclocker" && state.overclockActive) armorMul *= mech.incomingMul || 1.25;
     const real = dmg * armorMul;
     p.hp -= real;
     // 按敌人类型累计对玩家造成的伤害(图鉴"对玩家伤害"用)。srcType 为来源敌人 type/bossType
@@ -184,45 +192,132 @@
     if (p.hp <= 0) { p.hp = 0; SV.Game.onPlayerDeath(); }
   }
 
-  // 角色动态伤害乘子(每击现算,绝不写回 _mods)。服务 assassin(处决)/berserker(血怒)。
+  function healPlayer(state, amount, showText) {
+    const p = state.player;
+    if (!p || !(amount > 0) || p.hp >= p.maxHp) return 0;
+    const mul = (state.charMods && state.charMods.healingMul != null) ? state.charMods.healingMul : 1;
+    const real = Math.min(p.maxHp - p.hp, amount * mul);
+    if (real <= 0) return 0;
+    p.hp += real;
+    if (showText) SV.Effects.text(p.x, p.y - p.r - 6, "+" + Math.round(real), "#7CFFB2");
+    return real;
+  }
+
+  // 角色动态伤害乘子(每击现算,绝不写回 _mods)。
   function charDamageScale(state, e) {
     const sp = state.special;
     if (!sp || !e || e.maxHp <= 0) return 1;
     switch (sp) {
-      case "assassin":
-        // 处决:对生命低于 30% 的敌人伤害 ×2
-        if (e.hp / e.maxHp < 0.3) return 2.0;
+      case "assassin": {
+        const mech = characterMechanics(state), ratio = e.hp / e.maxHp;
+        if (ratio < (mech.lowHp == null ? 0.3 : mech.lowHp)) return mech.lowMul || 2;
+        if (ratio > (mech.highHp == null ? 0.7 : mech.highHp)) return mech.highMul || 0.85;
         return 1;
+      }
       case "berserker": {
-        // 血怒:自身当前生命越低伤害越高(满血 1.0,空血 2.5)
+        // 血怒：满血 ×0.9，随失血线性上升至空血 ×2。
         const p = state.player;
-        if (p && p.maxHp > 0) return 1 + (1 - p.hp / p.maxHp) * 1.5;
+        const mech = characterMechanics(state);
+        const full = mech.fullDamageMul == null ? 0.9 : mech.fullDamageMul;
+        const empty = mech.emptyDamageMul == null ? 2 : mech.emptyDamageMul;
+        if (p && p.maxHp > 0) return full + (1 - p.hp / p.maxHp) * (empty - full);
         return 1;
       }
       default: return 1;
     }
   }
-  // 角色每帧动态逻辑(站桩反击等)。updatePlayer 顶部调用。
+  function burstSpecial(state, x, y, radius, damage, color, skillId) {
+    const near = SV.Spatial.queryCircle(x, y, radius + 55);
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (e.hp > 0 && U.dist2(x, y, e.x, e.y) <= (radius + e.r) * (radius + e.r)) damageEnemy(state, e, damage, { text: false, skill: skillId });
+    }
+    SV.Effects.ring(x, y, color, 8, radius, 0.32, 3);
+    SV.Effects.explosion(x, y, color, 12);
+  }
+
+  function fireCollector(state) {
+    const p = state.player, m = mods(state), mech = characterMechanics(state);
+    const max = mech.maxCrystals || 6, crystals = Math.min(max, state.collectorCrystals || 0);
+    if (!crystals) return;
+    const targets = state.enemies.filter(function (e) { return e.hp > 0; }).sort(function (a, b) { return U.dist2(p.x, p.y, a.x, a.y) - U.dist2(p.x, p.y, b.x, b.y); });
+    if (!targets.length) return;
+    const n = Math.min(crystals, targets.length);
+    const radius = (mech.radius || 28) * m.areaMul;
+    const damage = ((mech.damageBase == null ? 10 : mech.damageBase) + (mech.damagePerLevel == null ? 0.9 : mech.damagePerLevel) * state.level) * m.damageMul;
+    for (let i = 0; i < crystals; i++) {
+      const t = targets[i % n];
+      if (t) burstSpecial(state, t.x, t.y, radius, damage, "#ffd86b", "collector");
+    }
+    state.collectorCrystals = 0;
+  }
+
+  function gainXP(state, amount) {
+    if (!(amount > 0)) return;
+    state.xp += amount;
+    if (state.special === "collector") {
+      const mech = characterMechanics(state), per = mech.xpPerCrystal || 12, max = mech.maxCrystals || 6;
+      if (state.collectorCrystals == null) state.collectorCrystals = 0;
+      state.collectorXp = (state.collectorXp || 0) + amount;
+      while (state.collectorXp >= per) {
+        if (state.collectorCrystals >= max) { fireCollector(state); if (state.collectorCrystals >= max) break; }
+        state.collectorXp -= per; state.collectorCrystals++;
+        if (state.collectorCrystals >= max) fireCollector(state);
+      }
+    }
+    SV.Game.onXP();
+  }
+
+  // 角色状态在武器更新前统一推进，使过载窗口对所有攻击时间源一致。
   function charTick(state, dt) {
     const sp = state.special;
     if (!sp) return;
+    const mech = characterMechanics(state);
     switch (sp) {
+      case "collector": if (state.collectorCrystals >= (mech.maxCrystals || 6)) fireCollector(state); break;
       case "bulwark": {
-        // 缓行/站桩时每 2.5s 发近身冲击波反击
+        // 站定周期纯击退，无伤害。
         const p = state.player; const m = mods(state);
         const full = p.speed * m.speedMul;
         const norm = full > 0 ? Math.min(1, Math.hypot(p.vx, p.vy) / full) : 1;
         p.bulwarkCd -= dt;
         if (norm < 0.25 && p.bulwarkCd <= 0) {
-          p.bulwarkCd = 2.5;
-          const R = 95;
-          const near = SV.Spatial.queryCircle(p.x, p.y, R);
+          p.bulwarkCd = (mech.interval || 2.5) * m.cdMul;
+          const R = (mech.radius || 95) * m.areaMul;
+          const near = SV.Spatial.queryCircle(p.x, p.y, R + 55);
           for (let i = 0; i < near.length; i++) {
             const e = near[i];
-            if (e.hp > 0) damageEnemy(state, e, 18 + state.level * 2, { text: false });
+            if (e.hp <= 0 || U.dist2(p.x, p.y, e.x, e.y) > (R + e.r) * (R + e.r)) continue;
+            const a = U.angleTo(p.x, p.y, e.x, e.y), kb = (mech.knock || 95) / Math.max(1, e.mass || 1);
+            e.x += Math.cos(a) * kb; e.y += Math.sin(a) * kb;
           }
           SV.Effects.ring(p.x, p.y, "#aab4ff", 10, R, 0.4, 4);
           SV.Effects.shake(4, 0.2);
+        }
+        break;
+      }
+      case "lingerer": {
+        const m = mods(state), interval = (mech.interval || 9) * (1 - (1 - m.cdMul) * (mech.cooldownEfficiency == null ? 0.5 : mech.cooldownEfficiency));
+        state.timeFractureClock = (state.timeFractureClock == null ? interval : state.timeFractureClock) - dt;
+        if (state.timeFractureActive > 0) state.timeFractureActive = Math.max(0, state.timeFractureActive - dt);
+        if (state.timeFractureClock <= 0) { state.timeFractureClock += interval; state.timeFractureActive = mech.duration || 2; SV.Effects.ring(state.player.x, state.player.y, "#9be7ff", 20, 180, 0.45, 4); }
+        break;
+      }
+      case "overclocker": {
+        state.overclockClock = (state.overclockClock == null ? (mech.interval || 8) : state.overclockClock) - dt;
+        if (state.overclockActive > 0) state.overclockActive = Math.max(0, state.overclockActive - dt);
+        if (state.overclockClock <= 0) { state.overclockClock += mech.interval || 8; state.overclockActive = mech.duration || 2.5; SV.Effects.ring(state.player.x, state.player.y, "#ffb25a", 12, 105, 0.35, 3); }
+        break;
+      }
+      case "phantom": {
+        const ghosts = state.afterimages || (state.afterimages = []), m = mods(state);
+        for (let i = ghosts.length - 1; i >= 0; i--) {
+          ghosts[i].delay -= dt;
+          if (ghosts[i].delay <= 0) {
+            const radius = (mech.radius || 70) * m.areaMul;
+            const damage = ((mech.damageBase == null ? 14 : mech.damageBase) + (mech.damagePerLevel == null ? 0.7 : mech.damagePerLevel) * state.level) * m.damageMul;
+            burstSpecial(state, ghosts[i].x, ghosts[i].y, radius, damage, "#73dcff", "phantom"); ghosts.splice(i, 1);
+          }
         }
         break;
       }
@@ -254,9 +349,9 @@
         const allowed = Math.max(0, cap - (p.lsWindow || 0));
         const heal = Math.min(dmg * m.lifesteal, allowed);
         if (heal > 0) {
-          p.hp = Math.min(p.maxHp, p.hp + heal);
-          p.lsWindow = (p.lsWindow || 0) + heal;
-          if (U.chance(0.10)) SV.Effects.text(p.x, p.y - p.r - 6, "+" + Math.round(heal), "#7CFFB2");
+          const got = healPlayer(state, heal, false);
+          p.lsWindow = (p.lsWindow || 0) + got;
+          if (got > 0 && U.chance(0.10)) SV.Effects.text(p.x, p.y - p.r - 6, "+" + Math.round(got), "#7CFFB2");
         }
       }
     }
@@ -267,6 +362,7 @@
       const k = tid(opts.wid);
       state.weaponDamage[k] = (state.weaponDamage[k] || 0) + real;
     }
+    if (opts.skill && state.skillDamage) state.skillDamage[opts.skill] = (state.skillDamage[opts.skill] || 0) + real;
     e.flash = 0.12;
     if (opts.text !== false && (e.isBoss || real >= 8 || U.chance(0.5) || isCrit)) {
       SV.Effects.text(e.x, e.y - e.r - 4, (isCrit ? "暴" : "") + Math.round(real), isCrit ? "#ffd86b" : "#ffe9c2", isCrit ? 18 : 14);
@@ -447,7 +543,6 @@
   // ── 玩家更新
   function updatePlayer(state, dt) {
     const p = state.player;
-    charTick(state, dt); // 角色每帧动态(站桩反击等)
     const m = mods(state);
     const ax = SV.Input.axis.x, ay = SV.Input.axis.y;
     const moving = ax || ay;
@@ -455,6 +550,12 @@
     const spd = p.speed * m.speedMul * (p.slow > 0 ? (1 - p.slowF) : 1);
     p.vx = ax * spd; p.vy = ay * spd;
     p.x += p.vx * dt; p.y += p.vy * dt;
+    if (state.special === "phantom") {
+      const mech = characterMechanics(state), step = mech.moveStep || 180, max = mech.maxAfterimages || 4, delay = mech.delay || 0.45;
+      const moved = Math.hypot(p.x - p.phantomX, p.y - p.phantomY);
+      p.phantomDist += moved; p.phantomX = p.x; p.phantomY = p.y;
+      while (p.phantomDist >= step && state.afterimages.length < max) { p.phantomDist -= step; state.afterimages.push({ x: p.x, y: p.y, delay: delay, max: delay }); }
+    }
     // 虚空引力:周期性把玩家朝随机方向牵引(边界夹取兜底,拉不出墙)
     if (state._voidPull > 0) {
       const env = state.stage && state.stage.envField;
@@ -478,7 +579,7 @@
     // 再生
     if (m.regen > 0 && p.hp < p.maxHp) {
       p.regenAcc += dt;
-      while (p.regenAcc >= 1) { p.regenAcc -= 1; p.hp = Math.min(p.maxHp, p.hp + m.regen); }
+      while (p.regenAcc >= 1) { p.regenAcc -= 1; healPlayer(state, m.regen, false); }
     }
     // 同步最大生命
     p.maxHp = m.maxHp;
@@ -537,20 +638,9 @@
         g.x += dx / d * f * dt; g.y += dy / d * f * dt;
       }
       if (d2 < collectR * collectR) {
-        state.xp += g.value * m.xpMul;
+        gainXP(state, g.value * m.xpMul);
         gems.splice(i, 1);
         SV.Audio.pickup();
-        SV.Game.onXP();
-        if (state.special === "collector") {
-          // 拾取共鸣:在拾取位引发小范围伤害爆发(范围受范围属性影响、伤害受攻击属性影响)
-          const R = 60 * m.areaMul;
-          const near = SV.Spatial.queryCircle(g.x, g.y, R);
-          for (let k = 0; k < near.length; k++) {
-            const en = near[k];
-            if (en.hp > 0) damageEnemy(state, en, (8 + state.level) * m.damageMul, { text: false });
-          }
-          SV.Effects.ring(g.x, g.y, "#ffd86b", 4, R, 0.3, 3);
-        }
       }
     }
     // 掉落物拾取(pulled:被磁铁吸附的宝箱飞向玩家,速度保底快于玩家,不会永远追不上)
@@ -574,13 +664,13 @@
   function applyPickup(state, kind) {
     const p = state.player;
     const m = mods(state);
-    if (kind === "health") { p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.3); SV.Effects.text(p.x, p.y - 20, "+治疗", "#7CFFB2"); }
+    if (kind === "health") { const got = healPlayer(state, p.maxHp * 0.3, false); SV.Effects.text(p.x, p.y - 20, "+" + Math.round(got), "#7CFFB2"); }
     else if (kind === "magnet") {
       for (let i = 0; i < state.gems.length; i++) state.gems[i].pulled = true;
       for (let i = 0; i < state.pickups.length; i++) if (state.pickups[i].kind === "treasure") state.pickups[i].pulled = true; // 连 Boss 宝箱一起吸过来
       SV.Effects.text(p.x, p.y - 20, "磁吸!", SV.Config.COLORS.gold);
     }
-    else if (kind === "treasure") { state.xp += C.TREASURE_XP * m.xpMul; SV.Game.onXP(); SV.Effects.text(p.x, p.y - 20, "宝箱!", SV.Config.COLORS.gold); }
+    else if (kind === "treasure") { gainXP(state, C.TREASURE_XP * m.xpMul); SV.Effects.text(p.x, p.y - 20, "宝箱!", SV.Config.COLORS.gold); }
     else if (kind === "bomb") {
       SV.Effects.shake(10, 0.4);
       for (let i = 0; i < state.enemies.length; i++) { const e = state.enemies[i]; if (!e.isBoss) { damageEnemy(state, e, e.maxHp, { text: false }); } }
@@ -663,8 +753,10 @@
         if (e.hex <= 0) hexDetonate(state, e, true);
       }
 
-      // AI 写入 e.vx/e.vy(满速)
-      AI.update(state, e, dt);
+      const fractureMech = characterMechanics(state);
+      const fracture = state.timeFractureActive > 0 ? (e.isBoss ? (fractureMech.bossScale || 0.70) : (fractureMech.normalScale || 0.35)) : 1;
+      // 断层同比减慢 AI 行动计时与移动，不缩短 DoT/控制持续时间。
+      AI.update(state, e, dt * fracture);
 
       // 积分(受减速/冰冻影响)
       let k = 1;
@@ -672,8 +764,8 @@
       else if (e.slow > 0) k = 1 - e.slowF;
       if (e._speedBuffT > 0) e._speedBuffT -= dt; else e._speedBuff = 1;
       const sb = e._speedBuff || 1;
-      e.x += e.vx * k * sb * dt;
-      e.y += e.vy * k * sb * dt;
+      e.x += e.vx * k * sb * dt * fracture;
+      e.y += e.vy * k * sb * dt * fracture;
     }
 
     // 玩家接触判定
@@ -699,7 +791,9 @@
     const es = state.eshots;
     for (let i = es.length - 1; i >= 0; i--) {
       const s = es[i];
-      s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
+      const fractureMech = characterMechanics(state);
+      const fracture = state.timeFractureActive > 0 ? (s.boss ? (fractureMech.bossScale || 0.70) : (fractureMech.normalScale || 0.35)) : 1;
+      s.x += s.vx * dt * fracture; s.y += s.vy * dt * fracture; s.life -= dt * fracture;
       const rr = s.r + p.r;
         if (U.dist2(s.x, s.y, p.x, p.y) < rr * rr) { damagePlayer(state, s.dmg, true, s.srcType || null); es.splice(i, 1); continue; }
       if (s.life <= 0) es.splice(i, 1);
@@ -735,7 +829,7 @@
       // 灼烧区数量随时间增多(每 3min +1),上限由 MAX_HAZARDS 兜底
       const nz = Math.min(C.MAX_HAZARDS - state.hazards.length, 1 + Math.floor(t / 3));
       const burnDmg = env.dps * 0.5 * CU.dmgFactor(t);
-      const mkBurn = (hx, hy) => state.hazards.push({ x: hx, y: hy, r: env.r, dmg: burnDmg, life: env.dur, max: env.dur, color: "#ff7a3c", kind: "burn", tick: 0.5, warm: env.warm || 0 });
+      const mkBurn = (hx, hy) => state.hazards.push({ x: hx, y: hy, r: env.r, dmg: burnDmg, life: env.dur, max: env.dur, color: "#ff4f91", kind: "burn", tick: 0.5, warm: env.warm || 0 });
       // 采样矩形:优先视口(世界坐标,留 env.r 内边距),沙箱/视口无效时回退玩家周围固定矩形
       let minX = p.x - 560, minY = p.y - 360, maxX = p.x + 560, maxY = p.y + 360;
       try {
@@ -780,6 +874,9 @@
 
   SV.Entities = {
     mods: mods,
+    updateCharacterState: charTick,
+    healPlayer: healPlayer,
+    gainXP: gainXP,
     envTick: envTick,
     tickAuras: tickAuras,
     invalidateMods: invalidateMods,

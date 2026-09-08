@@ -127,7 +127,7 @@
       case "blade_evo": out.push("每敌命中间隔0.25s"); break;
       case "blade_boomerang": out.push("环刃轮流离阵追敌并返航 · 环触间隔" + F10(s.hitCd) + "s"); break;
       case "blade_frost": out.push("每敌第" + s.frostHits + "击冰爆" + R(s.burstDmg) + "(半径" + R(s.burstR) + ") · 冻结" + F10(s.freeze) + "s"); break;
-      case "missile_aura": out.push("移动引力场半径" + R(s.fieldR) + " · 场伤" + R(s.fieldDmg) + "/" + F10(s.fieldTick) + "s"); break;
+      case "missile_aura": out.push("分头追踪 · 移动引力场半径" + R(s.fieldR) + " · 场伤" + R(s.fieldDmg) + "/" + F10(s.fieldTick) + "s · 击杀追猎" + s.chase + "次"); break;
       case "missile_railgun": out.push("制导" + F10(s.calibrate) + "s后高速贯穿" + s.pierce + "次 · 击杀追击" + s.chase + "次"); break;
       case "chain_sentry": out.push("每塔" + F10(s.fireCd) + "s发射 · 电弹连跳" + s.chainHops + "次"); break;
       case "aura_poison": out.push("停留叠加腐蚀至" + s.maxStacks + "层 · 每层伤害+" + Math.round(s.stackMul * 100) + "%"); break;
@@ -229,7 +229,7 @@
     if (!evo) return false;
     for (let i = 0; i < state.weapons.length; i++) {
       const w = state.weapons[i];
-      if (w.id === baseId && w.level >= C.WEAPON_MAX && (state.passives[evo.reqPassive] || 0) >= C.PASSIVE_MAX) return true;
+      if (w.id === baseId && w.level >= C.WEAPON_MAX && ((state.passives[evo.reqPassive] || 0) >= C.PASSIVE_MAX || !passiveAllowed(state, evo.reqPassive))) return true;
     }
     return false;
   }
@@ -278,19 +278,12 @@
     return null;
   }
 
-  // 构建候选池 [{c, weight}]
-  // 角色武器政策(硬禁):arcanist 只能用元素、ranger 禁近战。无 policy 或武器无 tags 时放行。
-  function weaponAllowed(state, def) {
-    const ch = CFG.CHARACTERS[state.charId];
-    const pol = ch && ch.weaponPolicy;
-    if (!pol || !def.tags) return true;
-    if (pol.require) for (let i = 0; i < pol.require.length; i++) if (def.tags.indexOf(pol.require[i]) < 0) return false;
-    if (pol.forbid) for (let i = 0; i < pol.forbid.length; i++) if (def.tags.indexOf(pol.forbid[i]) >= 0) return false;
-    return true;
-  }
-  // 角色被动禁用(派生自 charMods 清零项):berserker 的 regenMul/lifestealMul=0 ⇒ 不发"再生""吸血"卡(选了无用)。
-  // 零新配置,自动与 charMods 同步;刺客(lifestealMul=0)同理。
+  // 角色主题仅限制起手；局内所有基础武器、进化与融合全开。
+  function weaponAllowed() { return true; }
+  // 通用被动禁用入口。disabledPassives 为新结构，charMods.*Mul=0 仅保留旧配置兼容。
   function passiveAllowed(state, id) {
+    const ch = CFG.CHARACTERS[state.charId] || {};
+    if ((ch.disabledPassives || []).indexOf(id) >= 0) return false;
     const cmod = state.charMods || {};
     return cmod[id + "Mul"] !== 0; // undefined !== 0 为 true ⇒ 无对应清零项则放行
   }
@@ -323,7 +316,8 @@
       if (canEvolve(state, baseId) && weaponAllowed(state, CFG.weaponDef(CFG.EVOLUTIONS[baseId].to))) {
         const evo = CFG.EVOLUTIONS[baseId];
         const syn = evolveSynergy(state, baseId);
-        pool.push({ c: { kind: "evolve", id: baseId, name: evo.name, desc: evo.desc, trait: traitLabel(evo.to), icon: evo.icon, color: evo.color, rarity: "legend", synergy: syn }, weight: 200 });
+        const exempt = !passiveAllowed(state, evo.reqPassive);
+        pool.push({ c: { kind: "evolve", id: baseId, name: evo.name, desc: evo.desc + (exempt ? " · 角色豁免：无需对应被动" : ""), trait: traitLabel(evo.to), icon: evo.icon, color: evo.color, rarity: "legend", synergy: exempt ? ((syn ? syn + " · " : "") + "角色豁免") : syn }, weight: 200 });
       }
     }
     // 3) 已有武器升级(显示该级具体收益)
