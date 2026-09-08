@@ -184,7 +184,7 @@
   // 各被动在 Entities.mods() 中的曲线参数(与 entities.js 保持一致),用于计算"下一级真实增量"。
   // 收益递减(rootDim/capDim)后,实际增量小于首级——升级卡需展示真实增量而非首级文案。
   const PASSIVE_CURVE = {
-    maxhp:     { kind: "root", per: 24,    mul: "hp", fmt: function (d) { return "最大生命 +" + Math.round(d); } },
+    maxhp:     { kind: "root", per: 28,    mul: "hp", fmt: function (d) { return "最大生命 +" + Math.round(d); } },
     speed:     { kind: "root", per: 0.09,  fmt: function (d) { return "移速 +" + Math.round(d * 100) + "%"; } },
     damage:    { kind: "root", per: 0.11,  fmt: function (d) { return "伤害 +" + Math.round(d * 100) + "%"; } },
     cooldown:  { kind: "cap", cap: 0.70, v1: 0.075, fmt: function (d) { return "冷却 -" + Math.round(d * 100) + "%"; } },

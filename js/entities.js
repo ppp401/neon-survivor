@@ -26,7 +26,7 @@
     const cm = state.charMul || { hpMul: 1, speedMul: 1 };
     const L = function (id) { return p[id] || 0; };
     state._mods = {
-      maxHp: (C.PLAYER_BASE_HP + rootDim(L("maxhp"), 24)) * cm.hpMul,
+      maxHp: (C.PLAYER_BASE_HP + rootDim(L("maxhp"), 28)) * cm.hpMul,
       speedMul: (1 + rootDim(L("speed"), 0.09)) * cm.speedMul,
       damageMul: 1 + rootDim(L("damage"), 0.11),
       cdMul: 1 - capDim(L("cooldown"), 0.70, 0.075),

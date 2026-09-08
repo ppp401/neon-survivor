@@ -228,7 +228,7 @@ body.touch .joystick.active{ border-color:var(--cyan); box-shadow:0 0 18px rgba(
 .stage-tag{ font-size:11px; color:var(--dim); letter-spacing:1px; }
 
 /* 选关界面 */
-.screen-card.wide{ max-width:880px; }
+.screen-card.wide{ width:min(880px,100%); max-width:880px; }
 .diff-row{ display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; }
 .diff-label{ font-size:13px; color:var(--dim); }
 .diff-btn{ min-width:64px; }
@@ -263,29 +263,31 @@ body.touch .joystick.active{ border-color:var(--cyan); box-shadow:0 0 18px rgba(
 .char-tile:active{ transform:scale(.95); }
 .char-tile.selected{ outline:2px solid var(--gold); border-color:var(--gold); box-shadow:0 0 12px rgba(255,216,107,.35); }
 .char-detail{
-  width:100%; max-width:620px; display:flex; gap:14px; align-items:flex-start;
+  width:min(620px,100%); height:168px; max-width:620px; display:flex; gap:14px; align-items:flex-start;
+  min-height:0; overflow:hidden;
   background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:12px 14px; text-align:left;
 }
-.char-detail .cd-head{ display:flex; flex-direction:column; align-items:center; gap:2px; min-width:88px; }
+.char-detail .cd-head{ display:flex; flex:0 0 auto; flex-direction:column; align-items:center; gap:2px; min-width:88px; }
 .char-detail .cd-icon{ font-size:38px; line-height:1; }
 .char-detail .cd-name{ font-size:16px; font-weight:800; }
 .char-detail .cd-title{ font-size:11px; color:var(--dim); letter-spacing:1px; }
-.char-detail .cd-body{ flex:1; display:flex; flex-direction:column; gap:6px; min-width:0; }
+.char-detail .cd-body{ flex:1; display:flex; flex-direction:column; gap:6px; min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:rgba(192,107,255,.55) transparent; }
 .char-detail .cd-desc{ font-size:12px; color:var(--ink); line-height:1.45; }
 .char-detail .cd-ability{ font-size:11px; line-height:1.45; color:#e7dcff; padding:6px 8px; border-left:2px solid var(--purple); background:rgba(192,107,255,.08); }
 .char-detail .cd-ability span{ color:var(--dim); }
 .char-detail .cd-chips{ display:flex; flex-wrap:wrap; gap:4px; }
+.char-detail .char-chip-all{ color:var(--gold); border-color:rgba(255,216,107,.48); background:rgba(255,216,107,.1); }
 .char-detail .cd-best{ font-size:11px; color:var(--gold); font-variant-numeric:tabular-nums; line-height:1.5; }
 
 /* 起手武器：霓虹军械终端 */
-.weapon-terminal{ max-width:900px; }
-.weapon-select-layout{ width:100%; display:grid; grid-template-columns:minmax(210px,280px) 1fr; gap:14px; min-height:300px; }
-.start-weapon-list{ display:grid; grid-template-columns:repeat(2,minmax(96px,1fr)); gap:8px; align-content:start; max-height:54vh; overflow:auto; padding:4px; }
-.start-weapon{ min-height:58px; display:flex; align-items:center; gap:8px; padding:8px; color:var(--ink); background:rgba(8,7,18,.78); border:1px solid rgba(255,255,255,.12); border-radius:10px; cursor:pointer; text-align:left; }
+.weapon-terminal{ width:min(900px,100%); max-width:900px; }
+.weapon-select-layout{ width:100%; height:min(430px,calc(100vh - 190px)); display:grid; grid-template-columns:280px minmax(0,1fr); gap:14px; min-height:300px; overflow:hidden; }
+.start-weapon-list{ width:100%; height:100%; display:grid; grid-template-columns:repeat(2,minmax(96px,1fr)); gap:8px; align-content:start; overflow-y:auto; overflow-x:hidden; padding:4px; }
+.start-weapon{ min-width:0; min-height:58px; display:flex; align-items:center; gap:8px; padding:8px; color:var(--ink); background:rgba(8,7,18,.78); border:1px solid rgba(255,255,255,.12); border-radius:10px; cursor:pointer; text-align:left; }
 .start-weapon:hover,.start-weapon.selected{ border-color:var(--weapon-color); box-shadow:0 0 12px color-mix(in srgb,var(--weapon-color) 55%,transparent); }
 .start-weapon.selected{ outline:2px solid var(--gold); }
 .start-weapon-icon{ font-size:24px; flex:0 0 34px; }
-.start-weapon-detail{ min-width:0; text-align:left; padding:16px; border:1px solid rgba(192,107,255,.35); border-radius:14px; background:linear-gradient(145deg,rgba(18,12,36,.94),rgba(6,16,29,.9)); display:flex; flex-direction:column; gap:10px; }
+.start-weapon-detail{ width:100%; min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden; overflow-wrap:anywhere; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:rgba(192,107,255,.55) transparent; text-align:left; padding:16px; border:1px solid rgba(192,107,255,.35); border-radius:14px; background:linear-gradient(145deg,rgba(18,12,36,.94),rgba(6,16,29,.9)); display:flex; flex-direction:column; gap:10px; }
 .swd-head{ display:flex; align-items:center; gap:12px; }.swd-icon{ font-size:42px; }.swd-name{ font-size:22px; font-weight:800; }.swd-mechanic{ color:var(--dim); line-height:1.5; }
 .swd-level,.swd-evo{ display:flex; flex-direction:column; gap:3px; padding:8px 10px; border-radius:8px; background:rgba(255,255,255,.045); font-size:12px; }.swd-level b{ color:var(--cyan); }.swd-evo b{ color:var(--gold); }.swd-evo span,.swd-note{ color:var(--dim); }.swd-note{ margin-top:auto; font-size:11px; }
 
@@ -435,6 +437,8 @@ body.touch .vol-slider{ width:120px; height:28px; }
 @media (orientation: landscape) and (max-height: 500px) and (pointer: coarse){
   .screen-card{ gap:6px; max-height: 100vh; }
   .screen-card.wide{ max-width: 100%; }
+  #charSelectScreen .screen-card,#weaponSelectScreen .screen-card{ width:100%; height:100%; min-height:0; overflow:hidden; }
+  #charSelectScreen .btn-row,#weaponSelectScreen .btn-row{ flex:0 0 auto; margin-top:2px; }
   .screen h2{ font-size: 18px; }
   .lv-hint{ font-size: 11px; }
   /* 选关卡片:横屏下横向滚动 4 张并排 */
@@ -450,16 +454,19 @@ body.touch .vol-slider{ width:120px; height:28px; }
   .char-tile{ width:64px; min-height:50px; padding:5px 2px; }
   .char-tile .tile-icon{ font-size:20px; }
   .char-tile .tile-name{ font-size:10px; }
-  .char-detail{ padding:8px 10px; gap:10px; }
+  .char-detail{ flex:1 1 auto; width:100%; height:auto; max-width:720px; min-height:84px; padding:8px 10px; gap:10px; }
   .char-detail .cd-head{ min-width:70px; }
   .char-detail .cd-icon{ font-size:28px; }
   .char-detail .cd-name{ font-size:14px; }
-  .weapon-select-layout{ grid-template-columns:280px 1fr; min-height:0; max-height:66vh; }
-  .start-weapon-list{ display:flex; align-items:flex-start; overflow-x:auto; overflow-y:hidden; max-height:none; }
-  .start-weapon{ flex:0 0 116px; min-height:48px; height:48px; }
-  .start-weapon-detail{ padding:8px 10px; gap:5px; overflow:auto; }
+  .char-detail .cd-body,.start-weapon-list,.start-weapon-detail{ touch-action:pan-y; -webkit-overflow-scrolling:touch; }
+  .weapon-select-layout{ flex:1 1 auto; height:auto; grid-template-columns:minmax(220px,34vw) minmax(0,1fr); gap:10px; min-height:0; max-height:none; overflow:hidden; }
+  .start-weapon-list{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; overflow-x:hidden; overflow-y:auto; width:100%; height:100%; max-height:none; }
+  .start-weapon{ min-height:48px; height:auto; padding:6px; gap:6px; }
+  .start-weapon-icon{ font-size:22px; flex-basis:30px; }
+  .start-weapon span{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .start-weapon-detail{ height:100%; padding:8px 10px; gap:5px; }
   .swd-name{ font-size:16px; }.swd-icon{ font-size:28px; }.swd-level,.swd-evo{ padding:4px 7px; }
-  .char-detail .cd-desc{ font-size:11px; line-height:1.35; }
+  .char-detail .cd-desc,.char-detail .cd-ability,.char-detail .cd-ability span{ font-size:11px; line-height:1.4; }
   .char-chip{ font-size: 9px; padding: 2px 5px; }
   .mini-btn{ padding: 7px 14px; font-size: 12px; }
   .diff-row{ gap: 5px; }

@@ -17,7 +17,7 @@
     MAX_HAZARDS: 40,
     MAX_WEAPONS: 6,
     // 玩家
-    PLAYER_BASE_HP: 120,
+    PLAYER_BASE_HP: 100,
     PLAYER_BASE_SPEED: 165, // 略快于一切追逐者
     PLAYER_RADIUS: 14,
     PICKUP_RADIUS: 72,
@@ -447,7 +447,7 @@
 
   // ── 被动(11 种,等级无上限、收益递减;5 级为进化解锁阈值)
   const PASSIVES = {
-    maxhp: { name: "生命强化", icon: "❤", desc: "最大生命 +24", per: "+24 上限/级", color: "#ff7d8e" },
+    maxhp: { name: "生命强化", icon: "❤", desc: "最大生命 +28", per: "+28 上限/级", color: "#ff7d8e" },
     speed: { name: "移速强化", icon: "⚡", desc: "移动速度 +9%", per: "+9%/级", color: "#7dffce" },
     damage: { name: "攻击强化", icon: "⚔", desc: "全部武器伤害 +11%", per: "+11%/级", color: "#ff9a6b" },
     cooldown: { name: "冷却缩减", icon: "◷", desc: "武器冷却 -7.5%", per: "-7.5%/级(上限 -70%)", color: "#9be7ff" },
@@ -475,7 +475,7 @@
 
   // ── 可选角色(10 名):startWeapons/startWeaponTags 仅限制起手选择，局内武器池始终全开。
   const CHARACTERS = {
-    bulwark: { name: "铁壁", title: "重装战士", icon: "🛡", color: "#aab4ff", startPassives: { armor: 1 }, hpMul: 1.3, speedMul: 0.92, special: "bulwark", mechanics: { interval: 2.5, radius: 95, knock: 95, stationaryDr: 0.55 }, ability: { trigger: "站定时每 2.5s", base: "半径95的零伤害击退波", links: "范围强化扩大半径，冷却缩减短间隔" }, desc: "HP ×1.3、移速 ×0.92；站定额外减伤，并周期发出纯击退冲击波。", appearance: { shape: "circle", deco: "ring" } },
+    bulwark: { name: "铁壁", title: "重装战士", icon: "🛡", color: "#aab4ff", startWeaponTags: ["melee"], startPassives: { armor: 1 }, hpMul: 1.2, speedMul: 0.92, special: "bulwark", mechanics: { interval: 2.5, radius: 95, knock: 95, stationaryDr: 0.55 }, ability: { trigger: "站定时每 2.5s", base: "半径95的零伤害击退波", links: "仅起手限近战；范围强化扩大半径，冷却缩减短间隔" }, desc: "HP ×1.2、移速 ×0.92；起手仅可选近战武器，站定额外减伤并周期击退敌人。", appearance: { shape: "circle", deco: "ring" } },
     arcanist: { name: "星语", title: "秘法师", icon: "✦", color: "#c06bff", startWeaponTags: ["spell"], startPassives: { area: 1 }, hpMul: 0.85, speedMul: 1.0, charMods: { pickupMul: 0.75 }, special: "arcanist", weaponSpec: { tag: "spell", damageMul: 1.2, areaMul: 1.1 }, ability: { trigger: "使用法术武器", base: "伤害 +20%、范围 +10%", links: "仅起手限法术；局内全武器开放" }, desc: "HP ×0.85、拾取 ×0.75；法术武器伤害 +20%、范围 +10%。", appearance: { shape: "diamond", deco: "spark" } },
     ranger: { name: "流光", title: "游击射手", icon: "➤", color: "#5ad1ff", startWeaponTags: ["ranged"], startPassives: { cooldown: 1 }, hpMul: 0.85, speedMul: 1.12, charMods: { pickupMul: 0.8 }, special: "ranger", weaponSpec: { tag: "ranged", damageMul: 1.15, cooldownMul: 0.9 }, ability: { trigger: "使用远程武器", base: "伤害 +15%、攻击间隔 ×0.9", links: "仅起手限远程；局内全武器开放" }, desc: "HP ×0.85、移速 ×1.12、拾取 ×0.8；远程专精并自带冷却 1 级。", appearance: { shape: "triangle", deco: "arrow" } },
     assassin: { name: "夜刃", title: "影刃刺客", icon: "✸", color: "#ff5d8e", startWeapons: ["blade", "boomerang", "railgun", "crescent", "detonate", "spear"], startPassives: { crit: 2 }, hpMul: 0.9, speedMul: 1.08, special: "assassin", mechanics: { highHp: 0.7, highMul: 0.85, lowHp: 0.3, lowMul: 2 }, ability: { trigger: "按目标当前生命", base: ">70% HP 伤害 ×0.85；<30% HP 最终伤害 ×2", links: "攻击强化、暴击和吸血均正常生效" }, desc: "HP ×0.9、移速 ×1.08；擅长收割残血，但起手伤害受到抑制。", appearance: { shape: "star", deco: "dagger" } },
@@ -484,7 +484,7 @@
     lingerer: { name: "时滞者", title: "时空凝滞", icon: "◷", color: "#9be7ff", startWeapons: ["frost", "vortex", "shockwave", "polymorph", "timestop", "hex"], startPassives: { cooldown: 1 }, hpMul: 1.0, speedMul: 0.92, charMods: { pickupMul: 0.9 }, special: "lingerer", mechanics: { interval: 9, duration: 2, normalScale: 0.35, bossScale: 0.7, cooldownEfficiency: 0.5 }, ability: { trigger: "每 9s 开启 2s 时间断层", base: "普通敌/弹速与计时 ×0.35；Boss/弹幕 ×0.7", links: "冷却缩减以 50% 效率缩短间隔" }, desc: "移速 ×0.92、拾取 ×0.9；周期性扭曲敌方时间。", appearance: { shape: "hex", deco: "clock" } },
     overclocker: { name: "超频者", title: "过载核心", icon: "⚡", color: "#ffb25a", startWeapons: ["missile", "chain", "shotgun", "grenade", "railgun", "meteor"], startPassives: { cooldown: 1 }, hpMul: 0.9, speedMul: 1.0, special: "overclocker", mechanics: { interval: 8, duration: 2.5, damageMul: 1.1, frequencyMul: 1.35, incomingMul: 1.25 }, ability: { trigger: "每 8s 过载 2.5s", base: "武器伤害 ×1.1、攻击频率 ×1.35、承伤 ×1.25", links: "覆盖冷却、光环、炮塔、连续命中与融合间隔；不缩短 DoT/控制" }, desc: "HP ×0.9；周期进入高输出、高风险过载窗口。", appearance: { shape: "diamond", deco: "spark" } },
     phantom: { name: "幻步", title: "残像舞者", icon: "✧", color: "#73dcff", startWeapons: ["blade", "aura", "lance", "boomerang", "vortex", "sentry"], startPassives: { speed: 1 }, hpMul: 0.9, speedMul: 1.1, special: "phantom", mechanics: { moveStep: 180, delay: 0.45, radius: 70, maxAfterimages: 4, damageBase: 14, damagePerLevel: 0.7 }, ability: { trigger: "每移动 180px 留下残像，0.45s 后爆发", base: "伤害 14+0.7×等级，半径70，最多4道", links: "攻击、暴击、吸血、范围；移速自然提高触发频率", damageName: "残影爆发" }, desc: "HP ×0.9、移速 ×1.1；以高速移动铺设延时爆发残像。", appearance: { shape: "star", deco: "arrow" } },
-    allrounder: { name: "全能者", title: "均衡之刃", icon: "✦", color: "#b8c6ff", startPassives: { damage: 1, maxhp: 1 }, hpMul: 1.0, speedMul: 1.0, ability: { trigger: "无额外机制", base: "均衡成长", links: "全部 21 把基础武器可选起手" }, desc: "全面均衡，无短板也无专精，适合任何流派。", appearance: { shape: "circle", deco: "core" } }
+    allrounder: { name: "全能者", title: "均衡之刃", icon: "✦", color: "#b8c6ff", startPassives: { maxhp: 1, speed: 1, damage: 1, cooldown: 1, area: 1, armor: 1, regen: 1, magnet: 1, luck: 1, crit: 1, lifesteal: 1 }, hpMul: 1.0, speedMul: 1.0, ability: { trigger: "无额外机制", base: "全部被动各 1 级", links: "全部 21 把基础武器可选起手" }, desc: "开局获得全部被动各 1 级，全面成长，适合任何流派。", appearance: { shape: "circle", deco: "core" } }
   };
   const CHARACTER_ORDER = ["allrounder", "bulwark", "arcanist", "ranger", "assassin", "collector", "berserker", "lingerer", "overclocker", "phantom"];
 

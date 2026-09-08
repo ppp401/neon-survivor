@@ -156,12 +156,34 @@
       const wrap = document.getElementById("charDetail");
       if (!ch || !wrap) return;
       const startW = SV.Config.startWeaponLabel(ch);
-      let chips = '<span class="char-chip">HP ×' + ch.hpMul + "</span>";
-      chips += '<span class="char-chip">移速 ×' + ch.speedMul + "</span>";
+      let chips = "";
+      function mulChip(label, value) {
+        if (value == null || Math.abs(value - 1) < 1e-9) return;
+        chips += '<span class="char-chip">' + label + " ×" + value + "</span>";
+      }
+      mulChip("HP", ch.hpMul);
+      mulChip("移速", ch.speedMul);
+      const cmod = ch.charMods || {};
+      mulChip("拾取范围", cmod.pickupMul);
+      const healingMul = cmod.healingMul == null ? 1 : cmod.healingMul;
+      mulChip("生命再生", healingMul * (cmod.regenMul == null ? 1 : cmod.regenMul));
+      mulChip("吸血治疗", healingMul * (cmod.lifestealMul == null ? 1 : cmod.lifestealMul));
+      mulChip("血包治疗", healingMul);
+      const spec = ch.weaponSpec || {};
+      const specName = spec.tag === "spell" ? "法术" : spec.tag === "ranged" ? "远程" : spec.tag === "melee" ? "近战" : "专精武器";
+      mulChip(specName + "伤害", spec.damageMul);
+      mulChip(specName + "范围", spec.areaMul);
+      mulChip(specName + "攻击间隔", spec.cooldownMul);
       chips += '<span class="char-chip">' + (startW.icon || "◆") + " " + startW.name + "</span>";
-      for (const pid in ch.startPassives) {
-        const pd = SV.Config.PASSIVES[pid];
-        if (pd) chips += '<span class="char-chip">' + pd.icon + " " + pd.name + "×" + ch.startPassives[pid] + "</span>";
+      const passiveIds = Object.keys(SV.Config.PASSIVES);
+      const hasAllLv1 = passiveIds.length > 0 && passiveIds.every(function (pid) { return ch.startPassives[pid] === 1; });
+      if (hasAllLv1) {
+        chips += '<span class="char-chip char-chip-all" title="' + passiveIds.map(function (pid) { return SV.Config.PASSIVES[pid].name; }).join("、") + '">✦ 全部被动 ×1</span>';
+      } else {
+        for (const pid in ch.startPassives) {
+          const pd = SV.Config.PASSIVES[pid];
+          if (pd) chips += '<span class="char-chip">' + pd.icon + " " + pd.name + "×" + ch.startPassives[pid] + "</span>";
+        }
       }
       let html = '<div class="cd-head">';
       html += '<div class="cd-icon" style="color:' + ch.color + '">' + ch.icon + "</div>";
@@ -186,6 +208,9 @@
       html += '<div class="cd-best">' + stage.name + " ✓" + cs.clears + " 通关 · " + dh + "</div>";
       html += "</div>";
       wrap.innerHTML = html;
+      wrap.scrollTop = 0;
+      const body = wrap.querySelector(".cd-body");
+      if (body) body.scrollTop = 0;
     },
     // 点图标:只切 .selected + 刷详情(不重建网格,顺滑无闪烁)
     selectChar: function (id) {
@@ -244,6 +269,7 @@
       const spec = ch.special === "arcanist" && (def.tags || []).indexOf("spell") >= 0 ? "已计入星语法术专精" : ch.special === "ranger" && (def.tags || []).indexOf("ranged") >= 0 ? "已计入流光远程专精" : "已计入角色起手被动";
       html += '<div class="swd-note">' + spec + " · 局内可获得全部基础武器</div>";
       wrap.innerHTML = html;
+      wrap.scrollTop = 0;
     },
 
     // ── 无尽模式确认(通关后弹出)
