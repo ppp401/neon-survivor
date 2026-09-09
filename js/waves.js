@@ -72,6 +72,7 @@
 
     update: function (state, dt) {
       const t = state.time / 60; // 分钟
+      const bossQueue = [];
       if (state.spawnPause > 0) state.spawnPause -= dt;
       const diff = CFG.DIFFICULTY[state.difficulty] || CFG.DIFFICULTY.normal;
       const early = CU.earlySpawnFactor(t, state.difficulty);
@@ -100,13 +101,13 @@
         const pair = bosses[i];
         if (!state.bossSpawned[i] && state.time >= pair[1]) {
           state.bossSpawned[i] = true;
-          this.spawnBoss(state, pair[0]);
+          bossQueue.push(pair[0]);
         }
       }
       // 终局 Boss 组(虚空深渊等)
       if (state.stage.finale && !state.finalSpawned && state.time >= state.stage.finaleMin) {
         state.finalSpawned = true;
-        for (let i = 0; i < state.stage.finale.length; i++) this.spawnBoss(state, state.stage.finale[i]);
+        for (let i = 0; i < state.stage.finale.length; i++) bossQueue.push(state.stage.finale[i]);
       }
 
       // 14min 后周期性多 Boss 波(分档加密:14-17min@1.5min,17-19min@1min,19min+@30s;每波 2-3 只随机 Boss 同台)。非无尽:提供后期压力与宝箱
@@ -116,7 +117,7 @@
           state.bossWaveTimer = lateBossEvery(state.time);
           const pool = Object.keys(CFG.BOSSES);
           const n = U.randInt(2, 3);
-          for (let i = 0; i < n; i++) this.spawnBoss(state, U.choice(pool));
+          for (let i = 0; i < n; i++) bossQueue.push(U.choice(pool));
         }
       }
 
@@ -127,24 +128,35 @@
           state.endlessBossTimer = C.ENDLESS_BOSS_EVERY;
           const n = U.randInt(1, 3);
           const pool = Object.keys(CFG.BOSSES);
-          for (let i = 0; i < n; i++) this.spawnBoss(state, U.choice(pool));
+          for (let i = 0; i < n; i++) bossQueue.push(U.choice(pool));
         }
       }
+      if (bossQueue.length) this.spawnBosses(state, bossQueue);
     },
 
     spawnBoss: function (state, bossType) {
-      const def = CFG.BOSSES[bossType];
-      const count = def.count || 1;
-      const gid = count > 1 ? (state._bossGid = (state._bossGid || 0) + 1) : 0; // 多体 Boss 同组共享 gid(整组只掉一份 Boss 奖励)
-      for (let i = 0; i < count; i++) {
-        const pos = spawnPos(state);
-        const e = SV.Entities.addBoss(state, bossType, pos.x, pos.y);
-        if (e && gid) e.gid = gid;
+      this.spawnBosses(state, [bossType]);
+    },
+
+    spawnBosses: function (state, bossTypes) {
+      let spawned = 0;
+      for (let b = 0; b < bossTypes.length; b++) {
+        const bossType = bossTypes[b], def = CFG.BOSSES[bossType];
+        if (!def) continue;
+        const count = def.count || 1;
+        const gid = count > 1 ? (state._bossGid = (state._bossGid || 0) + 1) : 0; // 多体 Boss 同组共享 gid(整组只掉一份 Boss 奖励)
+        for (let i = 0; i < count; i++) {
+          const pos = spawnPos(state);
+          const e = SV.Entities.addBoss(state, bossType, pos.x, pos.y);
+          if (e) { spawned++; if (gid) e.gid = gid; }
+        }
       }
+      if (!spawned) return;
       state.spawnPause = 3;
       SV.Audio.bossWarn();
       SV.Effects.shake(8, 0.6);
-      SV.HUD.toast("⚠ " + def.name + " 降临");
+      const one = bossTypes.length === 1 && CFG.BOSSES[bossTypes[0]];
+      SV.HUD.toast(one ? "⚠ " + one.name + " 降临" : "⚠ 强敌集群来袭（" + spawned + "名）");
     }
   };
 

@@ -53,6 +53,12 @@
     return (ch && ch.mechanics) || {};
   }
 
+  // 角色固有直伤技能：前期保持线性，超过软上限后转为平方根成长，抑制长局等级膨胀。
+  function characterSkillLevel(level) {
+    const n = Math.max(0, level || 0), cap = C.CHAR_SKILL_LEVEL_SOFTCAP;
+    return n <= cap ? n : Math.sqrt(cap * n);
+  }
+
   // ── 怪物数值预览(图鉴用,纯计算,不创建实体、不碰缓存)。返回 {hp,speed,xp,...}
   // 伤害分项:contact 接触 / boom 自爆(bomber) / proj 弹幕(炮台/狙击) / trail 毒径每跳;dmg 为旧兼容字段(取最大者)
   function previewEnemy(type, state) {
@@ -244,7 +250,7 @@
     if (!targets.length) return;
     const n = Math.min(crystals, targets.length);
     const radius = (mech.radius || 28) * m.areaMul;
-    const damage = ((mech.damageBase == null ? 10 : mech.damageBase) + (mech.damagePerLevel == null ? 0.9 : mech.damagePerLevel) * state.level) * m.damageMul;
+    const damage = ((mech.damageBase == null ? 10 : mech.damageBase) + (mech.damagePerLevel == null ? 0.9 : mech.damagePerLevel) * characterSkillLevel(state.level)) * m.damageMul;
     for (let i = 0; i < crystals; i++) {
       const t = targets[i % n];
       if (t) burstSpecial(state, t.x, t.y, radius, damage, "#ffd86b", "collector");
@@ -256,7 +262,7 @@
     if (!(amount > 0)) return;
     state.xp += amount;
     if (state.special === "collector") {
-      const mech = characterMechanics(state), per = mech.xpPerCrystal || 12, max = mech.maxCrystals || 6;
+      const mech = characterMechanics(state), per = mech.xpPerCrystal || 13, max = mech.maxCrystals || 6;
       if (state.collectorCrystals == null) state.collectorCrystals = 0;
       state.collectorXp = (state.collectorXp || 0) + amount;
       while (state.collectorXp >= per) {
@@ -315,7 +321,7 @@
           ghosts[i].delay -= dt;
           if (ghosts[i].delay <= 0) {
             const radius = (mech.radius || 70) * m.areaMul;
-            const damage = ((mech.damageBase == null ? 14 : mech.damageBase) + (mech.damagePerLevel == null ? 0.7 : mech.damagePerLevel) * state.level) * m.damageMul;
+            const damage = ((mech.damageBase == null ? 14 : mech.damageBase) + (mech.damagePerLevel == null ? 0.7 : mech.damagePerLevel) * characterSkillLevel(state.level)) * m.damageMul;
             burstSpecial(state, ghosts[i].x, ghosts[i].y, radius, damage, "#73dcff", "phantom"); ghosts.splice(i, 1);
           }
         }

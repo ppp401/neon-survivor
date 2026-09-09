@@ -347,6 +347,26 @@
           const cracks=SV.Effects.isReduced()?3:6;for(let k=0;k<cracks;k++){const q=k/cracks*U.TAU+.3;ctx.beginPath();ctx.moveTo(h.x+Math.cos(q)*h.r*.15,h.y+Math.sin(q)*h.r*.15);ctx.lineTo(h.x+Math.cos(q+.12)*h.r*.55,h.y+Math.sin(q+.12)*h.r*.55);ctx.lineTo(h.x+Math.cos(q-.04)*h.r*.9,h.y+Math.sin(q-.04)*h.r*.9);ctx.stroke();}
           continue;
         }
+        if (h.kind === "poison") {                        // 腐泥毒径:黏液水洼 + 毒泡，必须与灼烧区域清晰区分
+          const a = Math.max(0, h.life / h.max), tm = state.time || 0;
+          ctx.save(); ctx.globalCompositeOperation = "source-over";
+          ctx.globalAlpha = .52 * a; ctx.fillStyle = "#163817";
+          ctx.beginPath();
+          for (let k = 0; k < 12; k++) { const q = k / 12 * U.TAU, rr = h.r * (.82 + .13 * Math.sin(k * 3.7 + h.x * .017 + h.y * .011)); if (k) ctx.lineTo(h.x + Math.cos(q) * rr, h.y + Math.sin(q) * rr); else ctx.moveTo(h.x + Math.cos(q) * rr, h.y + Math.sin(q) * rr); }
+          ctx.closePath(); ctx.fill(); ctx.restore();
+          ctx.globalAlpha = .28 * a; ctx.drawImage(glow("#68ff4f"), h.x - h.r * 1.35, h.y - h.r * 1.35, h.r * 2.7, h.r * 2.7);
+          ctx.globalAlpha = (.62 + .16 * Math.sin(tm * 5 + i)) * a; ctx.strokeStyle = "#79e85b"; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.arc(h.x, h.y, h.r * .88, 0, U.TAU); ctx.stroke();
+          const bubbles = SV.Effects.isReduced() ? 3 : 6;
+          for (let k = 0; k < bubbles; k++) {
+            const q = k * 2.399 + h.x * .013, rr = h.r * (.16 + .09 * (k % 3));
+            const bx = h.x + Math.cos(q) * rr, by = h.y + Math.sin(q) * rr;
+            const br = 1.5 + ((tm * 2.4 + k * .61) % 1) * 2.2;
+            ctx.globalAlpha = (.4 + .28 * Math.sin(tm * 6 + k)) * a; ctx.fillStyle = "#b7ff7a";
+            ctx.beginPath(); ctx.arc(bx, by, br, 0, U.TAU); ctx.fill();
+          }
+          continue;
+        }
         if (h.warm > 0) {
           // 地图灼烧预热：红紫旋转虚线 + 向内收缩警戒刻度。
           const pulse = 0.5 + 0.5 * Math.sin(state.time * 10 + i);
