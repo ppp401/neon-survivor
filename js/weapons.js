@@ -20,7 +20,7 @@
       resonance: false, resonanceHits: 0, resonanceWindow: 0, resonanceLock: 0, chainMul: 0, vortexBurn: 0, burnR: 0, burnEvery: 0,
       vortexBomb: false, captures: null, captureMax: 0, boomBase: 0, boomPer: 0, boomR: 0, boomRPer: 0,
       returnHit: false, returnCleared: false, spreadChance: 0, spreadDur: 0,
-      calibrate: 0, finalSpeed: 0 };
+      calibrate: 0, finalSpeed: 0, meteorHits: null, meteorPrimary: false };
   }
   function pReset(p) {
     p.vx = 0; p.vy = 0; p.r = 5; p.damage = 10; p.life = 1; p.maxLife = 1; p.color = "#fff";
@@ -37,7 +37,7 @@
     p.resonance = false; p.resonanceHits = 0; p.resonanceWindow = 0; p.resonanceLock = 0; p.chainMul = 0; p.vortexBurn = 0; p.burnR = 0; p.burnEvery = 0;
     p.vortexBomb = false; p.captures = null; p.captureMax = 0; p.boomBase = 0; p.boomPer = 0; p.boomR = 0; p.boomRPer = 0;
     p.returnHit = false; p.returnCleared = false; p.spreadChance = 0; p.spreadDur = 0;
-    p.calibrate = 0; p.finalSpeed = 0;
+    p.calibrate = 0; p.finalSpeed = 0; p.meteorHits = null; p.meteorPrimary = false;
   }
   const proj = SV.Pool.create(pFactory, pReset);
   const beams = []; // {pts,life,max,color,width}
@@ -583,11 +583,15 @@
     const cam = SV.Renderer.cam, sz = SV.Renderer.cssSize();
     const hw = sz.w / 2 / cam.zoom, hh = sz.h / 2 / cam.zoom, IN = 50;
     const clampView = hw > IN && hh > IN; // 视口有效(真浏览器)才夹;vm 沙箱无 canvas 时跳过,避免倒夹区间
+    const roundHits = {};
     for (let k = 0; k < s.count; k++) {
       let c = clusters[k];
       if (!c) { // 敌群少于陨石数:在最大敌群(或瞄准方向)附近散布,避免重叠成一点
         c = clusters[0] || fallback;
-        c = { x: c.x + U.rand(-26, 26), y: c.y + U.rand(-26, 26) };
+        const missing = k - clusters.length, total = Math.max(1, s.count - clusters.length);
+        const ang = U.TAU * missing / total + U.rand(-0.12, 0.12);
+        const spread = Math.max(64, s.radius * 0.7);
+        c = { x: c.x + Math.cos(ang) * spread, y: c.y + Math.sin(ang) * spread };
       }
       if (clampView) { // 落点钳到屏内(留 IN 内边距,保证爆炸圈也可见)
         c = { x: U.clamp(c.x, cam.x - hw + IN, cam.x + hw - IN),
@@ -598,14 +602,22 @@
       pr.vx = 0; pr.vy = 0;
       pr.r = 11; pr.damage = s.damage; pr.life = s.arm; pr.maxLife = s.arm; pr.color = def.color;
       pr.meteor = s.radius; pr.burn = s.burn; pr.burnDur = s.burnDur; pr.cluster = def.evo && s.cluster; pr.weaponId = w.id;
-      if (s.chainHops) { pr.chainHops = s.chainHops; pr.chainRange = s.chainRange; } // 融合(陨雷审判):落地连锁
+      pr.meteorHits = roundHits; pr.meteorPrimary = k < clusters.length;
+      if (s.chainHops && pr.meteorPrimary) { pr.chainHops = s.chainHops; pr.chainRange = s.chainRange; } // 仅真实独立敌群触发连锁
       SV.Effects.ring(pr.x, pr.y, def.color, 8, s.radius, s.arm, 4); // 落点预警圈(持续到爆炸)
     }
     SV.Audio.shoot();
   }
   // 陨石爆炸:范围伤害 + 进化/融合落地留焦土(只伤敌人的燃烧区域)
   function explodeMeteor(state, pr) {
-    splashAt(state, pr.x, pr.y, pr.meteor, pr.damage, pr.color, 22, pr.weaponId);
+    const near = SV.Spatial.queryCircle(pr.x, pr.y, pr.meteor);
+    for (let i = 0; i < near.length; i++) {
+      const e = near[i];
+      if (e.hp <= 0 || U.dist2(pr.x, pr.y, e.x, e.y) > pr.meteor * pr.meteor) continue;
+      const repeated = pr.meteorHits && pr.meteorHits[e.id];
+      dmgEnemy(e, pr.damage * (repeated ? 0.5 : 1), pr.weaponId);
+      if (pr.meteorHits) pr.meteorHits[e.id] = true;
+    }
     SV.Effects.explosion(pr.x, pr.y, pr.color, 24); SV.Effects.ring(pr.x, pr.y, pr.color, 8, pr.meteor, 0.4, 4); SV.Effects.shake(5, 0.25); SV.Audio.die();
     if (pr.chainHops) chainBurst(state, pr.x, pr.y, pr.damage * 0.6, pr.chainHops, pr.chainRange, pr.color, 1.1, pr.weaponId); // 融合:陨雷审判
     // 进化/融合:落地留焦土(kind:"scorch",只伤敌人、无 warm;与地图灼烧区只伤玩家区分,视觉另配色)
@@ -630,7 +642,7 @@
   function fireShockwave(state, w, def, s) {
     const p = state.player;
     const base = aimFrom(p);
-    const opts = { knock: s.knock, freeze: def.evo && s.freeze, shatter: s.shatter, shatterMul: s.shatterMul };
+    const opts = { knock: s.knock, freeze: def.evo && s.freeze, shatter: s.shatter, shatterMul: s.shatterMul, shatterBudget: s.shatter ? 4 : 0 };
     for (let k = 0; k < s.count; k++) {
       const dir = s.count > 1 ? base + k * U.TAU / s.count : base;
       swingOnce(state, w, def, s, dir, opts);
@@ -702,9 +714,9 @@
         e.x += Math.cos(a) * kb; e.y += Math.sin(a) * kb;
       }
       if (opts.freeze) ccFreeze(e, opts.freeze);
-      if (opts.shatter && wasFrozen) splashAt(state, e.x, e.y, opts.shatter, s.damage * (opts.shatterMul || 0.5), def.color, 10, w.id);
+      if (opts.shatter && wasFrozen && opts.shatterBudget > 0) { opts.shatterBudget--; splashAt(state, e.x, e.y, opts.shatter, s.damage * (opts.shatterMul || 0.5), def.color, 10, w.id); }
       if (opts.armorBreak) e.armorBreak = Math.max(e.armorBreak || 0, opts.armorBreak);
-      if (opts.explodeChance && Math.random() < opts.explodeChance) explodeAt(state, e.x, e.y, opts.explodeR, opts.explodeDmg, def.color, w.id, opts.chainHops || 0);
+      if (opts.explodeChance && Math.random() < opts.explodeChance && (!opts.explodeRound || opts.explodeRound.remaining > 0)) explodeAt(state, e.x, e.y, opts.explodeR, opts.explodeDmg, def.color, w.id, opts.chainHops || 0, opts.explodeRound);
       if (opts.onHit) opts.onHit(e);
       hit = true;
     }
@@ -713,7 +725,13 @@
   }
 
   // 以 (x,y) 为圆心的瞬时 AoE 爆炸(不入投射物池);hops>0 时向圈内最近敌人连环引爆(衰减、终止)
-  function explodeAt(state, x, y, radius, dmg, color, wid, hops) {
+  function explodeAt(state, x, y, radius, dmg, color, wid, hops, round) {
+    if (round) {
+      if (round.remaining <= 0) return;
+      const centerKey = Math.round(x) + "," + Math.round(y);
+      if (round.centers[centerKey]) return;
+      round.centers[centerKey] = true; round.remaining--;
+    }
     const near = SV.Spatial.queryCircle(x, y, radius);
     for (let i = 0; i < near.length; i++) {
       const e = near[i];
@@ -728,9 +746,10 @@
         const e = near[i];
         if (e.hp <= 0) continue;
         const d = U.dist2(x, y, e.x, e.y);
-        if (d < bd) { bd = d; best = e; }
+        const key = Math.round(e.x) + "," + Math.round(e.y);
+        if ((!round || !round.centers[key]) && d < bd) { bd = d; best = e; }
       }
-      if (best && bd <= radius * radius) explodeAt(state, best.x, best.y, radius * 0.8, dmg * 0.7, color, wid, hops - 1);
+      if (best && bd <= radius * radius) explodeAt(state, best.x, best.y, radius * 0.8, dmg * 0.7, color, wid, hops - 1, round);
     }
   }
 
@@ -750,7 +769,7 @@
   // ── 殉爆重击(多向扇形挥砍,命中按概率以敌为圆心爆炸;evo 必爆且连环)
   function fireDetonate(state, w, def, s) {
     const base = aimFrom(state.player);
-    const opts = { explodeChance: s.explodeChance, explodeR: s.explodeR, explodeDmg: s.explodeDmg, chainHops: s.chainHops || 0, hitIds: {} };
+    const opts = { explodeChance: s.explodeChance, explodeR: s.explodeR, explodeDmg: s.explodeDmg, chainHops: s.chainHops || 0, hitIds: {}, explodeRound: { remaining: s.explodeBudget || 2, centers: {} } };
     const cnt = s.count || 1;
     for (let k = 0; k < cnt; k++) {
       const dir = cnt > 1 ? base + k * U.TAU / cnt : base;
@@ -1024,6 +1043,7 @@
         if (pr.calibrate <= 0 && pr.finalSpeed > 0) {
           const a = Math.atan2(pr.vy, pr.vx);
           pr.vx = Math.cos(a) * pr.finalSpeed; pr.vy = Math.sin(a) * pr.finalSpeed;
+          pr.homing = false; pr.target = null;
         }
       }
       // 子步进移动(防穿透)
@@ -1324,7 +1344,7 @@
   // ── 血月断头台(融合:巨型挥砍,命中必爆且连环引爆)
   function fusionCrescentDetonate(state, w, def, s) {
     const base = aimFrom(state.player);
-    const opts = { explodeChance: s.explodeChance || 1.0, explodeR: s.explodeR, explodeDmg: s.explodeDmg, chainHops: s.chainHops || 0 };
+    const opts = { explodeChance: s.explodeChance || 1.0, explodeR: s.explodeR, explodeDmg: s.explodeDmg, chainHops: s.chainHops || 0, hitIds: {}, explodeRound: { remaining: s.explodeBudget || 5, centers: {} } };
     for (let k = 0; k < (s.count || 1); k++) {
       const dir = (s.count || 1) > 1 ? base + (k - ((s.count || 1) - 1) / 2) * 0.6 : base;
       swingOnce(state, w, def, s, dir, opts);
@@ -1419,7 +1439,7 @@
       const a = Math.atan2(pr.vy, pr.vx);
       pr.vx = Math.cos(a) * s.speed * 0.36; pr.vy = Math.sin(a) * s.speed * 0.36;
       pr.calibrate = s.calibrate; pr.finalSpeed = s.speed;
-      pr.pierce = s.pierce; pr.hitIds = []; pr.chaseKills = s.chase; pr.chaseDecay = s.chaseDecay == null ? 1 : s.chaseDecay;
+      pr.pierce = s.pierce; pr.hitIds = [];
     }
     SV.Audio.shoot();
   }

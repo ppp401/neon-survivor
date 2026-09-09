@@ -12,6 +12,7 @@
   width:100%; height:100%; overflow:hidden;
   background:var(--bg0); color:var(--ink);
   font-family:"Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-text-size-adjust:100%; text-size-adjust:100%;
   -webkit-tap-highlight-color:transparent;
   -webkit-touch-callout:none;
   -webkit-user-select:none; user-select:none;
@@ -437,7 +438,8 @@ body.touch .vol-slider{ width:120px; height:28px; }
 @media (orientation: landscape) and (max-height: 500px) and (pointer: coarse){
   .screen-card{ gap:6px; max-height: 100vh; }
   .screen-card.wide{ max-width: 100%; }
-  #charSelectScreen .screen-card,#weaponSelectScreen .screen-card{ width:100%; height:100%; min-height:0; overflow:hidden; }
+  #charSelectScreen .screen-card{ width:100%; height:100%; min-height:0; overflow:hidden; }
+  #weaponSelectScreen .screen-card{ width:min(720px,calc(100% - 24px)); height:100%; min-height:0; overflow:hidden; }
   #charSelectScreen .btn-row,#weaponSelectScreen .btn-row{ flex:0 0 auto; margin-top:2px; }
   .screen h2{ font-size: 18px; }
   .lv-hint{ font-size: 11px; }
@@ -455,9 +457,11 @@ body.touch .vol-slider{ width:120px; height:28px; }
   .char-tile .tile-icon{ font-size:20px; }
   .char-tile .tile-name{ font-size:10px; }
   .char-detail{ flex:1 1 auto; width:100%; height:auto; max-width:720px; min-height:84px; padding:8px 10px; gap:10px; }
-  .char-detail .cd-head{ min-width:70px; }
+  .char-detail .cd-head{ min-width:66px; }
   .char-detail .cd-icon{ font-size:28px; }
   .char-detail .cd-name{ font-size:14px; }
+  .char-detail .cd-title{ font-size:9px; }
+  .char-detail .cd-body{ gap:4px; }
   .char-detail .cd-body,.start-weapon-list,.start-weapon-detail{ touch-action:pan-y; -webkit-overflow-scrolling:touch; }
   .weapon-select-layout{ flex:1 1 auto; height:auto; grid-template-columns:minmax(220px,34vw) minmax(0,1fr); gap:10px; min-height:0; max-height:none; overflow:hidden; }
   .start-weapon-list{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; overflow-x:hidden; overflow-y:auto; width:100%; height:100%; max-height:none; }
@@ -465,9 +469,15 @@ body.touch .vol-slider{ width:120px; height:28px; }
   .start-weapon-icon{ font-size:22px; flex-basis:30px; }
   .start-weapon span{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .start-weapon-detail{ height:100%; padding:8px 10px; gap:5px; }
-  .swd-name{ font-size:16px; }.swd-icon{ font-size:28px; }.swd-level,.swd-evo{ padding:4px 7px; }
-  .char-detail .cd-desc,.char-detail .cd-ability,.char-detail .cd-ability span{ font-size:11px; line-height:1.4; }
-  .char-chip{ font-size: 9px; padding: 2px 5px; }
+  .swd-head{ gap:8px; }
+  .swd-name{ font-size:16px; }.swd-icon{ font-size:28px; }
+  .swd-mechanic{ font-size:11px; line-height:1.35; }
+  .swd-level,.swd-evo{ padding:4px 7px; font-size:10px; line-height:1.35; }
+  .swd-note{ font-size:9px; line-height:1.3; }
+  .char-detail .cd-desc,.char-detail .cd-ability,.char-detail .cd-ability span{ font-size:10px; line-height:1.3; }
+  .char-detail .cd-ability{ padding:4px 6px; }
+  .char-detail .cd-best{ font-size:9px; line-height:1.3; }
+  .char-chip{ font-size: 8px; padding: 1px 4px; }
   .mini-btn{ padding: 7px 14px; font-size: 12px; }
   .diff-row{ gap: 5px; }
   .diff-btn{ min-width: 50px; padding: 6px 10px; font-size: 12px; }

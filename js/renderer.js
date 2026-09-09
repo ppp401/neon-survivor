@@ -550,11 +550,10 @@
         ctx.fillRect(0,0,cssW,band);ctx.fillRect(0,cssH-band,cssW,band);
         ctx.fillRect(0,band,band,cssH-band*2);ctx.fillRect(cssW-band,band,band,cssH-band*2);
       }else{
-        const a=state._voidPullDir||0,dx=Math.cos(a),dy=Math.sin(a),px=-dy,py=dx,t=state.time||0,span=Math.hypot(cssW,cssH),tx=cssW/2+dx*span*.46,ty=cssH/2+dy*span*.46;
-        // 定向粒子被吸向屏幕边缘的引力核；尾迹方向与实际牵引完全一致。
+        const a=state._voidPullDir||0,dx=Math.cos(a),dy=Math.sin(a),px=-dy,py=dx,t=state.time||0,span=Math.hypot(cssW,cssH),cross=Math.min(cssW,cssH)*.58;
+        // 平行粒子流沿实际牵引方向掠过屏幕，不再绘制具象引力核。
         const tracks=SV.Effects.isReduced()?8:18;ctx.strokeStyle="rgba(205,165,255,.82)";ctx.fillStyle="#ead8ff";ctx.lineWidth=1.5;
-        for(let k=0;k<tracks;k++){const phase=((t*190+k*137)%span)-span*.58,off=Math.sin(k*91.73)*Math.min(cssW,cssH)*.46,bend=1-U.clamp((phase+span*.58)/span,0,1),cx=cssW/2+dx*phase+px*off*bend,cy=cssH/2+dy*phase+py*off*bend,len=16+22*(1-bend);ctx.globalAlpha=edge*(.35+.5*(k%3)/2);ctx.beginPath();ctx.moveTo(cx-dx*len+px*7*bend,cy-dy*len+py*7*bend);ctx.quadraticCurveTo(cx-dx*len*.35+px*3*bend,cy-dy*len*.35+py*3*bend,cx,cy);ctx.stroke();ctx.save();ctx.translate(cx,cy);ctx.rotate(a);ctx.beginPath();ctx.moveTo(5,0);ctx.lineTo(-3,-2.2);ctx.lineTo(-1,0);ctx.lineTo(-3,2.2);ctx.closePath();ctx.fill();ctx.restore();}
-        ctx.globalAlpha=edge*.32;ctx.drawImage(glow("#8f4dff"),tx-70,ty-70,140,140);ctx.globalAlpha=edge*.75;ctx.strokeStyle="rgba(205,150,255,.85)";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(tx,ty,34,12,a+.45,0,U.TAU);ctx.stroke();ctx.lineWidth=1.4;ctx.beginPath();ctx.ellipse(tx,ty,52,19,a+.45,.35,Math.PI*1.72);ctx.stroke();ctx.fillStyle="#f2e9ff";ctx.beginPath();ctx.arc(tx,ty,5,0,U.TAU);ctx.fill();
+        for(let k=0;k<tracks;k++){const phase=((t*190+k*137)%span)-span*.5,off=Math.sin(k*91.73)*cross,cx=cssW/2+dx*phase+px*off,cy=cssH/2+dy*phase+py*off,len=18+10*(k%3);ctx.globalAlpha=edge*(.35+.5*(k%3)/2);ctx.beginPath();ctx.moveTo(cx-dx*len,cy-dy*len);ctx.lineTo(cx,cy);ctx.stroke();ctx.save();ctx.translate(cx,cy);ctx.rotate(a);ctx.beginPath();ctx.moveTo(5,0);ctx.lineTo(-3,-2.2);ctx.lineTo(-1,0);ctx.lineTo(-3,2.2);ctx.closePath();ctx.fill();ctx.restore();}
       }ctx.restore();
     },
 

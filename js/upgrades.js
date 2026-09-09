@@ -128,7 +128,7 @@
       case "blade_boomerang": out.push("环刃轮流离阵追敌并返航 · 环触间隔" + F10(s.hitCd) + "s"); break;
       case "blade_frost": out.push("每敌第" + s.frostHits + "击冰爆" + R(s.burstDmg) + "(半径" + R(s.burstR) + ") · 冻结" + F10(s.freeze) + "s"); break;
       case "missile_aura": out.push("分头追踪 · 移动引力场半径" + R(s.fieldR) + " · 场伤" + R(s.fieldDmg) + "/" + F10(s.fieldTick) + "s · 击杀追猎" + s.chase + "次"); break;
-      case "missile_railgun": out.push("制导" + F10(s.calibrate) + "s后高速贯穿" + s.pierce + "次 · 击杀追击" + s.chase + "次"); break;
+      case "missile_railgun": out.push("制导 " + (Math.round(s.calibrate * 100) / 100) + "s 后高速无限贯穿"); break;
       case "chain_sentry": out.push("每塔" + F10(s.fireCd) + "s发射 · 电弹连跳" + s.chainHops + "次"); break;
       case "aura_poison": out.push("停留叠加腐蚀至" + s.maxStacks + "层 · 每层伤害+" + Math.round(s.stackMul * 100) + "%"); break;
       case "shotgun_shockwave": out.push(s.resonanceHits + "次命中触发共振爆" + R(s.burstDmg) + "(半径" + R(s.burstR) + ")"); break;
