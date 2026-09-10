@@ -402,6 +402,8 @@
       const ch = SV.Config.CHARACTERS[state.charId];
       if (ch) {
         const startW = SV.Config.startWeaponLabel(ch);
+        const startId = state.startWeaponId || (state.weapons[0] && state.weapons[0].id);
+        const startDef = startId && SV.Config.weaponDef(startId);
         html += '<div class="ars-section"><div class="ars-title">角色</div>';
         html += '<div class="ars-row"><span class="ars-ic" style="color:' + ch.color + '">' + ch.icon + "</span>" +
           '<span class="ars-name">' + ch.name + " · " + ch.title + "</span>" +
@@ -410,7 +412,7 @@
           '<span class="ars-eff" style="font-size:12px;color:var(--dim)">' + ch.desc + "</span>" +
           (ch.ability ? '<span class="ars-eff" style="font-size:12px"><b>' + ch.ability.trigger + "</b> · " + ch.ability.base + " · " + ch.ability.links + "</span>" : "") +
           (ch.ability && ch.ability.damageName ? '<span class="ars-dmg" style="font-size:12px">⚔ ' + ch.ability.damageName + " 总伤 " + fmtNum((state.skillDamage && state.skillDamage[state.charId]) || 0) + " · " + fmtNum(state.time > 0 ? ((state.skillDamage && state.skillDamage[state.charId]) || 0) / state.time * 60 : 0) + "/min</span>" : "") +
-          '<span class="ars-eff" style="font-size:12px">本局起手:' + (state.weapons[0] ? SV.Config.weaponDef(state.weapons[0].id).icon + " " + SV.Config.weaponDef(state.weapons[0].id).name : (startW.icon || "◆") + " " + startW.name) + "</span></div>";
+          '<span class="ars-eff" style="font-size:12px">本局起手:' + (startDef ? startDef.icon + " " + startDef.name : (startW.icon || "◆") + " " + startW.name) + "</span></div>";
         html += "</div>";
       }
       // 武器

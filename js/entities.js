@@ -166,6 +166,31 @@
   }
   function makePickup(x, y, kind) { return { x: x, y: y, kind: kind, bob: U.rand(0, U.TAU), pulled: false }; }
 
+  // 敌人可从场外入场；一旦碰撞圆完整进入竞技场，之后永久锁在边界内。
+  // ghost 是奖励型逃逸目标，不受此约束。
+  function enemyFullyInside(state, e) {
+    if (!state || !state.stage || !e || e.type === "ghost") return false;
+    const lim = state.stage.half - e.r;
+    return lim >= 0 && Math.abs(e.x) <= lim && Math.abs(e.y) <= lim;
+  }
+  function canEnemyRanged(state, e) {
+    if (e && e.type !== "ghost" && enemyFullyInside(state, e)) e._arenaEntered = true;
+    return !!(e && e._arenaEntered);
+  }
+  function constrainEnemy(state, e, oldX, oldY) {
+    if (!state || !state.stage || !e || e.type === "ghost") return;
+    const lim = Math.max(0, state.stage.half - e.r);
+    if (e._arenaEntered || enemyFullyInside(state, e)) {
+      e._arenaEntered = true;
+      e.x = U.clamp(e.x, -lim, lim); e.y = U.clamp(e.y, -lim, lim);
+      return;
+    }
+    // 尚未完整入场时允许向内/沿边移动，但拒绝在场外继续远离。
+    if (oldX != null && Math.abs(oldX) > lim && Math.abs(e.x) > Math.abs(oldX)) e.x = oldX;
+    if (oldY != null && Math.abs(oldY) > lim && Math.abs(e.y) > Math.abs(oldY)) e.y = oldY;
+    if (enemyFullyInside(state, e)) e._arenaEntered = true;
+  }
+
   // 受伤(玩家)
   function damagePlayer(state, dmg, ignoreIframe, srcType) {
     const p = state.player;
@@ -730,6 +755,8 @@
 
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
+      if (e.type === "ghost" && state.stage && (Math.abs(e.x) > state.stage.half || Math.abs(e.y) > state.stage.half)) { e._arenaEscaped = true; continue; }
+      constrainEnemy(state, e); // 收拢武器/角色等上一阶段产生的后置位移
       if (e.flash > 0) e.flash -= dt;
       if (e.slow > 0) e.slow -= dt;
       if (e.frozen > 0) e.frozen -= dt;
@@ -762,6 +789,7 @@
       const fractureMech = characterMechanics(state);
       const fracture = state.timeFractureActive > 0 ? (e.isBoss ? (fractureMech.bossScale || 0.70) : (fractureMech.normalScale || 0.35)) : 1;
       // 断层同比减慢 AI 行动计时与移动，不缩短 DoT/控制持续时间。
+      const oldX = e.x, oldY = e.y;
       AI.update(state, e, dt * fracture);
 
       // 积分(受减速/冰冻影响)
@@ -772,6 +800,7 @@
       const sb = e._speedBuff || 1;
       e.x += e.vx * k * sb * dt * fracture;
       e.y += e.vy * k * sb * dt * fracture;
+      constrainEnemy(state, e, oldX, oldY);
     }
 
     // 玩家接触判定
@@ -788,6 +817,7 @@
           const a = U.angleTo(p.x, p.y, e.x, e.y);
           const kb = 90 / e.mass;
           e.x += Math.cos(a) * kb; e.y += Math.sin(a) * kb;
+          constrainEnemy(state, e);
           if (p.iframes > 0) break;
         }
       }
@@ -805,13 +835,13 @@
       if (s.life <= 0) es.splice(i, 1);
     }
 
-    // 压缩 + 死亡结算 + 远距清理(竞技场外安全网)
-    const bound = ((state.stage && state.stage.half) || 2000) + 500;
-    const bound2 = bound * bound;
+    // 压缩 + 死亡结算。ghost 中心越界视为逃脱，不触发经验、掉落、击杀或死亡效果。
+    const half = (state.stage && state.stage.half) || 2000;
     let w = 0;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
-      if (e.hp > 0 && U.dist2(e.x, e.y, p.x, p.y) < bound2) {
+      const escapedGhost = e.type === "ghost" && e.hp > 0 && (e._arenaEscaped || Math.abs(e.x) > half || Math.abs(e.y) > half);
+      if (e.hp > 0 && !escapedGhost) {
         if (w !== i) enemies[w] = e;
         w++;
       } else {
@@ -892,6 +922,9 @@
     healScale: healScaleOf,
     previewEnemy: previewEnemy,
     previewBoss: previewBoss,
+    enemyFullyInside: enemyFullyInside,
+    canEnemyRanged: canEnemyRanged,
+    constrainEnemy: constrainEnemy,
     makePlayer: makePlayer,
     makeEnemy: makeEnemy,
     makeBoss: makeBoss,

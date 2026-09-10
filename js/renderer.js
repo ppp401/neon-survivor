@@ -238,32 +238,41 @@
 
     _drawBossArrows: function (state) {
       const arr = state.enemies;
-      const margin = 34;
+      const margin = 44, cx = cssW / 2, cy = cssH / 2;
       for (let i = 0; i < arr.length; i++) {
         const e = arr[i];
         if (!e.isBoss || e.hp <= 0) continue;
         const sx = cssW / 2 + (e.x - cam.x) * cam.zoom;
         const sy = cssH / 2 + (e.y - cam.y) * cam.zoom;
         if (sx >= 0 && sx <= cssW && sy >= 0 && sy <= cssH) continue; // 屏内不画箭头
-        // 夹到边缘
-        const cx = cssW / 2, cy = cssH / 2;
-        let dx = sx - cx, dy = sy - cy;
+        // Boss 方向射线与安全矩形的精确交点，避免斜向目标被错误夹到角落。
+        const dx = sx - cx, dy = sy - cy;
         const ang = Math.atan2(dy, dx);
-        const ex = U.clamp(sx, margin, cssW - margin);
-        const ey = U.clamp(sy, margin, cssH - margin);
+        const tx = Math.abs(dx) > 0.001 ? (cssW / 2 - margin) / Math.abs(dx) : Infinity;
+        const ty = Math.abs(dy) > 0.001 ? (cssH / 2 - margin) / Math.abs(dy) : Infinity;
+        const hitT = Math.min(tx, ty);
+        const ex = cx + dx * hitT, ey = cy + dy * hitT;
         const color = (SV.Config.BOSSES[e.bossType] && SV.Config.BOSSES[e.bossType].color) || "#ff5d73";
+        const pulse = 1 + 0.12 * Math.sin((state.time || 0) * 5 + e.id);
         ctx.save();
         ctx.translate(ex, ey);
         ctx.rotate(ang);
+        ctx.scale(pulse, pulse);
+        ctx.globalAlpha = 0.9;
+        ctx.drawImage(glow(color), -25, -25, 50, 50);
         ctx.fillStyle = color;
-        ctx.shadowColor = color; ctx.shadowBlur = 10;
+        ctx.strokeStyle = "rgba(5,8,18,.95)"; ctx.lineWidth = 4; ctx.lineJoin = "round";
         ctx.beginPath();
-        ctx.moveTo(14, 0); ctx.lineTo(-8, -9); ctx.lineTo(-8, 9); ctx.closePath(); ctx.fill();
+        ctx.moveTo(20, 0); ctx.lineTo(-11, -13); ctx.lineTo(-7, 0); ctx.lineTo(-11, 13); ctx.closePath(); ctx.stroke(); ctx.fill();
         ctx.restore();
         // 距离数字
         const dist = Math.round(U.dist(e.x, e.y, state.player.x, state.player.y));
-        ctx.fillStyle = color; ctx.font = "bold 11px ui-monospace, monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText(dist + "", ex, ey + 18);
+        const label = dist + "m";
+        ctx.font = "bold 12px ui-monospace, monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        const lw = ctx.measureText(label).width + 10, ly = ey + 25;
+        ctx.fillStyle = "rgba(3,7,16,.82)"; ctx.fillRect(ex - lw / 2, ly - 9, lw, 18);
+        ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 1; ctx.strokeRect(ex - lw / 2, ly - 9, lw, 18);
+        ctx.fillStyle = "#fff"; ctx.fillText(label, ex, ly);
       }
     },
 
@@ -561,14 +570,20 @@
       const max=state._envDebuffMax||left, edge=U.clamp(left/Math.min(.45,max),0,1), pulse=1+.12*Math.sin((state.time||0)*11);
       ctx.save();ctx.globalAlpha=edge*pulse;ctx.lineWidth=Math.max(10,Math.min(cssW,cssH)*.025);
       if(env.type==="freeze"){
-        ctx.strokeStyle="rgba(95,202,255,.32)";ctx.strokeRect(5,5,cssW-10,cssH-10);
+        const band=Math.max(72,Math.min(cssW,cssH)*.12),alpha=edge*pulse;
+        // 四条由高饱和外缘向内透明衰减的冰霜带；角落叠加形成更厚的冻结感。
+        let g=ctx.createLinearGradient(0,0,0,band);g.addColorStop(0,"rgba(35,180,255,.72)");g.addColorStop(.35,"rgba(100,215,255,.34)");g.addColorStop(1,"rgba(120,225,255,0)");ctx.globalAlpha=alpha;ctx.fillStyle=g;ctx.fillRect(0,0,cssW,band);
+        g=ctx.createLinearGradient(0,cssH,0,cssH-band);g.addColorStop(0,"rgba(35,180,255,.72)");g.addColorStop(.35,"rgba(100,215,255,.34)");g.addColorStop(1,"rgba(120,225,255,0)");ctx.fillStyle=g;ctx.fillRect(0,cssH-band,cssW,band);
+        g=ctx.createLinearGradient(0,0,band,0);g.addColorStop(0,"rgba(35,180,255,.72)");g.addColorStop(.35,"rgba(100,215,255,.34)");g.addColorStop(1,"rgba(120,225,255,0)");ctx.fillStyle=g;ctx.fillRect(0,0,band,cssH);
+        g=ctx.createLinearGradient(cssW,0,cssW-band,0);g.addColorStop(0,"rgba(35,180,255,.72)");g.addColorStop(.35,"rgba(100,215,255,.34)");g.addColorStop(1,"rgba(120,225,255,0)");ctx.fillStyle=g;ctx.fillRect(cssW-band,0,band,cssH);
+        ctx.globalAlpha=alpha;ctx.strokeStyle="rgba(180,238,255,.48)";ctx.lineWidth=Math.max(3,Math.min(cssW,cssH)*.008);ctx.strokeRect(3,3,cssW-6,cssH-6);
         const corners=[[12,12,1,1],[cssW-12,12,-1,1],[12,cssH-12,1,-1],[cssW-12,cssH-12,-1,-1]],branches=SV.Effects.isReduced()?2:4;ctx.strokeStyle="rgba(225,250,255,.86)";ctx.fillStyle="rgba(145,225,255,.2)";ctx.lineWidth=1.6;
         for(let c=0;c<corners.length;c++){const q=corners[c];ctx.save();ctx.translate(q[0],q[1]);ctx.scale(q[2],q[3]);for(let k=0;k<branches;k++){const ang=.18+k*.66/(branches-1),len=52+(k%2)*18,ux=Math.cos(ang),uy=Math.sin(ang),nx=-uy,ny=ux;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(ux*len,uy*len);ctx.stroke();for(let j=1;j<=2;j++){const d=len*(.38+j*.2),arm=10+j*3;ctx.beginPath();ctx.moveTo(ux*d,uy*d);ctx.lineTo(ux*(d-arm*.55)+nx*arm,uy*(d-arm*.55)+ny*arm);ctx.moveTo(ux*d,uy*d);ctx.lineTo(ux*(d-arm*.55)-nx*arm,uy*(d-arm*.55)-ny*arm);ctx.stroke();}ctx.beginPath();ctx.moveTo(ux*len,uy*len);ctx.lineTo(ux*(len-11)+nx*5,uy*(len-11)+ny*5);ctx.lineTo(ux*(len-16),uy*(len-16));ctx.lineTo(ux*(len-11)-nx*5,uy*(len-11)-ny*5);ctx.closePath();ctx.fill();}ctx.restore();}
         // 折射光只贴边铺开，避免左上角出现缺乏语义的整块蓝色斜面。
         ctx.globalAlpha*=.16;ctx.fillStyle="#9be7ff";
-        const band=Math.max(6,Math.min(cssW,cssH)*.018);
-        ctx.fillRect(0,0,cssW,band);ctx.fillRect(0,cssH-band,cssW,band);
-        ctx.fillRect(0,band,band,cssH-band*2);ctx.fillRect(cssW-band,band,band,cssH-band*2);
+        const rim=Math.max(8,Math.min(cssW,cssH)*.02);
+        ctx.fillRect(0,0,cssW,rim);ctx.fillRect(0,cssH-rim,cssW,rim);
+        ctx.fillRect(0,rim,rim,cssH-rim*2);ctx.fillRect(cssW-rim,rim,rim,cssH-rim*2);
       }else{
         const a=state._voidPullDir||0,dx=Math.cos(a),dy=Math.sin(a),px=-dy,py=dx,t=state.time||0,span=Math.hypot(cssW,cssH),cross=Math.min(cssW,cssH)*.58;
         // 平行粒子流沿实际牵引方向掠过屏幕，不再绘制具象引力核。

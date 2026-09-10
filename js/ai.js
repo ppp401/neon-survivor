@@ -46,7 +46,7 @@
       if (e.t1 <= 0 && d < 360) {
         e.t1 = 1.9;
         const spd = 230;
-        E.addEShot(SV.Game.state, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, e.projDmg, e.color, 6, "shooter");
+        if (E.canEnemyRanged(SV.Game.state, e)) E.addEShot(SV.Game.state, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, e.projDmg, e.color, 6, "shooter");
       }
     },
     bomber: function (e, p, dt) {
@@ -118,7 +118,7 @@
       else if (d > 420) { e.vx = Math.cos(a) * e.speed * 0.6; e.vy = Math.sin(a) * e.speed * 0.6; }
       else { e.vx *= 0.82; e.vy *= 0.82; }
       e.t1 -= dt;
-      if (e.t1 <= 0 && d < 480) { e.t1 = 3.4; e.flash = 0.2; const spd = 420; E.addEShot(SV.Game.state, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, e.projDmg, e.color, 7, "sniper"); }
+      if (e.t1 <= 0 && d < 480) { e.t1 = 3.4; e.flash = 0.2; const spd = 420; if (E.canEnemyRanged(SV.Game.state, e)) E.addEShot(SV.Game.state, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, e.projDmg, e.color, 7, "sniper"); }
     },
     regen: function (e, p, dt) {
       toPlayer(e, p, e.speed);
@@ -182,7 +182,7 @@
         }
         // 偶发:从两个偏移点各射一环(弹幕来源脱离体心)
         e.t3 = (e.t3 || 0) - dt;
-        if (e.t3 <= 0) { e.t3 = 4.5; const d = bossAttack(e, "projectile", 0); ringFrom(st, e.x - 50, e.y, 6, 150, d, e.color, 6, "architect"); ringFrom(st, e.x + 50, e.y, 6, 150, d, e.color, 6, "architect"); }
+        if (e.t3 <= 0) { e.t3 = 4.5; const d = bossAttack(e, "projectile", 0); ringFrom(st, e.x - 50, e.y, 6, 150, d, e.color, 6, "architect", e); ringFrom(st, e.x + 50, e.y, 6, 150, d, e.color, 6, "architect", e); }
       } else if (e.bossType === "queen") {
         toPlayer(e, p, e.speed);
         e.t1 -= dt; e.t2 -= dt;
@@ -201,7 +201,7 @@
           const ox = e.x, oy = e.y; // 传送前位置:留一环(弹幕脱离体心)
           e.x = p.x + Math.cos(ta) * tr; e.y = p.y + Math.sin(ta) * tr;
           e.flash = 0.25; SV.Effects.hit(e.x, e.y, e.color);
-          ringFrom(st, ox, oy, 10, 150, bossAttack(e, "projectile", 1), e.color, 6, "inquisitor");
+          ringFrom(st, ox, oy, 10, 150, bossAttack(e, "projectile", 1), e.color, 6, "inquisitor", e);
           spiralBurst(st, e, 12, 160, bossAttack(e, "projectile", 1), 7);
         }
         if (e.t2 <= 0) { e.t2 = 1.4; aimedSpread(st, e, p, 3, 0.3, 280, bossAttack(e, "projectile", 0)); }
@@ -210,7 +210,7 @@
         const pulling = e.cstate === "pull";
         if (!pulling) toPlayer(e, p, e.speed * 0.7);
         e.t1 -= dt; e.t2 -= dt;
-        if (e.t1 <= 0) { e.t1 = 6; e.cstate = "pull"; e.ct = 1.2; ringFrom(st, e.x, e.y, 12, 150, bossAttack(e, "projectile", 0), e.color, 6, "magnetwarper"); }
+        if (e.t1 <= 0) { e.t1 = 6; e.cstate = "pull"; e.ct = 1.2; ringFrom(st, e.x, e.y, 12, 150, bossAttack(e, "projectile", 0), e.color, 6, "magnetwarper", e); }
         if (e.cstate === "pull") {
           e.ct -= dt;
           e.vx = 0; e.vy = 0;
@@ -244,8 +244,8 @@
                 e.flash = 0.2; o.flash = 0.2;
                 SV.Effects.hit(e.x, e.y, e.color); SV.Effects.hit(o.x, o.y, o.color);
                 const rd = bossAttack(e, "projectile", 1);
-                ringFrom(st, e.x, e.y, 8, 150, rd, e.color, 6, "twins"); // 换位后两点各开一环
-                ringFrom(st, o.x, o.y, 8, 150, rd, o.color, 6, "twins");
+                ringFrom(st, e.x, e.y, 8, 150, rd, e.color, 6, "twins", e); // 换位后两点各开一环
+                ringFrom(st, o.x, o.y, 8, 150, rd, o.color, 6, "twins", o);
                 break;
               }
             }
@@ -264,8 +264,10 @@
           const px = p.x - e.x, py = p.y - e.y;
           const proj = px * dx + py * dy;
           const perp = Math.abs(-py * dx + px * dy);
-          if (proj > 0 && proj < 600 && perp < 16 + p.r) E.damagePlayer(st, bossAttack(e, "laser", 0) * dmgScale(st, e), false, "colossus");
-          SV.Weapons.beams.push({ pts: [[e.x, e.y], [e.x + dx * 600, e.y + dy * 600]], life: 0.08, max: 0.08, color: e.color, width: 14 });
+          if (E.canEnemyRanged(st, e)) {
+            if (proj > 0 && proj < 600 && perp < 16 + p.r) E.damagePlayer(st, bossAttack(e, "laser", 0) * dmgScale(st, e), false, "colossus");
+            SV.Weapons.beams.push({ pts: [[e.x, e.y], [e.x + dx * 600, e.y + dy * 600]], life: 0.08, max: 0.08, color: e.color, width: 14 });
+          }
           if (e.ct <= 0) e.cstate = "walk";
           e.t2 -= dt;
           if (e.t2 <= 0) {
@@ -283,23 +285,27 @@
   };
 
   function burst(st, e, n, spd, dmg, r) {
+    if (!E.canEnemyRanged(st, e)) return;
     const off = U.rand(0, U.TAU);
     const d = dmg * dmgScale(st, e), src = e.bossType || e.type;
     for (let k = 0; k < n; k++) { const a = off + k / n * U.TAU; E.addEShot(st, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, d, e.color, r, src); }
   }
   function aimedSpread(st, e, p, n, spreadRad, spd, dmg) {
+    if (!E.canEnemyRanged(st, e)) return;
     const base = U.angleTo(e.x, e.y, p.x, p.y);
     const d = dmg * dmgScale(st, e), src = e.bossType || e.type;
     for (let k = 0; k < n; k++) { const a = base + (k - (n - 1) / 2) * spreadRad; E.addEShot(st, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, d, e.color, 6, src); }
   }
   // 从任意点发射环形弹幕(非体心,增加弹幕来源多样性)。srcType 由调用方传入(Boss 体内或换位点等)
-  function ringFrom(st, x, y, n, spd, dmg, color, r, srcType) {
+  function ringFrom(st, x, y, n, spd, dmg, color, r, srcType, attacker) {
+    if (attacker && !E.canEnemyRanged(st, attacker)) return;
     const off = U.rand(0, U.TAU);
     const d = dmg * dmgScale(st, { bossType: srcType });
     for (let k = 0; k < n; k++) { const a = off + k / n * U.TAU; E.addEShot(st, x, y, Math.cos(a) * spd, Math.sin(a) * spd, d, color, r || 6, srcType || null); }
   }
   // 螺旋弹幕:每次发射旋转相位(e.sp 专用字段),多次发射绘出螺旋。n=每圈弹数
   function spiralBurst(st, e, n, spd, dmg, r) {
+    if (!E.canEnemyRanged(st, e)) return;
     const ph = e.sp || 0;
     const d = dmg * dmgScale(st, e), src = e.bossType || e.type;
     for (let k = 0; k < n; k++) { const a = ph + k / n * U.TAU; E.addEShot(st, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, d, e.color, r || 6, src); }

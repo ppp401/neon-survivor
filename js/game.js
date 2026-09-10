@@ -73,6 +73,7 @@
     s.ended = false;
     SV.Entities.invalidateMods(s);    // 清跨局残留的 mods 缓存
     const startW = resolveStartWeapon();
+    s.startWeaponId = startW;
     SV.Weapons.init(s, startW);
     s.everOwned = {}; s.everOwned[startW] = true; // 武器历史(记解析后的具体 id):防止融合/进化后被当新武器重发
     // 起手满血(含角色 hpMul)
