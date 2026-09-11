@@ -123,6 +123,29 @@
     const tgt = nearest(p.x, p.y, 99999);
     return tgt ? U.angleTo(p.x, p.y, tgt.x, tgt.y) : p.facing;
   }
+  // 多龙卷优先像导弹一样分头瞄准不同近敌；目标不足时改用明显的对称扇形。
+  function vortexAngles(state, p, count) {
+    const base = aimFrom(p);
+    if (count <= 1) return [base];
+    const angles = [], locked = {};
+    for (let k = 0; k < count; k++) {
+      let tgt = null, bd = 99999 * 99999;
+      for (let i = 0; i < state.enemies.length; i++) {
+        const e = state.enemies[i];
+        if (e.hp <= 0 || locked[e.id]) continue;
+        const d = U.dist2(p.x, p.y, e.x, e.y);
+        if (d < bd) { bd = d; tgt = e; }
+      }
+      if (!tgt) break;
+      locked[tgt.id] = true;
+      angles.push(U.angleTo(p.x, p.y, tgt.x, tgt.y));
+    }
+    if (angles.length === count) return angles;
+    angles.length = 0;
+    const spread = 1.0;
+    for (let k = 0; k < count; k++) angles.push(base + (k - (count - 1) / 2) * spread);
+    return angles;
+  }
   // 哨卫分头锁定:找最近且未被其他塔锁定的存活目标(locked 每帧重建)
   function nearestUnlocked(x, y, locked) {
     const st = SV.Game.state;
@@ -515,10 +538,10 @@
   // ── 龙卷风(游走投射物,吸敌 + 持续伤害)
   function fireVortex(state, w, def, s) {
     const p = state.player;
-    const base = aimFrom(p);
     const count = s.count || 1;
+    const angles = vortexAngles(state, p, count);
     for (let k = 0; k < count; k++) {
-      const ang = base + (count > 1 ? (k - (count - 1) / 2) * 0.5 : 0);
+      const ang = angles[k];
       const pr = mkProj();
       pr.x = p.x; pr.y = p.y;
       pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
@@ -1232,10 +1255,10 @@
   // 裂空风暴:龙卷聚怪 + 光束绕龙卷风旋转切割(连续 fire 弹体;光束独立伤害)
   function fusionLanceVortex(state, w, def, s) {
     const p = state.player;
-    const base = aimFrom(p);
     const count = s.count || 1;
+    const angles = vortexAngles(state, p, count);
     for (let k = 0; k < count; k++) {
-      const ang = base + (count > 1 ? (k - (count - 1) / 2) * 0.5 : 0);
+      const ang = angles[k];
       const pr = mkProj();
       pr.x = p.x; pr.y = p.y;
       pr.vx = Math.cos(ang) * s.speed; pr.vy = Math.sin(ang) * s.speed;
@@ -1511,18 +1534,20 @@
     beams.push({ pts: [[p.x, p.y], [p.x + dx * s.length, p.y + dy * s.length]], life: 0.18, max: 0.18, color: def.color, width: 9, weaponId: w.id, visualStyle: "rail" });
     SV.Audio.shoot();
   }
-  function makeFusionVortex(state, w, def, s, k) {
-    const p = state.player, base = aimFrom(p), a = base + (k - (s.count - 1) / 2) * 0.5;
+  function makeFusionVortex(state, w, def, s, a) {
+    const p = state.player;
     const pr = mkProj(); pr.x = p.x; pr.y = p.y; pr.vx = Math.cos(a) * s.speed; pr.vy = Math.sin(a) * s.speed;
     pr.r = 12; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
     pr.vortex = true; pr.vrad = s.radius; pr.pull = s.pull; pr.vtick = 0; pr.weaponId = w.id; return pr;
   }
   function fusionVortexMeteor(state, w, def, s) {
-    for (let k = 0; k < s.count; k++) { const pr = makeFusionVortex(state, w, def, s, k); pr.vortexBurn = s.burn; pr.burnR = s.burnR; pr.burnDur = s.burnDur; pr.burnEvery = s.trailTick; pr.btick = 0; }
+    const angles = vortexAngles(state, state.player, s.count);
+    for (let k = 0; k < s.count; k++) { const pr = makeFusionVortex(state, w, def, s, angles[k]); pr.vortexBurn = s.burn; pr.burnR = s.burnR; pr.burnDur = s.burnDur; pr.burnEvery = s.trailTick; pr.btick = 0; }
     SV.Audio.shoot();
   }
   function fusionVortexDetonate(state, w, def, s) {
-    for (let k = 0; k < s.count; k++) { const pr = makeFusionVortex(state, w, def, s, k); pr.vortexBomb = true; pr.captures = {}; pr.captureMax = s.captureMax; pr.boomBase = s.boomBase; pr.boomPer = s.boomPer; pr.boomR = s.boomR; pr.boomRPer = s.boomRPer; }
+    const angles = vortexAngles(state, state.player, s.count);
+    for (let k = 0; k < s.count; k++) { const pr = makeFusionVortex(state, w, def, s, angles[k]); pr.vortexBomb = true; pr.captures = {}; pr.captureMax = s.captureMax; pr.boomBase = s.boomBase; pr.boomPer = s.boomPer; pr.boomR = s.boomR; pr.boomRPer = s.boomRPer; }
     SV.Audio.shoot();
   }
   function fusionShockwavePolymorph(state, w, def, s) {

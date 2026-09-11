@@ -55,7 +55,7 @@
     const curHp = cur.hp;
     let html = '<div class="ars-row" style="flex-direction:column;align-items:flex-start;gap:2px">';
     html += '<div style="display:flex;width:100%;justify-content:space-between;align-items:center">';
-    html += '<span><canvas class="ars-ic" width="22" height="22" data-shape="' + (def.shape || "circle") + '" data-color="' + def.color + '"></canvas><span class="ars-name">' + def.name + "</span></span>";
+    html += '<span><canvas class="ars-ic" width="22" height="22" data-shape="' + (def.shape || "circle") + '" data-color="' + def.color + '" data-pattern="' + (def.pattern || "") + '" data-boss="' + (isBoss ? "1" : "0") + '"></canvas><span class="ars-name">' + def.name + "</span></span>";
     html += '<span class="ars-lv">HP ' + fmtNum(initHp) + "→" + fmtNum(curHp) + " · " + (isBoss ? bossDmgSegs(def, cur) : enemyDmgSegs(def, cur)) + " · 经验 " + (cur.xp || def.xp) + "</span>";
     html += "</div>";
     let eff = def.skill || "";
@@ -85,6 +85,10 @@
       const shape = cv.getAttribute("data-shape") || "circle";
       const color = cv.getAttribute("data-color") || "#fff";
       if (ctx.clearRect) ctx.clearRect(0, 0, 22, 22);
+      if (SV.Renderer && SV.Renderer.drawEnemyPortrait) {
+        SV.Renderer.drawEnemyPortrait(ctx, { shape:shape, color:color, pattern:cv.getAttribute("data-pattern") || "" }, 11, 11, 7, { boss:cv.getAttribute("data-boss") === "1", reduced:true });
+        continue;
+      }
       ctx.fillStyle = color; ctx.strokeStyle = "rgba(0,0,0,0.5)"; ctx.lineWidth = 1.5;
       if (SV.Renderer && SV.Renderer.drawShapePath) {
         SV.Renderer.drawShapePath(ctx, 11, 11, 7, shape);

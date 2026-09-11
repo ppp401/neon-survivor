@@ -66,6 +66,50 @@
     }
   }
 
+  // 克制的内部纹章：只用细线/小圆，不改变敌人的基础几何轮廓。
+  function drawEnemyPattern(g, x, y, r, pattern, time, reduced, boss) {
+    if (!pattern) return;
+    const pulse = reduced ? 1 : 0.88 + 0.12 * Math.sin((time || 0) * 2.4);
+    const rot = (!reduced && boss) ? (time || 0) * 0.18 : 0;
+    g.save(); g.translate(x, y); if (rot) g.rotate(rot);
+    g.globalAlpha = (boss ? 0.76 : 0.58) * pulse;
+    g.strokeStyle = "rgba(255,255,255,0.92)"; g.fillStyle = "rgba(255,255,255,0.86)";
+    g.lineWidth = Math.max(1, r * (boss ? 0.075 : 0.085));
+    g.lineCap = "round"; g.lineJoin = "round";
+    function line(a,b,c,d){g.beginPath();g.moveTo(a*r,b*r);g.lineTo(c*r,d*r);g.stroke();}
+    function dot(a,b,s){g.beginPath();g.arc(a*r,b*r,r*s,0,U.TAU);g.fill();}
+    function poly(n, rr, phase){g.beginPath();for(let k=0;k<n;k++){const a=(phase||0)+k*U.TAU/n,px=Math.cos(a)*r*rr,py=Math.sin(a)*r*rr;k?g.lineTo(px,py):g.moveTo(px,py);}g.closePath();g.stroke();}
+    if(pattern==="barrel"){line(-.34,0,.28,0);dot(.36,0,.1);}
+    else if(pattern==="sight"){line(-.46,0,.46,0);line(0,-.22,0,.22);dot(0,0,.07);}
+    else if(pattern==="crack"){line(-.12,-.45,.03,-.12);line(.03,-.12,-.24,.18);line(.03,-.12,.3,.26);}
+    else if(pattern==="cells"||pattern==="honey"){const n=pattern==="honey"?6:3;for(let k=0;k<n;k++){const a=k*U.TAU/n;dot(Math.cos(a)*.3,Math.sin(a)*.3,pattern==="honey"?.085:.11);}}
+    else if(pattern==="chevron"){g.beginPath();g.moveTo(-r*.38,-r*.22);g.lineTo(0,r*.18);g.lineTo(r*.38,-r*.22);g.stroke();}
+    else if(pattern==="inner_hex"){poly(6,.43,0);}
+    else if(pattern==="double_hex"){poly(6,.5,0);poly(6,.27,Math.PI/6);}
+    else if(pattern==="plus"){line(-.34,0,.34,0);line(0,-.34,0,.34);}
+    else if(pattern==="trident"){line(0,.4,0,-.34);line(0,-.12,-.28,-.36);line(0,-.12,.28,-.36);}
+    else if(pattern==="broken"){line(-.38,.28,-.08,.02);line(.08,-.02,.38,-.28);}
+    else if(pattern==="crown"){g.beginPath();g.moveTo(-r*.45,r*.2);g.lineTo(-r*.34,-r*.28);g.lineTo(0,r*.02);g.lineTo(r*.34,-r*.28);g.lineTo(r*.45,r*.2);g.closePath();g.stroke();}
+    else if(pattern==="crescent"){g.beginPath();g.arc(-r*.05,0,r*.4,-1.15,1.15);g.quadraticCurveTo(-r*.12,0,-r*.05,-r*.36);g.stroke();}
+    else if(pattern==="poles"){line(-.42,0,.42,0);dot(-.42,0,.12);g.beginPath();g.arc(r*.42,0,r*.12,0,U.TAU);g.stroke();}
+    else if(pattern==="split"){line(0,-.52,0,.52);dot(-.25,0,.09);g.beginPath();g.arc(r*.25,0,r*.09,0,U.TAU);g.stroke();}
+    else if(pattern==="nodes"){for(let k=0;k<4;k++){const a=Math.PI/4+k*Math.PI/2;line(0,0,Math.cos(a)*.46,Math.sin(a)*.46);dot(Math.cos(a)*.46,Math.sin(a)*.46,.075);}}
+    else if(pattern==="judge"){line(-.38,0,.38,0);line(0,-.46,0,.46);g.beginPath();g.ellipse(0,0,r*.2,r*.11,0,0,U.TAU);g.stroke();dot(0,0,.055);}
+    else if(pattern==="reactor"){g.beginPath();g.arc(0,0,r*.22,0,U.TAU);g.stroke();g.beginPath();g.arc(0,0,r*.45,0,U.TAU);g.stroke();for(let k=0;k<6;k++){const a=k*U.TAU/6;line(Math.cos(a)*.25,Math.sin(a)*.25,Math.cos(a)*.42,Math.sin(a)*.42);}}
+    g.restore();
+  }
+
+  function drawEnemyPortrait(g, def, x, y, r, options) {
+    if (!def) return;
+    const o = options || {}, col = o.frozen ? "#cfefff" : def.color;
+    g.save(); g.fillStyle = col; g.strokeStyle = "rgba(0,0,0,0.45)"; g.lineWidth = Math.max(1, r * 0.15);
+    drawShapePath(g, x, y, r, def.shape || "circle"); g.fill(); g.stroke();
+    g.save(); drawShapePath(g, x, y, Math.max(0, r - 1), def.shape || "circle"); g.clip();
+    g.globalCompositeOperation = "lighter"; g.globalAlpha = 0.38; g.fillStyle = "#ffffff";
+    g.beginPath(); g.ellipse(x-r*.28,y-r*.3,r*.28,r*.14,-.55,0,U.TAU); g.fill(); g.restore();
+    drawEnemyPattern(g,x,y,r,def.pattern,o.time,o.reduced,!!o.boss); g.restore();
+  }
+
   function makeGrid() {
     const S = C.CELL;
     const cv = document.createElement("canvas"); cv.width = S; cv.height = S;
@@ -429,9 +473,8 @@
           ctx.fillStyle = e.color;
           ctx.beginPath(); ctx.arc(e.x + rr * 0.5, e.y - rr * 0.5, rr * 0.32, 0, U.TAU); ctx.fill();
         } else {
-          const col = e.frozen > 0 ? "#cfefff" : e.color;
-          ctx.fillStyle = col; ctx.strokeStyle = "rgba(0,0,0,0.45)"; ctx.lineWidth = 2;
-          drawShapePath(ctx, e.x, e.y, e.r, e.shape); ctx.fill(); ctx.stroke();
+          const def = e.isBoss ? SV.Config.BOSSES[e.bossType] : SV.Config.ENEMIES[e.type];
+          drawEnemyPortrait(ctx, def || e, e.x, e.y, e.r, { boss:e.isBoss, frozen:e.frozen>0, time:state.time, reduced:SV.Effects.isReduced() });
         }
         ctx.restore();
         // 光环(盾卫/祭司/狂热者):淡填充 + 虚线环
@@ -443,10 +486,7 @@
           ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.arc(e.x, e.y, e.auraR, 0, U.TAU); ctx.stroke(); ctx.setLineDash([]);
           ctx.restore();
         }
-        // 内核高光
-        ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.5;
-        ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(e.x - e.r * 0.3, e.y - e.r * 0.3, e.r * 0.3, 0, U.TAU); ctx.fill();
-        ctx.restore();
+        // 内核高光已由 drawEnemyPortrait 裁切在几何轮廓内；羊形态不叠加敌人高光。
         // ghost 高价值提示:金色正弦闪烁(一眼看出是奖励目标)
         if (e.shimmer) {
           const sh = 0.5 + 0.5 * Math.sin(state.time * 8 + e.id);
@@ -854,4 +894,5 @@
 
   SV.Renderer = Renderer;
   SV.Renderer.drawShapePath = drawShapePath; // 供 menus 怪物图鉴绘制真实形状
+  SV.Renderer.drawEnemyPortrait = drawEnemyPortrait;
 })();

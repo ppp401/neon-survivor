@@ -53,9 +53,9 @@
     return (ch && ch.mechanics) || {};
   }
 
-  // 角色固有直伤技能：前期保持线性，超过软上限后转为平方根成长，抑制长局等级膨胀。
-  function characterSkillLevel(level) {
-    const n = Math.max(0, level || 0), cap = C.CHAR_SKILL_LEVEL_SOFTCAP;
+  // 磁芯的触发频率会随经验/怪量自然成长，所以仅它的直伤等级超过阈值后转为平方根成长。
+  function collectorSkillLevel(level, cap) {
+    const n = Math.max(0, level || 0);
     return n <= cap ? n : Math.sqrt(cap * n);
   }
 
@@ -275,7 +275,7 @@
     if (!targets.length) return;
     const n = Math.min(crystals, targets.length);
     const radius = (mech.radius || 28) * m.areaMul;
-    const damage = ((mech.damageBase == null ? 10 : mech.damageBase) + (mech.damagePerLevel == null ? 0.9 : mech.damagePerLevel) * characterSkillLevel(state.level)) * m.damageMul;
+    const damage = ((mech.damageBase == null ? 10 : mech.damageBase) + (mech.damagePerLevel == null ? 0.9 : mech.damagePerLevel) * collectorSkillLevel(state.level, mech.levelSoftcap || 15)) * m.damageMul;
     for (let i = 0; i < crystals; i++) {
       const t = targets[i % n];
       if (t) burstSpecial(state, t.x, t.y, radius, damage, "#ffd86b", "collector");
@@ -346,7 +346,7 @@
           ghosts[i].delay -= dt;
           if (ghosts[i].delay <= 0) {
             const radius = (mech.radius || 70) * m.areaMul;
-            const damage = ((mech.damageBase == null ? 14 : mech.damageBase) + (mech.damagePerLevel == null ? 0.7 : mech.damagePerLevel) * characterSkillLevel(state.level)) * m.damageMul;
+            const damage = ((mech.damageBase == null ? 14 : mech.damageBase) + (mech.damagePerLevel == null ? 0.7 : mech.damagePerLevel) * Math.max(0, state.level || 0)) * m.damageMul;
             burstSpecial(state, ghosts[i].x, ghosts[i].y, radius, damage, "#73dcff", "phantom"); ghosts.splice(i, 1);
           }
         }

@@ -1,33 +1,56 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="42%" r="72%">
-      <stop offset="0" stop-color="#1a1240"/>
-      <stop offset="1" stop-color="#070611"/>
+    <radialGradient id="bg" cx="55%" cy="56%" r="76%">
+      <stop offset="0" stop-color="#171d44"/><stop offset=".62" stop-color="#0b0e22"/><stop offset="1" stop-color="#03050b"/>
     </radialGradient>
-    <radialGradient id="glow" cx="50%" cy="50%" r="42%">
-      <stop offset="0" stop-color="#5ad1ff" stop-opacity="0.95"/>
-      <stop offset="0.45" stop-color="#c06bff" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="#000" stop-opacity="0"/>
-    </radialGradient>
-    <filter id="blur" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="6"/>
+    <filter id="playerGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="10" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
+    <filter id="redGlow" x="-55%" y="-55%" width="210%" height="210%">
+      <feFlood flood-color="#f04467" result="color"/><feComposite in="color" in2="SourceAlpha" operator="in" result="mask"/><feGaussianBlur in="mask" stdDeviation="19" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="purpleGlow" x="-55%" y="-55%" width="210%" height="210%">
+      <feFlood flood-color="#a653ed" result="color"/><feComposite in="color" in2="SourceAlpha" operator="in" result="mask"/><feGaussianBlur in="mask" stdDeviation="19" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="greenGlow" x="-55%" y="-55%" width="210%" height="210%">
+      <feFlood flood-color="#7dd87a" result="color"/><feComposite in="color" in2="SourceAlpha" operator="in" result="mask"/><feGaussianBlur in="mask" stdDeviation="19" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="blueGlow" x="-55%" y="-55%" width="210%" height="210%">
+      <feFlood flood-color="#5ad1ff" result="color"/><feComposite in="color" in2="SourceAlpha" operator="in" result="mask"/><feGaussianBlur in="mask" stdDeviation="19" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="plate"><rect width="512" height="512" rx="104"/></clipPath>
   </defs>
-  <rect width="512" height="512" rx="92" ry="92" fill="url(#bg)"/>
-  <rect width="512" height="512" fill="url(#glow)"/>
-  <g transform="translate(256 256)">
-    <g opacity="0.9" filter="url(#blur)">
-      <circle r="52" fill="#fff"/>
+
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+
+  <!-- 四个巨大几何敌人从画面边缘压入。 -->
+  <g clip-path="url(#plate)">
+    <!-- 上方六边怪 -->
+    <g transform="translate(304 8) rotate(96) scale(1.1)" filter="url(#blueGlow)">
+      <path d="M95 0 48 82-48 82-95 0-48-82 48-82Z" fill="#5ad1ff"/>
     </g>
-    <circle r="44" fill="#ffffff"/>
-    <circle r="44" fill="none" stroke="#5ad1ff" stroke-width="3" opacity="0.7"/>
-    <g>
-      <polygon points="0,-176 17,-112 -17,-112" fill="#5ad1ff"/>
-      <polygon points="152.4,-88 99.8,-50.8 81.4,-82.6" fill="#c06bff"/>
-      <polygon points="152.4,88 81.4,82.6 99.8,50.8" fill="#5ad1ff"/>
-      <polygon points="0,176 -17,112 17,112" fill="#c06bff"/>
-      <polygon points="-152.4,88 -99.8,50.8 -81.4,82.6" fill="#5ad1ff"/>
-      <polygon points="-152.4,-88 -81.4,-82.6 -99.8,-50.8" fill="#c06bff"/>
+
+    <!-- 左侧圆形怪 -->
+    <g transform="translate(6 200) rotate(7) scale(1.1)" filter="url(#greenGlow)">
+      <circle r="94" fill="#7dd87a"/>
     </g>
+
+    <!-- 右侧三角怪 -->
+    <g transform="translate(522 287) rotate(187) scale(1.08)" filter="url(#redGlow)">
+      <path d="M112 0-72 98-72-98Z" fill="#ef3e61"/>
+    </g>
+
+    <!-- 左下方方形怪 -->
+    <g transform="translate(174 528) rotate(-39) scale(1.1)" filter="url(#purpleGlow)">
+      <rect x="-79" y="-79" width="158" height="158" rx="13" fill="#9148dc"/>
+    </g>
+  </g>
+
+  <!-- 全能者：游戏内 circle 外形、白色 core 与朝向线。 -->
+  <g transform="translate(269 287)" filter="url(#playerGlow)">
+    <circle r="75" fill="#b8c6ff" stroke="#fff" stroke-width="9"/>
+    <circle r="34" fill="#fff"/>
+    <circle r="13" fill="#dce5ff"/>
+    <path d="M0 0 67 53" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
   </g>
 </svg>
