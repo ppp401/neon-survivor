@@ -36,6 +36,15 @@
     return g;
   }
 
+  // 将角色色向白色提亮，供玩家朝向箭头复用本体的霓虹层次。
+  function brighten(color, amount) {
+    const m = /^#([0-9a-f]{6})$/i.exec(color || "");
+    if (!m) return color;
+    const n = parseInt(m[1], 16), t = amount == null ? 0.25 : amount;
+    function ch(v) { return Math.round(v + (255 - v) * t).toString(16).padStart(2, "0"); }
+    return "#" + ch((n >> 16) & 255) + ch((n >> 8) & 255) + ch(n & 255);
+  }
+
   // 按形状构造路径(以 r 缩放)。敌人/玩家外观统一走这里。
   function drawShapePath(ctx, x, y, r, shape) {
     ctx.beginPath();
@@ -773,16 +782,22 @@
         const ch = SV.Config.CHARACTERS[state.charId] || {};
         const app = ch.appearance || { shape: "circle" };
         const pcol = ch.color || COL.player;
+        // 玩家轮廓默认朝上；整体转到 facing，使非圆形角色、装饰与前缘箭头保持固定相对位置。
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.facing + Math.PI / 2);
         ctx.fillStyle = pcol; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2;
-        drawShapePath(ctx, p.x, p.y, p.r, app.shape); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = COL.playerCore; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.45, 0, U.TAU); ctx.fill();
+        drawShapePath(ctx, 0, 0, p.r, app.shape); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = COL.playerCore; ctx.beginPath(); ctx.arc(0, 0, p.r * 0.45, 0, U.TAU); ctx.fill();
         this._drawCharDeco(state, app.deco);
-        // 朝向指示
-        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(p.facing) * p.r * 1.7, p.y + Math.sin(p.facing) * p.r * 1.7); ctx.stroke();
+        // 朝向指示：钝角折线沿人物外圈展开，辉光/白边/亮色内芯复用角色本体的视觉层次。
+        ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.42;
+        ctx.drawImage(glow(pcol), -p.r * 0.36, -p.r * 1.82, p.r * 0.72, p.r * 0.72); ctx.restore();
+        ctx.globalAlpha = 0.98; ctx.lineCap = "round"; ctx.lineJoin = "round";
+        ctx.beginPath(); ctx.moveTo(-p.r * 0.23, -p.r * 1.30); ctx.lineTo(0, -p.r * 1.54); ctx.lineTo(p.r * 0.23, -p.r * 1.30);
+        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 4; ctx.stroke();
+        ctx.strokeStyle = brighten(pcol, 0.25); ctx.lineWidth = 2.2; ctx.stroke(); ctx.restore();
       }
       // 玩家头顶血条(常驻)
-      const bw = p.r * 2.4, bx = p.x - bw / 2, by = p.y - p.r - 11;
+      const bw = p.r * 2.4, bx = p.x - bw / 2, by = p.y - p.r - 15;
       const hpPct = U.clamp(p.hp / p.maxHp, 0, 1);
       ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
       ctx.fillStyle = hpPct < 0.3 ? "#ff3d5a" : "#ff7d8e"; ctx.fillRect(bx, by, bw * hpPct, 4);
@@ -865,28 +880,25 @@
       ctx.save(); ctx.globalCompositeOperation = "lighter";
       if (deco === "ring") {
         ctx.globalAlpha = 0.5; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 1.3, 0, U.TAU); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, p.r * 1.3, 0, U.TAU); ctx.stroke();
       } else if (deco === "spark") {
         ctx.globalAlpha = 0.6; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(p.x - p.r, p.y); ctx.lineTo(p.x + p.r, p.y); ctx.moveTo(p.x, p.y - p.r); ctx.lineTo(p.x, p.y + p.r); ctx.stroke();
-      } else if (deco === "arrow") {
-        ctx.globalAlpha = 0.5; ctx.fillStyle = "#ffffff";
-        ctx.beginPath(); ctx.arc(p.x + Math.cos(p.facing) * p.r * 0.7, p.y + Math.sin(p.facing) * p.r * 0.7, p.r * 0.22, 0, U.TAU); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-p.r, 0); ctx.lineTo(p.r, 0); ctx.moveTo(0, -p.r); ctx.lineTo(0, p.r); ctx.stroke();
       } else if (deco === "dagger") {
         ctx.globalAlpha = 0.5; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5;
-        for (let k = 0; k < 4; k++) { const a = k * U.TAU / 4; ctx.beginPath(); ctx.moveTo(p.x + Math.cos(a) * p.r * 0.5, p.y + Math.sin(a) * p.r * 0.5); ctx.lineTo(p.x + Math.cos(a) * p.r, p.y + Math.sin(a) * p.r); ctx.stroke(); }
+        for (let k = 0; k < 4; k++) { const a = k * U.TAU / 4; ctx.beginPath(); ctx.moveTo(Math.cos(a) * p.r * 0.5, Math.sin(a) * p.r * 0.5); ctx.lineTo(Math.cos(a) * p.r, Math.sin(a) * p.r); ctx.stroke(); }
       } else if (deco === "magnet") {
         ctx.globalAlpha = 0.4; ctx.strokeStyle = "#ffd86b"; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 1.5, 0, U.TAU); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, p.r * 1.5, 0, U.TAU); ctx.stroke();
       } else if (deco === "rage") {
         ctx.globalAlpha = 0.6; ctx.strokeStyle = "#ff3d5a"; ctx.lineWidth = 2;
-        drawShapePath(ctx, p.x, p.y, p.r * 1.15, "square"); ctx.stroke();
+        drawShapePath(ctx, 0, 0, p.r * 1.15, "square"); ctx.stroke();
       } else if (deco === "clock") {
         ctx.globalAlpha = 0.5; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1;
-        for (let k = 0; k < 6; k++) { const a = k * U.TAU / 6; ctx.beginPath(); ctx.moveTo(p.x + Math.cos(a) * p.r * 0.8, p.y + Math.sin(a) * p.r * 0.8); ctx.lineTo(p.x + Math.cos(a) * p.r, p.y + Math.sin(a) * p.r); ctx.stroke(); }
+        for (let k = 0; k < 6; k++) { const a = k * U.TAU / 6; ctx.beginPath(); ctx.moveTo(Math.cos(a) * p.r * 0.8, Math.sin(a) * p.r * 0.8); ctx.lineTo(Math.cos(a) * p.r, Math.sin(a) * p.r); ctx.stroke(); }
       } else if (deco === "core") {
         ctx.globalAlpha = 0.5; ctx.fillStyle = "#ffffff";
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.3, 0, U.TAU); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, p.r * 0.3, 0, U.TAU); ctx.fill();
       }
       ctx.restore();
     }

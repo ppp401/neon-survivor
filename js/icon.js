@@ -46,16 +46,21 @@
     monster(ctx,304*s,8*s,105*s,"hex","#5ad1ff",96*Math.PI/180);
     monster(ctx,6*s,200*s,103*s,"circle","#7dd87a",7*Math.PI/180);
     monster(ctx,522*s,287*s,121*s,"triangle","#ef3e61",187*Math.PI/180);
-    monster(ctx,174*s,528*s,87*s,"square","#9148dc",-39*Math.PI/180);
+    monster(ctx,174*s,510*s,87*s,"square","#9148dc",-39*Math.PI/180);
     ctx.restore();
 
-    // 全能者贴图:circle + 白色 core + facing，仅玩家保留辉光。
-    const px=269*s,py=287*s;
+    // 全能者贴图:居中 circle + 白色 core + 悬浮霓虹折线箭头，并保留游戏内的柔和辉光。
+    const px=256*s,py=256*s;
+    const halo=ctx.createRadialGradient(px,py,38*s,px,py,142*s);
+    halo.addColorStop(0,"rgba(121,237,255,.46)");halo.addColorStop(.48,"rgba(121,237,255,.2)");halo.addColorStop(1,"rgba(121,237,255,0)");
+    ctx.fillStyle=halo;ctx.beginPath();ctx.arc(px,py,142*s,0,Math.PI*2);ctx.fill();
     ctx.save();ctx.shadowColor="#79edff";ctx.shadowBlur=21*s;ctx.fillStyle="#b8c6ff";ctx.strokeStyle="#fff";ctx.lineWidth=9*s;
     ctx.beginPath();ctx.arc(px,py,75*s,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
     ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(px,py,34*s,0,Math.PI*2);ctx.fill();
     ctx.fillStyle="#dce5ff";ctx.beginPath();ctx.arc(px,py,13*s,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle="#fff";ctx.lineWidth=10*s;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(336*s,340*s);ctx.stroke();ctx.restore();
+    const a=Math.atan2(53,67)+15*Math.PI/180,ux=Math.cos(a),uy=Math.sin(a),nx=-uy,ny=ux;
+    const p1=[px+ux*97.5*s+nx*17.25*s,py+uy*97.5*s+ny*17.25*s],p2=[px+ux*115.5*s,py+uy*115.5*s],p3=[px+ux*97.5*s-nx*17.25*s,py+uy*97.5*s-ny*17.25*s];
+    ctx.lineCap="round";ctx.lineJoin="round";ctx.beginPath();ctx.moveTo(p1[0],p1[1]);ctx.lineTo(p2[0],p2[1]);ctx.lineTo(p3[0],p3[1]);ctx.shadowColor="#b8c6ff";ctx.shadowBlur=12*s;ctx.strokeStyle="#fff";ctx.lineWidth=10*s;ctx.stroke();ctx.shadowBlur=0;ctx.strokeStyle="#cad4ff";ctx.lineWidth=6*s;ctx.stroke();ctx.restore();
 
     try{return cv.toDataURL("image/png");}catch(e){return "";}
   }
