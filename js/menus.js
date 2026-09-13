@@ -20,9 +20,9 @@
     const k = SV.Entities.tid(wid);
     const total = (state.weaponDamage && state.weaponDamage[k]) || 0;
     const active = (state.weaponActive && state.weaponActive[k]) || 0;
-    return { total: total, perMin: active > 0 ? total / active * 60 : 0 };
+    return { total: total, perMin: active > 0 ? total / active * 60 : 0, recent: SV.Entities.weaponRecentDamage(state, k) };
   }
-  // 怪物图鉴条目(本局已遇)。敌人展示初始→当前值,8min 后额外标精英变异倍率。dmgToMe: {total, perMin} 或 null
+  // 怪物图鉴条目(本局已遇)。敌人展示初始→当前值。dmgToMe: {total} 或 null
   // 伤害分项标注:接触 / 自爆 / 弹幕·狙击 / 毒径 各列各的(特殊机制伤害与接触伤害分开)
   function enemyDmgSegs(def, cur) {
     const isBomber = def.ai === "bomber";
@@ -59,12 +59,9 @@
     html += '<span class="ars-lv">HP ' + fmtNum(initHp) + "→" + fmtNum(curHp) + " · " + (isBoss ? bossDmgSegs(def, cur) : enemyDmgSegs(def, cur)) + " · 经验 " + (cur.xp || def.xp) + "</span>";
     html += "</div>";
     let eff = def.skill || "";
-    if (withElite) eff += " · <span style='color:#ffd86b'>精英变异:HP×4 / 伤×1.5 / 体型×1.4</span>";
-    // 对玩家伤害统计:Boss 显示总伤;普通敌显示总伤 + 每分钟(自首次出现起算)
+    // 对玩家伤害统计:普通敌与 Boss 均只显示累计总伤。
     if (dmgToMe && dmgToMe.total > 0) {
-      const seg = isBoss
-        ? "对玩家 总伤 " + fmtNum(dmgToMe.total)
-        : "对玩家 总伤 " + fmtNum(dmgToMe.total) + " · " + fmtNum(dmgToMe.perMin) + "/min";
+      const seg = "对玩家 总伤 " + fmtNum(dmgToMe.total);
       eff += " · <span style='color:#ff8a8a'>" + seg + "</span>";
     }
     html += '<span class="ars-eff" style="font-size:11px">' + eff + "</span>";
@@ -431,7 +428,7 @@
           (trait ? '<span class="ars-trait">' + trait + "</span>" : "") +
           '<span class="ars-lv">Lv ' + w.level + "/" + def.max + "</span>" +
           '<span class="ars-eff">' + SV.Upgrades.summary(w, state) + "</span>" +
-          (dm.total > 0 ? '<span class="ars-dmg">⚔ ' + fmtNum(dm.total) + " · " + fmtNum(dm.perMin) + "/min</span>" : "") +
+          (dm.total > 0 ? '<span class="ars-dmg">⚔ 总' + fmtNum(dm.total) + "，" + fmtNum(dm.perMin) + "/min" + (dm.recent == null ? "" : "，最近" + fmtNum(dm.recent) + "/min") + "</span>" : "") +
           "</div>";
       }
       html += "</div>";
@@ -458,7 +455,8 @@
       html += statTile("减伤", "-" + Math.round((1 - m.armorMul) * 100) + "%");
       html += statTile("再生", Number(m.regen).toFixed(1) + "/s");
       html += statTile("暴击", Math.round(m.critChance * 100) + "%");
-      html += statTile("吸血·秒回≤5%", Math.round(m.lifesteal * 100) + "%");
+      html += statTile("吸血", (Math.round(m.lifesteal * 1000) / 10) + "%");
+      html += statTile("吸血秒回上限", (Math.round(m.lifesteal * 1000) / 10) + "%最大生命/s");
       html += statTile("拾取", pct(m.pickupMul - 1));
       html += statTile("经验", pct(m.xpMul - 1));
       html += statTile("幸运", pct(m.luck));
@@ -471,16 +469,9 @@
       let encN = 0;
       for (const k in enc.enemy) if (enc.enemy[k] != null) encN++;
       for (const k in enc.boss) if (enc.boss[k] != null) encN++;
-      // 计算某 id 的"对玩家每分钟伤害"(自首次出现起算)。firstSeen=首次遇敌秒数,cur=state.time 秒
-      function dmgToMe(id, firstSeen) {
-        const total = edmg[id] || 0;
-        let perMin = 0;
-        const fs = Number(firstSeen) || 0;
-        if (fs > 0 && state.time > fs) perMin = total / ((state.time - fs) / 60);
-        return { total: total, perMin: perMin };
-      }
+      function dmgToMe(id) { return { total: edmg[id] || 0 }; }
       if (encN > 0) {
-        html += '<div class="ars-section"><div class="ars-title">怪物图鉴 · 本局 ' + encN + ' 种' + (showElite ? '(已现精英变异)' : "") + '</div>';
+        html += '<div class="ars-section"><div class="ars-title">怪物图鉴 · 本局 ' + encN + ' 种' + (showElite ? '（已现精英变异：HP×4 / 伤×1.5 / 体型×1.4）' : "") + '</div>';
         for (const id in enc.boss) {
           if (enc.boss[id] == null) continue;
           const def = SV.Config.BOSSES[id]; if (!def) continue;

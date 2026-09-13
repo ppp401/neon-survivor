@@ -26,7 +26,15 @@
     GEM_PULL_NEAR_K: 10,    // 经验球近场牵引速度系数(速度 = d * K,随距离线性衰减防过冲)
     IFRAME: 0.85, // 受击无敌秒数
     REGEN_INTERVAL: 1, // 回血结算间隔
-    LIFESTEAL_CAP: 0.05, // 吸血每秒回血上限(占最大生命比例)。属性上限仍 10%,治疗上限降到 5%/s 以防后期站撸
+    // 吸血属性采用指数收敛；当前吸血率也直接作为每秒回血预算占最大生命的比例。
+    LIFESTEAL_FIRST: 0.009,
+    LIFESTEAL_ATTR_CAP: 0.075,
+    // 闪烁者：一个周期的最后 BLINK_WARN 秒锁定并预警落点。
+    BLINK_WARN: 0.6,
+    BLINK_PERIOD_MIN: 1.6,
+    BLINK_PERIOD_MAX: 2.4,
+    BLINK_DISTANCE: 180,
+    BLINK_GAP: 40,
     // 无尽模式
     ENDLESS_BOSS_EVERY: 60, // 无尽模式 Boss 波间隔(秒)= 1min(且 Boss 不掉宝箱)
     ENDLESS_HP_PER_MIN: 0.18, // 无尽模式每分钟额外敌血倍率
@@ -153,7 +161,7 @@
       tags: ["melee"],
       stats: function (lv) {
         // 伤害频率(tick)在 weapons.js 受冷却缩减影响(仅光环系)
-        return { damage: 7 + (lv - 1) * 1.6, radius: 65 + (lv - 1) * 12, tick: Math.max(0.11, 0.42 - (lv - 1) * 0.045) };
+        return { damage: 6.3 + (lv - 1) * 1.44, radius: 65 + (lv - 1) * 12, tick: Math.max(0.11, 0.42 - (lv - 1) * 0.045) };
       }
     },
     shotgun: {
@@ -170,8 +178,7 @@
       desc: "周期性冰爆,减速范围内敌人。",
       tags: ["spell"],
       stats: function (lv) {
-        // 伤害中幅 +22~27%
-        return { damage: 10 + (lv - 1) * 3.6, radius: 110 + (lv - 1) * 15, cooldown: Math.max(0.72, 1.45 - (lv - 1) * 0.1), slow: Math.min(0.75, 0.4 + (lv - 1) * 0.05), slowDur: 1.5 + (lv - 1) * 0.1, expand: 620 };
+        return { damage: 9 + (lv - 1) * 3.24, radius: 110 + (lv - 1) * 15, cooldown: 1.62 - (lv - 1) * 0.07, slow: Math.min(0.75, 0.4 + (lv - 1) * 0.05), slowDur: 1.5 + (lv - 1) * 0.1, expand: 620 };
       }
     },
     lance: {
@@ -334,8 +341,8 @@
     blade_evo: Object.assign({}, WEAPONS.blade, { name: EVOLUTIONS.blade.name, color: EVOLUTIONS.blade.color, icon: EVOLUTIONS.blade.icon, evo: true, stats: function (lv) { const s = WEAPONS.blade.stats(8); return { damage: s.damage + 20, count: 8, radius: s.radius * 1.5, spin: s.spin + 1.0 }; } }),
     missile_evo: Object.assign({}, WEAPONS.missile, { name: EVOLUTIONS.missile.name, color: EVOLUTIONS.missile.color, icon: EVOLUTIONS.missile.icon, evo: true, desc: EVOLUTIONS.missile.desc, stats: function (lv) { const s = WEAPONS.missile.stats(8); return Object.assign({}, s, { damage: 150, cooldown: 1.9, count: 3, chase: 99, infiniteChase: true, chaseDecay: 1 }); } }),
     chain_evo: Object.assign({}, WEAPONS.chain, { name: EVOLUTIONS.chain.name, color: EVOLUTIONS.chain.color, icon: EVOLUTIONS.chain.icon, evo: true, stats: function (lv) { const s = WEAPONS.chain.stats(8); return Object.assign({}, s, { damage: s.damage + 8, chains: 8, range: s.range + 60 }); } }),
-    aura_evo: Object.assign({}, WEAPONS.aura, { name: EVOLUTIONS.aura.name, color: EVOLUTIONS.aura.color, icon: EVOLUTIONS.aura.icon, evo: true, stats: function (lv) { const s = WEAPONS.aura.stats(8); return { damage: s.damage + 10, radius: s.radius * 1.3, tick: 0.1, pull: 210 }; } }),
-    frost_evo: Object.assign({}, WEAPONS.frost, { name: EVOLUTIONS.frost.name, color: EVOLUTIONS.frost.color, icon: EVOLUTIONS.frost.icon, evo: true, stats: function (lv) { const s = WEAPONS.frost.stats(8); return Object.assign({}, s, { damage: s.damage + 4, freeze: 0.6, freezeHits: 3, freezeVuln: 1.5, slow: 0.8 }); } }),
+    aura_evo: Object.assign({}, WEAPONS.aura, { name: EVOLUTIONS.aura.name, color: EVOLUTIONS.aura.color, icon: EVOLUTIONS.aura.icon, evo: true, stats: function (lv) { const s = WEAPONS.aura.stats(8); return { damage: 28.2, radius: s.radius * 1.3, tick: 0.125, pull: 210 }; } }),
+    frost_evo: Object.assign({}, WEAPONS.frost, { name: EVOLUTIONS.frost.name, color: EVOLUTIONS.frost.color, icon: EVOLUTIONS.frost.icon, evo: true, stats: function (lv) { const s = WEAPONS.frost.stats(8); return Object.assign({}, s, { damage: 39.2, cooldown: 0.94, freeze: 0.6, freezeHits: 3, freezeVuln: 1.5, slow: 0.8 }); } }),
     boomerang_evo: Object.assign({}, WEAPONS.boomerang, { name: EVOLUTIONS.boomerang.name, color: EVOLUTIONS.boomerang.color, icon: EVOLUTIONS.boomerang.icon, evo: true, stats: function (lv) { const s = WEAPONS.boomerang.stats(8); return Object.assign({}, s, { damage: s.damage + 10, count: 5, pierce: true }); } }),
     shotgun_evo: Object.assign({}, WEAPONS.shotgun, { name: EVOLUTIONS.shotgun.name, color: EVOLUTIONS.shotgun.color, icon: EVOLUTIONS.shotgun.icon, evo: true, stats: function (lv) { const s = WEAPONS.shotgun.stats(8); return Object.assign({}, s, { damage: s.damage - 6, count: s.count * 2, cone: s.cone * 1.4, pierce: 1 }); } }),
     lance_evo: Object.assign({}, WEAPONS.lance, { name: EVOLUTIONS.lance.name, color: EVOLUTIONS.lance.color, icon: EVOLUTIONS.lance.icon, evo: true, stats: function (lv) { const s = WEAPONS.lance.stats(8); return Object.assign({}, s, { damage: s.damage + 4, beams: 2, spin: 1.74, width: 8, tick: 0.1, length: Math.round(s.length * 1.15) }); } }),
@@ -354,9 +361,9 @@
     timestop_evo: Object.assign({}, WEAPONS.timestop, { name: EVOLUTIONS.timestop.name, color: EVOLUTIONS.timestop.color, icon: EVOLUTIONS.timestop.icon, evo: true, stats: function (lv) { const s = WEAPONS.timestop.stats(8); return Object.assign({}, s, { damage: s.damage + 6, radius: Math.round(s.radius * 1.25), freeze: s.freeze + 0.6, count: s.count + 1, shatter: true }); } }),
     // ── 协同进化(两把已进化武器合成)。kind:"fusion" 由 weapons.js 分发双机制。
     blade_aura: Object.assign({}, WEAPONS.blade, { name: "湮灭之轮", color: "#ffd0a0", icon: "☀", evo: true, kind: "fusion", fuse: ["blade_evo", "aura_evo"], stats: function (lv) { const s = WEAPONS.blade.stats(8); return { damage: s.damage + 18, count: 8, radius: s.radius * 1.6, spin: s.spin + 1.2, splash: 26, splashMul: 0.6, pull: 150 }; } }),
-    missile_chain: Object.assign({}, WEAPONS.missile, { name: "雷暴蜂群", color: "#ff9a3c", icon: "⚡", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["missile_evo", "chain_evo"], stats: function (lv) { return { damage: 34, cooldown: 0.9, count: 5, speed: 300, seek: 5, life: 2.2, chase: 2, chaseDecay: 1, chainHops: 3, chainRange: 180 }; } }),
+    missile_chain: Object.assign({}, WEAPONS.missile, { name: "雷暴蜂群", color: "#ff9a3c", icon: "⚡", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["missile_evo", "chain_evo"], stats: function (lv) { return { damage: 27, cooldown: 0.9, count: 5, speed: 300, seek: 5, life: 2.2, chase: 2, chaseDecay: 1, chainHops: 3, chainRange: 180 }; } }),
     railgun_grenade: Object.assign({}, WEAPONS.railgun, { name: "轨道轰炸", color: "#ff5d73", icon: "☄", evo: true, kind: "fusion", fuse: ["railgun_evo", "grenade_evo"], stats: function (lv) { const s = WEAPONS.railgun.stats(8); return Object.assign({}, s, { damage: s.damage + 52, cooldown: 1.6, explode: 58, cluster: 2 }); } }),
-    frost_poison: Object.assign({}, WEAPONS.frost, { name: "冰霜瘟疫", color: "#a8f0ff", icon: "❅", evo: true, kind: "fusion", tags: ["spell"], fuse: ["frost_evo", "poison_evo"], stats: function (lv) { const s = WEAPONS.frost.stats(8); return Object.assign({}, s, { damage: s.damage + 10, dot: 30, dotDur: 4.5, slow: 0.8, freeze: 0.5 }); } }),
+    frost_poison: Object.assign({}, WEAPONS.frost, { name: "冰霜瘟疫", color: "#a8f0ff", icon: "❅", evo: true, kind: "fusion", tags: ["spell"], fuse: ["frost_evo", "poison_evo"], stats: function () { return { damage: 45.2, radius: 215, cooldown: 0.75, slow: 0.8, slowDur: 2.2, expand: 620, dot: 30, dotDur: 4.5, freeze: 0.5 }; } }),
     boomerang_sentry: Object.assign({}, WEAPONS.sentry, { name: "风暴哨戒", color: "#7df9ff", icon: "✪", evo: true, kind: "fusion", fuse: ["boomerang_evo", "sentry_evo"], stats: function (lv) { const s = WEAPONS.sentry.stats(8); return Object.assign({}, s, { count: s.count + 2, damage: s.damage + 16, projSpeed: 380, pierce: 2, life: 1.6 }); } }),
     lance_vortex: Object.assign({}, WEAPONS.vortex, { name: "裂空风暴", color: "#ff6b9d", icon: "⇶", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["lance_evo", "vortex_evo"], stats: function () { return { damage: 6, cooldown: 2.4, count: 2, speed: 140, life: 4, radius: 90, vrad: 90, pull: 260, beamDmg: 9, beamTick: 0.12, beamLen: 180, beamWidth: 6, beamSpin: 1.8 }; } }),
     shotgun_grenade: Object.assign({}, WEAPONS.shotgun, { name: "爆裂霰弹", color: "#ffe066", icon: "≣", evo: true, kind: "fusion", fuse: ["shotgun_evo", "grenade_evo"], stats: function (lv) { const s = WEAPONS.shotgun.stats(8); return Object.assign({}, s, { damage: s.damage + 12, cooldown: 0.8, count: s.count + 2, cone: s.cone * 1.2, splash: 28, splashMul: 0.45 }); } }),
@@ -457,7 +464,7 @@
     magnet: { name: "磁吸光环", icon: "✜", desc: "拾取范围 +45%、经验 +9%", per: "+45%/+9%/级", color: "#ffd86b" },
     luck: { name: "幸运", icon: "✦", desc: "稀有强化与特殊掉落(血包/磁铁/清屏/宝箱)出现率 +17%", per: "+17%/级", color: "#ffd0a0" },
     crit: { name: "暴击", icon: "✸", desc: "+9% 暴击率,暴击造成 2 倍伤害", per: "+9%/级(上限 100%)", color: "#ffd86b" },
-    lifesteal: { name: "吸血", icon: "♥", desc: "造成伤害的 1.0% 转为生命(每秒上限 5% 最大生命)", per: "+1%/级(属性上限 10%)", color: "#ff5d8e" }
+    lifesteal: { name: "吸血", icon: "♥", desc: "造成伤害的 0.9% 转为生命(秒回上限等于当前吸血率)", per: "+0.9%起(属性上限 7.5%)", color: "#ff5d8e" }
   };
 
   // 武器「数量」字段的中文量词(用于升级文案/暂停摘要)

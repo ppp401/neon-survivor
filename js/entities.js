@@ -37,7 +37,7 @@
       xpMul: 1 + rootDim(L("magnet"), 0.09),
       luck: rootDim(L("luck"), 0.17),
       critChance: capDim(L("crit"), 1.0, 0.09),
-      lifesteal: capDim(L("lifesteal"), 0.10, 0.01)
+      lifesteal: capDim(L("lifesteal"), C.LIFESTEAL_ATTR_CAP, C.LIFESTEAL_FIRST)
     };
     // 角色静态乘子(整局不变,进缓存安全)。!= null 以允许 0 值(如 berserker 清零再生)
     const cmod = state.charMods || {};
@@ -376,7 +376,7 @@
       if (m.critChance > 0 && U.chance(m.critChance)) { real *= 2; isCrit = true; }
       // 吸血:基于暴击前伤害(dmg),受每秒上限约束
       if (m.lifesteal > 0 && p.hp < p.maxHp) {
-        const cap = C.LIFESTEAL_CAP * p.maxHp;
+        const cap = m.lifesteal * m.maxHp;
         const allowed = Math.max(0, cap - (p.lsWindow || 0));
         const heal = Math.min(dmg * m.lifesteal, allowed);
         if (heal > 0) {
@@ -392,12 +392,31 @@
     if (opts.wid && state.weaponDamage) {
       const k = tid(opts.wid);
       state.weaponDamage[k] = (state.weaponDamage[k] || 0) + real;
+      // 以该武器累计活跃时间为时钟。时间戳令跨秒/环绕时旧槽可被可靠清空。
+      state.weaponRecent = state.weaponRecent || {};
+      const sec = Math.floor((state.weaponActive && state.weaponActive[k]) || 0);
+      const recent = state.weaponRecent[k] || (state.weaponRecent[k] = { slots: new Array(60).fill(0), stamps: new Array(60).fill(-1) });
+      const slot = sec % 60;
+      if (recent.stamps[slot] !== sec) { recent.stamps[slot] = sec; recent.slots[slot] = 0; }
+      recent.slots[slot] += real;
     }
     if (opts.skill && state.skillDamage) state.skillDamage[opts.skill] = (state.skillDamage[opts.skill] || 0) + real;
     e.flash = 0.12;
     if (opts.text !== false && (e.isBoss || real >= 8 || U.chance(0.5) || isCrit)) {
       SV.Effects.text(e.x, e.y - e.r - 4, (isCrit ? "暴" : "") + Math.round(real), isCrit ? "#ffd86b" : "#ffe9c2", isCrit ? 18 : 14);
     }
+  }
+
+  function weaponRecentDamage(state, wid) {
+    const k = tid(wid);
+    const active = (state.weaponActive && state.weaponActive[k]) || 0;
+    if (active < 60) return null;
+    const recent = state.weaponRecent && state.weaponRecent[k];
+    if (!recent) return 0;
+    const sec = Math.floor(active), oldest = sec - 59;
+    let total = 0;
+    for (let i = 0; i < 60; i++) if (recent.stamps[i] >= oldest && recent.stamps[i] <= sec) total += recent.slots[i] || 0;
+    return total;
   }
 
   // 诅咒引爆:对 e 结算 固定伤害+百分比maxHp 伤害(可选,引信到期 e 还活着时) + 向周围蔓延 + 视觉;清印记
@@ -605,7 +624,7 @@
     if (p.slow > 0) p.slow -= dt;
     if (p.flash > 0) p.flash -= dt;
     // 吸血每秒上限的预算衰减
-    if (p.lsWindow > 0) p.lsWindow = Math.max(0, p.lsWindow - m.maxHp * C.LIFESTEAL_CAP * dt);
+    if (p.lsWindow > 0) p.lsWindow = Math.max(0, p.lsWindow - m.maxHp * m.lifesteal * dt);
 
     // 再生
     if (m.regen > 0 && p.hp < p.maxHp) {
@@ -935,6 +954,7 @@
     addEShot: addEShot,
     damagePlayer: damagePlayer,
     damageEnemy: damageEnemy,
+    weaponRecentDamage: weaponRecentDamage,
     killEnemy: killEnemy,
     rebuildGrid: rebuildGrid,
     updatePlayer: updatePlayer,

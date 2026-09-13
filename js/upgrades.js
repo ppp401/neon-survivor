@@ -193,7 +193,7 @@
     regen:     { kind: "root", per: 2,     fmt: function (d) { return "再生 +" + (Math.round(d * 10) / 10) + "/s"; } },
     luck:      { kind: "root", per: 0.17,  fmt: function (d) { return "幸运 +" + Math.round(d * 100) + "%"; } },
     crit:      { kind: "cap", cap: 1.0, v1: 0.09, fmt: function (d) { return "暴击 +" + Math.round(d * 100) + "%"; } },
-    lifesteal: { kind: "cap", cap: 0.10, v1: 0.01, fmt: function (d) { return "吸血 +" + Math.round(d * 100) + "%"; } }
+    lifesteal: { kind: "cap", cap: C.LIFESTEAL_ATTR_CAP, v1: C.LIFESTEAL_FIRST, fmt: function (d) { return "吸血 +" + (Math.round(d * 1000) / 10) + "%"; } }
   };
   // 计算某被动「从当前级升到下一级」的真实增量文案(无递减则退回静态文案)
   function passiveLevelText(state, id) {
@@ -211,6 +211,10 @@
       txt = curve.fmt(d);
     } else {
       txt = null;
+    }
+    if (id === "lifesteal") {
+      const next = E.capDim(lvl + 1, C.LIFESTEAL_ATTR_CAP, C.LIFESTEAL_FIRST);
+      txt += " · 秒回上限升至 " + (Math.round(next * 1000) / 10) + "%最大生命/s";
     }
     return txt;
   }

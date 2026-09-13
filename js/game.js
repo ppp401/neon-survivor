@@ -64,6 +64,7 @@
     s.encountered = { enemy: {}, boss: {} }; // 图鉴(本局遇敌记录)
     s.weaponDamage = {};                     // 每武器累计伤害(键=canonical id)
     s.weaponActive = {};                     // 每武器累计活跃秒数(键=canonical id)
+    s.weaponRecent = {};                     // 每武器最近 60 个活跃秒的一秒伤害槽
     s.skillDamage = {};                      // 角色独立伤害技能累计伤害(不并入武器桶)
     s.enemyDamage = {};                      // 每敌人类型对玩家累计伤害(键=type/bossType)
     s.bossFlags = { count: 0, wraithEnrage: false };

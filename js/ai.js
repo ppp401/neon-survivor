@@ -4,6 +4,7 @@
   const SV = window.SV;
   const U = SV.Util;
   const E = SV.Entities;
+  const C = SV.Config.CONST;
 
   function toPlayer(e, p, spd) {
     const a = U.angleTo(e.x, e.y, p.x, p.y);
@@ -70,8 +71,9 @@
         e.ct -= dt;
         if (e.ct <= 0) { e.cstate = "tele"; e.teleT = 0.7; e.cdir = U.angleTo(e.x, e.y, p.x, p.y); }
       } else if (e.cstate === "tele") {
-        e.vx = 0; e.vy = 0; e.flash = 0.1; // 持续白闪预警
+        e.vx = 0; e.vy = 0;
         e.teleT -= dt;
+        e.flash = (Math.floor(Math.max(0, e.teleT) * 18) % 2 === 0) ? 0.2 : 0.04; // 高频白闪预警
         if (e.teleT <= 0) { e.cstate = "charge"; e.chargeT = 0.6; }
       } else if (e.cstate === "charge") {
         e.vx = Math.cos(e.cdir) * def.chargeSpeed; e.vy = Math.sin(e.cdir) * def.chargeSpeed;
@@ -98,14 +100,25 @@
       e.vx = Math.cos(ang) * e.speed; e.vy = Math.sin(ang) * e.speed;
     },
     blink: function (e, p, dt) {
+      if (e.blinkWarn > 0) {
+        toPlayer(e, p, e.speed * 0.18);
+        e.blinkWarn -= dt;
+        e.flash = (Math.floor(e.blinkWarn * 20) % 2 === 0) ? 0.2 : 0.04;
+        if (e.blinkWarn <= 0) {
+          e.x = e.blinkX; e.y = e.blinkY;
+          e.blinkWarn = 0;
+          e.t1 = U.rand(C.BLINK_PERIOD_MIN, C.BLINK_PERIOD_MAX) - C.BLINK_WARN;
+          e.flash = 0.2; SV.Effects.hit(e.x, e.y, e.color);
+        }
+        return;
+      }
       toPlayer(e, p, e.speed);
       e.t1 -= dt;
       if (e.t1 <= 0) {
-        e.t1 = U.rand(1.6, 2.4);
         const a = U.angleTo(e.x, e.y, p.x, p.y);
-        const d = Math.min(180, U.dist(e.x, e.y, p.x, p.y) - 40);
-        e.x += Math.cos(a) * d; e.y += Math.sin(a) * d;
-        e.flash = 0.2; SV.Effects.hit(e.x, e.y, e.color);
+        const d = Math.max(0, Math.min(C.BLINK_DISTANCE, U.dist(e.x, e.y, p.x, p.y) - C.BLINK_GAP));
+        e.blinkX = e.x + Math.cos(a) * d; e.blinkY = e.y + Math.sin(a) * d;
+        e.blinkWarn = C.BLINK_WARN;
       }
     },
     splitter: function (e, p, dt) { toPlayer(e, p, e.speed); }, // 死亡分裂由 killEnemy 处理

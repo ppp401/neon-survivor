@@ -257,6 +257,8 @@
 
       // ── 实体核心(普通混合)
       this._drawEnemyCores(state);
+      this._drawChargeWarnings(state);
+      this._drawBlinkWarnings(state);
       this._drawProjectileCores(state);
       this._drawEShots(state);
       this._drawBeams(state);
@@ -544,6 +546,73 @@
           ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(e.x - w / 2, e.y - e.r - 8, w, 3);
           ctx.fillStyle = "#ff6b7d"; ctx.fillRect(e.x - w / 2, e.y - e.r - 8, w * U.clamp(e.hp / e.maxHp, 0, 1), 3);
         }
+      }
+    },
+    // 冲锋兽蓄力：锁定方向的高对比跑道、箭头和收缩倒计时环；低特效仍完整显示。
+    _drawChargeWarnings: function (state) {
+      const arr = state.enemies;
+      for (let i = 0; i < arr.length; i++) {
+        const e = arr[i];
+        if (e.type !== "charger" || e.cstate !== "tele" || !(e.teleT > 0)) continue;
+        if (e.x < view.l || e.x > view.r || e.y < view.t || e.y > view.b) continue;
+        const left = U.clamp(e.teleT / 0.7, 0, 1);
+        const pulse = 0.5 + 0.5 * Math.sin((state.time || 0) * 30 + e.id);
+        const dx = Math.cos(e.cdir), dy = Math.sin(e.cdir), nx = -dy, ny = dx;
+        const len = SV.Config.ENEMIES.charger.chargeSpeed * 0.6;
+        const ex = e.x + dx * len, ey = e.y + dy * len;
+        ctx.save(); ctx.globalCompositeOperation = "lighter";
+        // 双边冲锋跑道比单线更容易看清实际危险宽度。
+        ctx.strokeStyle = "#ffb24d"; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.58 + pulse * 0.3;
+        ctx.setLineDash([12, 7]); ctx.lineDashOffset = -(state.time || 0) * 70;
+        for (let side = -1; side <= 1; side += 2) {
+          const off = side * (e.r + 5);
+          ctx.beginPath(); ctx.moveTo(e.x + nx * off, e.y + ny * off); ctx.lineTo(ex + nx * off, ey + ny * off); ctx.stroke();
+        }
+        ctx.setLineDash([]); ctx.lineDashOffset = 0;
+        // 跑道中央连续箭头，明确指出锁定后的冲锋方向。
+        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.globalAlpha = 0.9;
+        for (let k = 1; k <= 3; k++) {
+          const px = e.x + dx * len * k / 4, py = e.y + dy * len * k / 4, arm = 9;
+          ctx.beginPath(); ctx.moveTo(px - dx * arm + nx * arm * 0.7, py - dy * arm + ny * arm * 0.7); ctx.lineTo(px, py); ctx.lineTo(px - dx * arm - nx * arm * 0.7, py - dy * arm - ny * arm * 0.7); ctx.stroke();
+        }
+        const rr = e.r + 8 + left * 16;
+        ctx.strokeStyle = "#ffcf70"; ctx.lineWidth = 3; ctx.globalAlpha = 0.75 + pulse * 0.2;
+        ctx.beginPath(); ctx.arc(e.x, e.y, rr, 0, U.TAU); ctx.stroke();
+        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5;
+        drawShapePath(ctx, e.x, e.y, e.r + 4 + pulse * 3, "triangle"); ctx.stroke();
+        ctx.restore();
+      }
+    },
+    // 闪烁者瞬移预警属于玩法信息：低特效也保留完整轮廓；落点在屏内时不受本体剔除影响。
+    _drawBlinkWarnings: function (state) {
+      const arr = state.enemies;
+      for (let i = 0; i < arr.length; i++) {
+        const e = arr[i];
+        if (e.type !== "blinker" || !(e.blinkWarn > 0) || e.blinkX == null) continue;
+        const originIn = e.x >= view.l && e.x <= view.r && e.y >= view.t && e.y <= view.b;
+        const targetIn = e.blinkX >= view.l && e.blinkX <= view.r && e.blinkY >= view.t && e.blinkY <= view.b;
+        if (!originIn && !targetIn) continue;
+        const left = U.clamp(e.blinkWarn / C.BLINK_WARN, 0, 1);
+        const pulse = 0.5 + 0.5 * Math.sin((state.time || 0) * 28 + e.id);
+        const rr = 10 + 15 * left;
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.lineDashOffset = -(state.time || 0) * 55;
+        ctx.setLineDash([7, 6]); ctx.strokeStyle = "#c084fc"; ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.55 + pulse * 0.35;
+        ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.blinkX, e.blinkY); ctx.stroke();
+        ctx.setLineDash([]); ctx.lineDashOffset = 0;
+        // 原地双层紫白菱形脉冲。
+        ctx.strokeStyle = "#c084fc"; ctx.lineWidth = 3;
+        drawShapePath(ctx, e.x, e.y, e.r + 6 + pulse * 4, "diamond"); ctx.stroke();
+        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5;
+        drawShapePath(ctx, e.x, e.y, e.r + 1 + pulse * 2, "diamond"); ctx.stroke();
+        // 收缩的落点菱形与警戒环，倒计时结束时精确汇聚到固定落点。
+        ctx.strokeStyle = "#d8b4fe"; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.9;
+        ctx.beginPath(); ctx.arc(e.blinkX, e.blinkY, rr, 0, U.TAU); ctx.stroke();
+        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2;
+        drawShapePath(ctx, e.blinkX, e.blinkY, 8 + 10 * left, "diamond"); ctx.stroke();
+        ctx.restore();
       }
     },
 
