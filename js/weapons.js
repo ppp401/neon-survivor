@@ -652,12 +652,15 @@
   function explodeTimestop(state, pr) {
     splashAt(state, pr.x, pr.y, pr.timestop, pr.damage, pr.color, 22, pr.weaponId);
     const near = SV.Spatial.queryCircle(pr.x, pr.y, pr.timestop);
+    let canShatter = false;
     for (let i = 0; i < near.length; i++) {
       const e = near[i];
       if (e.hp <= 0 || U.dist2(pr.x, pr.y, e.x, e.y) > pr.timestop * pr.timestop) continue;
       ccFreeze(e, pr.tsFreeze);
-      if (pr.shatter && e.frozen > 0) splashAt(state, e.x, e.y, 36, pr.damage * 0.5, pr.color, 10, pr.weaponId); // evo:冻者碎裂
+      if (e.frozen > 0) canShatter = true;
     }
+    // 进化时停每个力场最多碎裂一次，避免密集敌群下逐敌溅射形成平方级伤害。
+    if (pr.shatter && canShatter) splashAt(state, pr.x, pr.y, 36, pr.damage * 0.5, pr.color, 10, pr.weaponId);
     SV.Effects.explosion(pr.x, pr.y, pr.color, 24); SV.Effects.ring(pr.x, pr.y, pr.color, 8, pr.timestop, 0.4, 4); SV.Effects.shake(5, 0.25); SV.Audio.die();
   }
 
