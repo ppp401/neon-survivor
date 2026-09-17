@@ -28,6 +28,7 @@ ehthumbs.db
 Desktop.ini
 
 # test
+tests/
 test_audio/
 test_audio_ext/
 test_audio_ext_glm/

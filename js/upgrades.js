@@ -134,7 +134,7 @@
       case "shotgun_shockwave": out.push(s.resonanceHits + "次命中触发共振爆" + R(s.burstDmg) + "(半径" + R(s.burstR) + ")"); break;
       case "shotgun_spear": out.push("贯刺点喷出" + s.pelletCount + "枚碎弹 · 每轮最多" + s.pelletCap + "枚"); break;
       case "boomerang_crescent": out.push("去程与返程各可命中一次 · 无限贯穿"); break;
-      case "grenade_meteor": out.push("母爆" + R(s.damage) + "后召来" + s.childCount + "颗小陨石×" + R(s.childDmg)); break;
+      case "grenade_meteor": out.push("每轮" + s.count + "枚母弹 · 每枚母爆" + R(s.damage) + "后召来" + s.childCount + "颗小陨石×" + R(s.childDmg)); break;
       case "railgun_timestop": out.push("光轨伤" + R(s.damage) + " · 静滞走廊" + R(s.corridorDmg) + "/" + F10(s.corridorTick) + "s · 冻结" + F10(s.freeze) + "s"); break;
       case "vortex_meteor": out.push("卷伤" + R(s.damage) + "/0.2s · 沿途焦土" + R(s.burn) + "/0.5s"); break;
       case "vortex_detonate": out.push("消失爆炸" + R(s.boomBase) + "+每卷入1敌人" + R(s.boomPer) + " · 最多计" + s.captureMax + "个"); break;

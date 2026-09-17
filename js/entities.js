@@ -793,7 +793,10 @@
         e.poison -= dt; e.poisonTick -= dt;
         if (e.poisonTick <= 0) {
           e.poisonTick = 0.5; damageEnemy(state, e, e.poisonDmg, { text: false, wid: e.poisonWid });
-          if (e.poisonHexCut > 0 && e.hex > 0 && e.poisonWid === e.hexWid) e.hex -= e.poisonHexCut;
+          if (e.poisonHexCut > 0 && e.hex > 0 && e.poisonWid === e.hexWid) {
+            e.hex -= e.poisonHexCut;
+            if (e.hex <= 0) hexDetonate(state, e, true);
+          }
         }
       } else if (e.poisonStacks) {
         e.poisonStacks = 0; e.poisonHexCut = 0;

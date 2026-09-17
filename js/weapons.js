@@ -85,7 +85,7 @@
     if (base.dot != null) s.dot = base.dot * m.damageMul;
     if (base.explodeDmg != null) s.explodeDmg = base.explodeDmg * m.damageMul;
     if (base.cooldown != null) s.cooldown = base.cooldown * m.cdMul;
-    if (base.tick != null && def.kind === "aura") s.tick = Math.max(0.055, base.tick * m.cdMul); // 光环系伤害频率吃冷却缩减(下限防每帧跳伤;不波及 lance_evo 的 tick)
+    if (base.tick != null && (def.kind === "aura" || w.id === "aura_poison")) s.tick = Math.max(0.055, base.tick * m.cdMul); // 光环与蚀界黑洞吃冷却缩减，不影响其他持续伤害
     if (base.radius != null) s.radius = base.radius * m.areaMul;
     if (base.length != null) s.length = base.length * m.areaMul;
     if (base.expand != null) s.expand = base.expand * m.areaMul;
@@ -891,7 +891,7 @@
   function sentryUpdate(state, w, def, dt) {
     const p = state.player;
     const s = stats(w, state);
-    const arr = p.sentries;
+    const arr = w.sentries || (w.sentries = []);
     if (arr.length !== s.count) {
       arr.length = 0;
       for (let i = 0; i < s.count; i++) arr.push({ angle: i / s.count * U.TAU, x: 0, y: 0, cd: 0 });
@@ -1293,7 +1293,7 @@
   function fusionSentryBoomerang(state, w, def, dt) {
     const p = state.player;
     const s = stats(w, state);
-    const arr = p.sentries;
+    const arr = w.sentries || (w.sentries = []);
     if (arr.length !== s.count) {
       arr.length = 0;
       for (let i = 0; i < s.count; i++) arr.push({ angle: i / s.count * U.TAU, x: 0, y: 0, cd: 0 });
@@ -1505,16 +1505,23 @@
     SV.Audio.shoot();
   }
   function fusionGrenadeMeteor(state, w, def, s) {
-    const p = state.player, a = aimFrom(p), cx = p.x + Math.cos(a) * 210, cy = p.y + Math.sin(a) * 210;
-    const parent = mkProj(); parent.x = cx; parent.y = cy; parent.r = 12; parent.damage = s.damage;
-    parent.life = 0.45; parent.maxLife = 0.45; parent.color = def.color; parent.meteor = s.radius; parent.weaponId = w.id;
-    SV.Effects.ring(cx, cy, def.color, 8, s.radius, 0.45, 4);
-    for (let k = 0; k < s.childCount; k++) {
-      const ang = k / s.childCount * U.TAU + 0.4, d = 70;
-      const pr = mkProj(); pr.x = cx + Math.cos(ang) * d; pr.y = cy + Math.sin(ang) * d;
-      pr.r = 10; pr.damage = s.childDmg; pr.life = 0.6 + k * s.childDelay; pr.maxLife = pr.life; pr.color = def.color;
-      pr.meteor = s.childR; pr.burn = s.burn; pr.burnDur = s.burnDur; pr.weaponId = w.id;
-      SV.Effects.ring(pr.x, pr.y, def.color, 8, s.childR, pr.life, 3);
+    const p = state.player, clusters = denseClusters(p, 460, s.count, 170, C.AIM_MIN_DIST);
+    const a = aimFrom(p), fallback = { x: p.x + Math.cos(a) * 210, y: p.y + Math.sin(a) * 210 };
+    for (let i = 0; i < s.count; i++) {
+      const target = clusters[i] || clusters[0] || fallback;
+      const spread = clusters.length ? i - clusters.length + 1 : i;
+      const cx = clusters[i] ? target.x : target.x + spread * 140 * -Math.sin(a);
+      const cy = clusters[i] ? target.y : target.y + spread * 140 * Math.cos(a);
+      const parent = mkProj(); parent.x = cx; parent.y = cy; parent.r = 12; parent.damage = s.damage;
+      parent.life = 0.45; parent.maxLife = 0.45; parent.color = def.color; parent.meteor = s.radius; parent.weaponId = w.id;
+      SV.Effects.ring(cx, cy, def.color, 8, s.radius, 0.45, 4);
+      for (let k = 0; k < s.childCount; k++) {
+        const ang = k / s.childCount * U.TAU + 0.4, d = 70;
+        const pr = mkProj(); pr.x = cx + Math.cos(ang) * d; pr.y = cy + Math.sin(ang) * d;
+        pr.r = 10; pr.damage = s.childDmg; pr.life = 0.6 + k * s.childDelay; pr.maxLife = pr.life; pr.color = def.color;
+        pr.meteor = s.childR; pr.burn = s.burn; pr.burnDur = s.burnDur; pr.weaponId = w.id;
+        SV.Effects.ring(pr.x, pr.y, def.color, 8, s.childR, pr.life, 3);
+      }
     }
     SV.Audio.shoot();
   }
@@ -1604,7 +1611,7 @@
     }
   }
   function fusionTurrets(state, w, def, dt, judge) {
-    const p = state.player, s = stats(w, state), arr = p.sentries;
+    const p = state.player, s = stats(w, state), arr = w.sentries || (w.sentries = []);
     if (arr.length !== s.count) { arr.length = 0; for (let i=0;i<s.count;i++) arr.push({angle:0,x:0,y:0,cd:0}); }
     w.angle=(w.angle||0)+s.spin*dt;
     for(let i=0;i<arr.length;i++){
@@ -1663,6 +1670,13 @@
         const s = stats(w, state);
         w.cd -= dt;
         if (w.cd <= 0) { fire(state, w, def, s); w.cd = s.cooldown || 0.5; }
+      }
+      // Turret cooldowns belong to each weapon; the player array is only a render view.
+      const visibleSentries = state.player.sentries;
+      visibleSentries.length = 0;
+      for (let i = 0; i < state.weapons.length; i++) {
+        const arr = state.weapons[i].sentries;
+        if (arr) for (let j = 0; j < arr.length; j++) visibleSentries.push(arr[j]);
       }
       updateProjectiles(state, dt);
     },
