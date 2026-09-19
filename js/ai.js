@@ -154,7 +154,7 @@
       }
     },
     slime: function (e, p, dt) {
-      // 腐泥:摇摆追击,周期在路径上留下短暂毒径(走 hazards 系统)
+      // 腐泥:摇摆追击；同一只腐泥的采样点归入一条连续毒径，避免密集圆斑和重叠伤害。
       const a = U.angleTo(e.x, e.y, p.x, p.y);
       const wob = Math.sin((e.t1 += dt) * 3) * 0.6;
       e.vx = Math.cos(a + wob) * e.speed; e.vy = Math.sin(a + wob) * e.speed;
@@ -162,8 +162,19 @@
       if (e.t2 <= 0) {
         e.t2 = e.trailInterval;
         const st = SV.Game.state;
-        if (st.hazards && st.hazards.length < SV.Config.CONST.MAX_HAZARDS) {
-          st.hazards.push({ x: e.x, y: e.y, r: 16, dmg: e.trailDmg * 0.5, life: e.trailDur, max: e.trailDur, color: e.color, kind: "poison", tick: 0.5, srcType: "slime" });
+        if (st.hazards) {
+          let trail = null;
+          for (let i = st.hazards.length - 1; i >= 0; i--) {
+            const h = st.hazards[i];
+            if (h.kind === "poisonTrail" && h.ownerId === e.id) { trail = h; break; }
+          }
+          if (!trail && st.hazards.length < SV.Config.CONST.MAX_HAZARDS) {
+            trail = { x:e.x, y:e.y, r:16, dmg:e.trailDmg*0.5, color:e.color, kind:"poisonTrail", tick:0, ownerId:e.id, points:[], srcType:"slime" };
+            st.hazards.push(trail);
+          }
+          if (trail) {
+            trail.x=e.x; trail.y=e.y; trail.points.push({ x:e.x, y:e.y, life:e.trailDur, max:e.trailDur });
+          }
         }
       }
     },

@@ -20,7 +20,8 @@
       resonance: false, resonanceHits: 0, resonanceWindow: 0, resonanceLock: 0, chainMul: 0, vortexBurn: 0, burnR: 0, burnEvery: 0,
       vortexBomb: false, captures: null, captureMax: 0, boomBase: 0, boomPer: 0, boomR: 0, boomRPer: 0,
       returnHit: false, returnCleared: false, spreadChance: 0, spreadDur: 0,
-      calibrate: 0, finalSpeed: 0, meteorHits: null, meteorPrimary: false };
+      calibrate: 0, finalSpeed: 0, meteorHits: null, meteorPrimary: false,
+      moonArc: false, moonOutbound: 0, moonMinR: 0, moonMaxR: 0, moonTrail: 0, moonTrailEvery: 0, moonTrailLife: 0, moonTrailTick: 0, moonTrailDmg: 0 };
   }
   function pReset(p) {
     p.vx = 0; p.vy = 0; p.r = 5; p.damage = 10; p.life = 1; p.maxLife = 1; p.color = "#fff";
@@ -38,10 +39,12 @@
     p.vortexBomb = false; p.captures = null; p.captureMax = 0; p.boomBase = 0; p.boomPer = 0; p.boomR = 0; p.boomRPer = 0;
     p.returnHit = false; p.returnCleared = false; p.spreadChance = 0; p.spreadDur = 0;
     p.calibrate = 0; p.finalSpeed = 0; p.meteorHits = null; p.meteorPrimary = false;
+    p.moonArc = false; p.moonOutbound = 0; p.moonMinR = 0; p.moonMaxR = 0; p.moonTrail = 0; p.moonTrailEvery = 0; p.moonTrailLife = 0; p.moonTrailTick = 0; p.moonTrailDmg = 0;
   }
   const proj = SV.Pool.create(pFactory, pReset);
   const beams = []; // {pts,life,max,color,width}
   const swings = []; // 扇形挥砍视觉 {x,y,dir,arc,radius,life,max,color}
+  const arcFields = []; // 满月斩环扇地带 + 月轮残迹
 
   // 硬上限:满则回收最旧再取,保证始终返回非空,避免子弹爆炸性增长卡死
   // 回收策略:跳过返航中的回旋镖(shape=star 且已过半程),它必须回到玩家
@@ -701,7 +704,7 @@
     let marked = 0;
     for (let i = 0; i < cand.length && marked < s.count; i++) {
       const e = cand[i];
-      e.hex = s.delay; e.hexDmg = s.damage; e.hexFrac = s.frac; e.hexSpread = s.spread; e.hexWid = w.id;
+      e.hex = s.delay; e.hexMax = s.delay; e.hexChild = false; e.hexDmg = s.damage; e.hexFrac = s.frac; e.hexSpread = s.spread; e.hexWid = w.id;
       if (s.dot) {
         e.poisonStacks = Math.min(3, (e.poisonStacks || 0) + 1); e.poison = s.dotDur;
         e.poisonDmg = s.dot * (1 + 0.4 * ((e.poisonStacks || 1) - 1)); e.poisonTick = 0; e.poisonWid = w.id;
@@ -784,10 +787,10 @@
     const p = state.player;
     const base = aimFrom(p);
     const opts = {};
-    if (def.evo && s.leaveTrail) opts.onHit = function (e) { e.poisonStacks = Math.min(3, (e.poisonStacks || 0) + 1); e.poison = 1.2; e.poisonDmg = s.damage * 0.25; e.poisonTick = 0; e.poisonWid = w.id; };
     for (let k = 0; k < (s.count || 1); k++) {
       const dir = (s.count || 1) > 1 ? base + (k - ((s.count || 1) - 1) / 2) * 0.6 : base;
       swingOnce(state, w, def, s, dir, opts);
+      if (def.evo && s.leaveTrail) arcFields.push({ kind:"sector", x:p.x, y:p.y, dir:dir, arc:s.arc, inner:s.radius*0.7, outer:s.radius, damage:s.damage*0.25, life:1.2, max:1.2, every:0.5, tick:0, color:def.color, wid:w.id });
     }
     SV.Audio.shoot();
   }
@@ -943,6 +946,27 @@
         else if (pr.timestop) explodeTimestop(state, pr); // 时停力场落地冻结
         else if (pr.explode && pr.pierce <= 0) explodeGrenade(state, pr); // 榴弹到时爆炸
         return false;
+      }
+      // 月轮归刃:去程扩张，0.75s 后清空命中表并返航收束；两程各至多命中一次。
+      if (pr.moonArc) {
+        const age = pr.maxLife - pr.life;
+        const returning = age >= pr.moonOutbound;
+        if (returning && !pr.returnCleared) { pr.hitIds = []; pr.returnCleared = true; }
+        if (!returning) {
+          pr.r = U.lerp(pr.moonMinR, pr.moonMaxR, U.clamp(age / pr.moonOutbound, 0, 1));
+        } else {
+          const rt = U.clamp((age - pr.moonOutbound) / Math.max(0.01, pr.maxLife - pr.moonOutbound), 0, 1);
+          pr.r = U.lerp(pr.moonMaxR, pr.moonMinR, rt);
+          const a = U.angleTo(pr.x, pr.y, p.x, p.y);
+          pr.vx = U.lerp(pr.vx, Math.cos(a) * 420, 1 - Math.exp(-14 * dt));
+          pr.vy = U.lerp(pr.vy, Math.sin(a) * 420, 1 - Math.exp(-14 * dt));
+          if (U.dist2(pr.x, pr.y, p.x, p.y) < 24 * 24) return false;
+        }
+        pr.moonTrail -= dt;
+        if (pr.moonTrail <= 0) {
+          pr.moonTrail += pr.moonTrailEvery;
+          arcFields.push({ kind:"moon", x:pr.x, y:pr.y, dir:Math.atan2(pr.vy,pr.vx), inner:pr.r*0.42, outer:pr.r, damage:pr.moonTrailDmg, life:pr.moonTrailLife, max:pr.moonTrailLife, every:pr.moonTrailTick, tick:0, color:pr.color, wid:pr.weaponId });
+        }
       }
       // 贯星长矛光栅:静止的短时横向切割线,每 tick 对线上每敌至多结算一次。
       if (pr.grid) {
@@ -1102,7 +1126,7 @@
 
   function collideOne(state, pr) {
     if (pr.vortex || pr.shockwave || pr.meteor || pr.timestop) return false; // 龙卷风/冲击波/陨石/时停场不硬碰撞
-    const near = SV.Spatial.queryCircle(pr.x, pr.y, pr.r + 30);
+    const near = SV.Spatial.queryCircle(pr.x, pr.y, pr.r + (pr.moonArc ? 60 : 30));
     for (let j = 0; j < near.length; j++) {
       const e = near[j];
       if (e.hp <= 0) continue;
@@ -1499,8 +1523,10 @@
     for (let k = 0; k < s.count; k++) {
       const a = base + (k - (s.count - 1) / 2) * s.spread;
       const pr = mkProj(); pr.x = p.x; pr.y = p.y; pr.vx = Math.cos(a) * s.speed; pr.vy = Math.sin(a) * s.speed;
-      pr.r = 12; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
-      pr.shape = "star"; pr.spin = 8; pr.pierce = 99; pr.hitIds = []; pr.weaponId = w.id; pr.returnHit = true;
+      pr.r = s.minR; pr.damage = s.damage; pr.life = s.life; pr.maxLife = s.life; pr.color = def.color;
+      pr.visualStyle = "moonArc"; pr.pierce = 99; pr.hitIds = []; pr.weaponId = w.id;
+      pr.moonArc = true; pr.moonOutbound = s.outbound; pr.moonMinR = s.minR; pr.moonMaxR = s.maxR;
+      pr.moonTrail = 0; pr.moonTrailEvery = s.trailEvery; pr.moonTrailLife = s.trailLife; pr.moonTrailTick = s.trailTick; pr.moonTrailDmg = s.trailDmg;
     }
     SV.Audio.shoot();
   }
@@ -1572,7 +1598,7 @@
   }
   function fusionHexCrescent(state, w, def, s) {
     const base = aimFrom(state.player), ids = {};
-    const mark = function (e) { if (e.hex > 0) return; e.hex = s.delay; e.hexDmg = s.hexDmg; e.hexFrac = s.frac; e.hexSpread = s.spread; e.hexWid = w.id; e.hexEchoDmg = s.echoDmg; };
+    const mark = function (e) { if (e.hex > 0) return; e.hex = s.delay; e.hexMax = s.delay; e.hexChild = false; e.hexDmg = s.hexDmg; e.hexFrac = s.frac; e.hexSpread = s.spread; e.hexWid = w.id; e.hexEchoDmg = s.echoDmg; };
     for (let k = 0; k < s.count; k++) swingOnce(state, w, def, s, base + (k - (s.count - 1) / 2) * 0.65, { hitIds: ids, onHit: mark });
     SV.Audio.shoot();
   }
@@ -1614,22 +1640,47 @@
     const p = state.player, s = stats(w, state), arr = w.sentries || (w.sentries = []);
     if (arr.length !== s.count) { arr.length = 0; for (let i=0;i<s.count;i++) arr.push({angle:0,x:0,y:0,cd:0}); }
     w.angle=(w.angle||0)+s.spin*dt;
+    let focus=null; const spreadLocked={};
+    if(judge){for(let k=0;k<state.enemies.length;k++){const e=state.enemies[k];if(e.hp<=0)continue;const ep=(e.isBoss?2:0)+((e._judgeHits||0)>0?1:0),fp=focus?((focus.isBoss?2:0)+((focus._judgeHits||0)>0?1:0)):-1;if(!focus||ep>fp||(ep===fp&&e.maxHp>focus.maxHp))focus=e;}}
     for(let i=0;i<arr.length;i++){
       const dr=arr[i];dr.angle=w.angle+i/arr.length*U.TAU;dr.x=p.x+Math.cos(dr.angle)*s.radius;dr.y=p.y+Math.sin(dr.angle)*s.radius;dr.interceptR=s.interceptR;dr.cd-=dt;
       for(let k=state.eshots.length-1;k>=0;k--) if(U.dist2(dr.x,dr.y,state.eshots[k].x,state.eshots[k].y)<s.interceptR*s.interceptR){state.eshots.splice(k,1);break;}
-      if(dr.cd<=0){let tgt=null;if(judge){for(let k=0;k<state.enemies.length;k++){const e=state.enemies[k];if(e.hp>0&&(!tgt||e.maxHp>tgt.maxHp))tgt=e;}}else tgt=nearest(dr.x,dr.y,99999);
+      if(dr.cd<=0){let tgt=null;if(judge&&i<2)tgt=focus;else if(judge){let bd=Infinity;for(let k=0;k<state.enemies.length;k++){const e=state.enemies[k];if(e.hp<=0||e===focus||spreadLocked[e.id])continue;const d=U.dist2(dr.x,dr.y,e.x,e.y);if(d<bd){bd=d;tgt=e;}}if(!tgt){for(let k=0;k<state.enemies.length;k++){const e=state.enemies[k];if(e.hp<=0)continue;const d=U.dist2(dr.x,dr.y,e.x,e.y);if(d<bd){bd=d;tgt=e;}}}if(tgt)spreadLocked[tgt.id]=true;}else tgt=nearest(dr.x,dr.y,99999);
         if(tgt){dmgEnemy(tgt,s.damage,w.id);beams.push({pts:[[dr.x,dr.y],[tgt.x,tgt.y]],life:.1,max:.1,color:def.color,width:3});
-          if(judge){tgt._judgeHits=(tgt._judgeHits||0)+1;if(tgt._judgeHits>=s.judgeHits&&!(tgt._judgeLock>0)){tgt._judgeHits=0;tgt._judgeLock=s.judgeLock;dmgEnemy(tgt,s.judgeDmg+tgt.maxHp*s.judgeFrac*(tgt.isBoss?1/4:1),w.id);}}
+          dr.targetId=tgt.id;if(judge){tgt._judgeHits=(tgt._judgeHits||0)+1;if(tgt._judgeHits>=s.judgeHits&&!(tgt._judgeLock>0)){tgt._judgeHits=0;tgt._judgeLock=s.judgeLock;dmgEnemy(tgt,s.judgeDmg+tgt.maxHp*s.judgeFrac*(tgt.isBoss?1/5:1),w.id);}}
           else chainBurst(state,tgt.x,tgt.y,s.damage*s.chainMul,s.chainHops,s.chainRange,def.color,s.chainMul,w.id);dr.cd=s.fireCd;}}
     }
   }
   function fusionAuraPoison(state,w,def,dt){const s=stats(w,state),p=state.player;w.cd=(w.cd||0)-dt;if(w.cd>0)return;w.cd=s.tick;const near=SV.Spatial.queryCircle(p.x,p.y,s.radius);for(let i=0;i<near.length;i++){const e=near[i];if(e.hp<=0||U.dist2(p.x,p.y,e.x,e.y)>s.radius*s.radius)continue;e._corrode=Math.min(s.maxStacks,(e._corrode||0)+1);e._corrodeT=s.stackGrace;dmgEnemy(e,s.damage*(1+(e._corrode-1)*s.stackMul),w.id);const a=U.angleTo(e.x,e.y,p.x,p.y),d=U.dist(e.x,e.y,p.x,p.y);if(!e.isBoss){const f=Math.min(s.pull,d*3)*dt;e.x+=Math.cos(a)*f;e.y+=Math.sin(a)*f;}}}
   function fusionLanceChain(state,w,def,dt){const s=stats(w,state),p=state.player;w.angle=(w.angle||0)+s.spin*dt;w.cd=(w.cd||0)-dt;if(w.cd<=0){w.cd=s.tick;for(let b=0;b<s.beams;b++){const a=w.angle+b/s.beams*U.TAU,dx=Math.cos(a),dy=Math.sin(a);beamDamage(state,p.x,p.y,dx,dy,s.length,4,s.damage,def.color,w.id);let seed=null,bd=Infinity;for(let i=0;i<state.enemies.length;i++){const e=state.enemies[i],along=(e.x-p.x)*dx+(e.y-p.y)*dy,side=Math.abs((e.x-p.x)*dy-(e.y-p.y)*dx);if(e.hp>0&&along>=0&&along<=s.length&&side<=e.r+4&&along<bd){seed=e;bd=along;}}if(seed)chainBurst(state,seed.x,seed.y,s.chainDmg,s.chainHops,s.chainRange,def.color,s.chainMul,w.id);}}for(let b=0;b<s.beams;b++){const a=w.angle+b/s.beams*U.TAU;beams.push({pts:[[p.x,p.y],[p.x+Math.cos(a)*s.length,p.y+Math.sin(a)*s.length]],life:.06,max:.06,color:def.color,width:s.width,lance:true,evo:true});}}
 
+  function updateArcFields(state, dt) {
+    let out = 0;
+    for (let i = 0; i < arcFields.length; i++) {
+      const f = arcFields[i]; f.life -= dt; f.tick -= dt;
+      if (f.tick <= 0) {
+        f.tick += f.every;
+        const near = SV.Spatial.queryCircle(f.x, f.y, f.outer + 60);
+        for (let j = 0; j < near.length; j++) {
+          const e = near[j]; if (e.hp <= 0) continue;
+          const d2 = U.dist2(f.x, f.y, e.x, e.y);
+          if (d2 < f.inner * f.inner || d2 > f.outer * f.outer) continue;
+          if (f.kind === "sector") { const a=U.angleTo(f.x,f.y,e.x,e.y),diff=Math.abs(Math.atan2(Math.sin(a-f.dir),Math.cos(a-f.dir))); if(diff>f.arc/2)continue; }
+          const hits=e._arcFieldHits||(e._arcFieldHits={}),last=hits[f.wid];
+          if(last!=null&&(state.time||0)-last<f.every-0.02)continue;
+          hits[f.wid]=state.time||0; dmgEnemy(e,f.damage,f.wid);
+        }
+      }
+      if (f.life > 0) { if (out !== i) arcFields[out] = f; out++; }
+    }
+    arcFields.length = out;
+  }
+
   function init(state, startWeapon) {
     proj.clear();
     beams.length = 0;
     swings.length = 0;
+    arcFields.length = 0;
     state.weapons = [{ id: startWeapon || C.XP_START_WEAPON, level: 1, cd: 0, angle: 0, evolved: false }];
     state.player.blades = [];
     state.player.sentries = [];
@@ -1639,9 +1690,11 @@
     proj: proj,
     beams: beams,
     swings: swings,
+    arcFields: arcFields,
     init: init,
     stats: stats,
     updateAll: function (state, dt) {
+      updateArcFields(state, dt);
       // 光束衰减
       let bw = 0;
       for (let i = 0; i < beams.length; i++) { beams[i].life -= dt; if (beams[i].life > 0) { if (bw !== i) beams[bw] = beams[i]; bw++; } }

@@ -75,6 +75,36 @@
     }
   }
 
+  // 减速:把敌人轮廓打散成稳定但不规则的冰壳碎片；不使用规则虚线或平滑圆弧。
+  function drawSlowFracture(g, e, shape, pulse, reduced) {
+    const r=e.r+5,seed=(e.id||0)*17+13,verts=[];
+    const rnd=function(k){const v=Math.sin(seed*12.9898+k*78.233)*43758.5453;return v-Math.floor(v);};
+    const add=function(a,rr){verts.push({x:e.x+Math.cos(a)*rr,y:e.y+Math.sin(a)*rr});};
+    if(shape==="square"){verts.push({x:e.x-r*.92,y:e.y-r*.92},{x:e.x+r*.92,y:e.y-r*.92},{x:e.x+r*.92,y:e.y+r*.92},{x:e.x-r*.92,y:e.y+r*.92});}
+    else if(shape==="diamond"){add(-Math.PI/2,r);add(0,r);add(Math.PI/2,r);add(Math.PI,r);}
+    else if(shape==="triangle"){for(let k=0;k<3;k++)add(-Math.PI/2+k*U.TAU/3,r);}
+    else if(shape==="pentagon"||shape==="hex"){const n=shape==="pentagon"?5:6;for(let k=0;k<n;k++)add(-Math.PI/2+k*U.TAU/n,r);}
+    else if(shape==="star"){for(let k=0;k<10;k++)add(-Math.PI/2+k*Math.PI/5,(k&1)?r*.5:r);}
+    else if(shape==="cross"){const t=r*.36;verts.push({x:e.x-t,y:e.y-r},{x:e.x+t,y:e.y-r},{x:e.x+t,y:e.y-t},{x:e.x+r,y:e.y-t},{x:e.x+r,y:e.y+t},{x:e.x+t,y:e.y+t},{x:e.x+t,y:e.y+r},{x:e.x-t,y:e.y+r},{x:e.x-t,y:e.y+t},{x:e.x-r,y:e.y+t},{x:e.x-r,y:e.y-t},{x:e.x-t,y:e.y-t});}
+    else {const n=reduced?13:19;for(let k=0;k<n;k++)add(-.2+k*U.TAU/n,r*(.82+rnd(k)*.2));}
+    g.save();g.strokeStyle="#78e8ff";g.fillStyle="#c8f4ff";g.globalAlpha=.72*pulse;g.lineWidth=1.5;g.lineCap="butt";g.lineJoin="miter";
+    for(let i=0;i<verts.length;i++){
+      const a=verts[i],b=verts[(i+1)%verts.length],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1,nx=-dy/len,ny=dx/len;
+      const pieces=Math.max(1,Math.ceil(len/(reduced?11:8)));
+      for(let j=0;j<pieces;j++){
+        const q=i*7+j,base0=j/pieces,base1=(j+1)/pieces;
+        if(rnd(q+31)<(reduced?.27:.34))continue;
+        const t0=base0+(base1-base0)*(.05+rnd(q+1)*.24),t1=base1-(base1-base0)*(.08+rnd(q+2)*.27);
+        const kick0=(rnd(q+3)-.5)*5,kick1=(rnd(q+4)-.5)*6;
+        const x0=a.x+dx*t0+nx*kick0,y0=a.y+dy*t0+ny*kick0,x1=a.x+dx*t1+nx*kick1,y1=a.y+dy*t1+ny*kick1;
+        const mx=(x0+x1)*.5+nx*(rnd(q+5)-.35)*4,my=(y0+y1)*.5+ny*(rnd(q+5)-.35)*4;
+        g.beginPath();g.moveTo(x0,y0);g.lineTo(mx,my);g.lineTo(x1,y1);g.stroke();
+        if(!reduced&&rnd(q+6)>.67){const vx=mx-e.x,vy=my-e.y,vl=Math.hypot(vx,vy)||1,ox=vx/vl,oy=vy/vl,tx=-oy,ty=ox,sl=3+rnd(q+7)*6,sw=1+rnd(q+8)*2.6;g.globalAlpha=(.42+rnd(q+9)*.35)*pulse;g.beginPath();g.moveTo(mx+tx*sw,my+ty*sw);g.lineTo(mx+ox*sl+tx*(rnd(q+10)-.5)*3,my+oy*sl+ty*(rnd(q+10)-.5)*3);g.lineTo(mx-tx*sw*.65,my-ty*sw*.65);g.closePath();g.fill();g.globalAlpha=.72*pulse;}
+      }
+    }
+    g.restore();
+  }
+
   // 克制的内部纹章：只用细线/小圆，不改变敌人的基础几何轮廓。
   function drawEnemyPattern(g, x, y, r, pattern, time, reduced, boss) {
     if (!pattern) return;
@@ -402,7 +432,7 @@
       ctx.save(); ctx.globalCompositeOperation = "lighter";
       for (let i = 0; i < arr.length; i++) {
         const h = arr[i];
-        if (h.x < view.l || h.x > view.r || h.y < view.t || h.y > view.b) continue;
+        if (h.kind !== "poisonTrail" && (h.x < view.l || h.x > view.r || h.y < view.t || h.y > view.b)) continue;
         if (h.kind === "scorch") {                        // 陨石焦土:实心灼烧盘(区别于地图灼烧的辉光环),无 warm 预警
           const a = Math.max(0, h.life / h.max);
           ctx.globalAlpha = 0.20 * a; ctx.fillStyle = "#a84b18";
@@ -411,24 +441,21 @@
           const cracks=SV.Effects.isReduced()?3:6;for(let k=0;k<cracks;k++){const q=k/cracks*U.TAU+.3;ctx.beginPath();ctx.moveTo(h.x+Math.cos(q)*h.r*.15,h.y+Math.sin(q)*h.r*.15);ctx.lineTo(h.x+Math.cos(q+.12)*h.r*.55,h.y+Math.sin(q+.12)*h.r*.55);ctx.lineTo(h.x+Math.cos(q-.04)*h.r*.9,h.y+Math.sin(q-.04)*h.r*.9);ctx.stroke();}
           continue;
         }
-        if (h.kind === "poison") {                        // 腐泥毒径:黏液水洼 + 毒泡，必须与灼烧区域清晰区分
-          const a = Math.max(0, h.life / h.max), tm = state.time || 0;
-          ctx.save(); ctx.globalCompositeOperation = "source-over";
-          ctx.globalAlpha = .52 * a; ctx.fillStyle = "#163817";
-          ctx.beginPath();
-          for (let k = 0; k < 12; k++) { const q = k / 12 * U.TAU, rr = h.r * (.82 + .13 * Math.sin(k * 3.7 + h.x * .017 + h.y * .011)); if (k) ctx.lineTo(h.x + Math.cos(q) * rr, h.y + Math.sin(q) * rr); else ctx.moveTo(h.x + Math.cos(q) * rr, h.y + Math.sin(q) * rr); }
-          ctx.closePath(); ctx.fill(); ctx.restore();
-          ctx.globalAlpha = .28 * a; ctx.drawImage(glow("#68ff4f"), h.x - h.r * 1.35, h.y - h.r * 1.35, h.r * 2.7, h.r * 2.7);
-          ctx.globalAlpha = (.62 + .16 * Math.sin(tm * 5 + i)) * a; ctx.strokeStyle = "#79e85b"; ctx.lineWidth = 2.5;
-          ctx.beginPath(); ctx.arc(h.x, h.y, h.r * .88, 0, U.TAU); ctx.stroke();
-          const bubbles = SV.Effects.isReduced() ? 3 : 6;
-          for (let k = 0; k < bubbles; k++) {
-            const q = k * 2.399 + h.x * .013, rr = h.r * (.16 + .09 * (k % 3));
-            const bx = h.x + Math.cos(q) * rr, by = h.y + Math.sin(q) * rr;
-            const br = 1.5 + ((tm * 2.4 + k * .61) % 1) * 2.2;
-            ctx.globalAlpha = (.4 + .28 * Math.sin(tm * 6 + k)) * a; ctx.fillStyle = "#b7ff7a";
-            ctx.beginPath(); ctx.arc(bx, by, br, 0, U.TAU); ctx.fill();
+        if (h.kind === "poisonTrail") {                   // 腐泥毒径:连续黏液带，新端清晰、旧端逐段消散
+          const pts=h.points||[],tm=state.time||0;if(!pts.length)continue;
+          ctx.save();ctx.globalCompositeOperation="source-over";ctx.lineCap="round";ctx.lineJoin="round";
+          for(let k=0;k<pts.length;k++){
+            const a=Math.max(0,pts[k].life/pts[k].max),prev=k?pts[k-1]:pts[k];
+            if(Math.max(prev.x,pts[k].x)<view.l-h.r||Math.min(prev.x,pts[k].x)>view.r+h.r||Math.max(prev.y,pts[k].y)<view.t-h.r||Math.min(prev.y,pts[k].y)>view.b+h.r)continue;
+            const pa=k?Math.max(0,prev.life/prev.max):a,fade=(a+pa)*.5;
+            ctx.globalAlpha=.5*fade;ctx.strokeStyle="#163817";ctx.lineWidth=h.r*2;
+            ctx.beginPath();ctx.moveTo(prev.x,prev.y);ctx.lineTo(pts[k].x,pts[k].y);ctx.stroke();
+            ctx.globalAlpha=.58*fade;ctx.strokeStyle="#65cf4f";ctx.lineWidth=2.4;
+            ctx.beginPath();ctx.moveTo(prev.x,prev.y);ctx.lineTo(pts[k].x,pts[k].y);ctx.stroke();
           }
+          ctx.globalCompositeOperation="lighter";const step=SV.Effects.isReduced()?4:2;
+          for(let k=0;k<pts.length;k+=step){const q=pts[k],a=Math.max(0,q.life/q.max),br=1.4+((tm*2.4+k*.61)%1)*2;ctx.globalAlpha=(.3+.22*Math.sin(tm*6+k))*a;ctx.fillStyle="#b7ff7a";ctx.beginPath();ctx.arc(q.x+Math.sin(k*2.1)*h.r*.35,q.y+Math.cos(k*1.7)*h.r*.28,br,0,U.TAU);ctx.fill();}
+          ctx.restore();
           continue;
         }
         if (h.warm > 0) {
@@ -512,8 +539,14 @@
         if (e.flash > 0) { ctx.globalAlpha = Math.min(1, e.flash * 5); ctx.fillStyle = "#ffffff"; drawShapePath(ctx, e.x, e.y, e.r, eshape); ctx.fill(); ctx.globalAlpha = 1; }
         // 剧毒泛绿(叠层越深越绿;贴合形状)
         if (e.poison > 0) { ctx.globalAlpha = 0.30 + 0.12 * (e.poisonStacks || 0); ctx.fillStyle = "#9bff5a"; drawShapePath(ctx, e.x, e.y, e.r, eshape); ctx.fill(); ctx.globalAlpha = 1; }
-        // 诅咒印记:紫色咒环(贴合形状;引信进行中,玩家可见锁定了谁)
-        if (e.hex > 0) { ctx.strokeStyle = "#d0a0ff"; ctx.lineWidth = 2; ctx.globalAlpha = 0.75; drawShapePath(ctx, e.x, e.y, e.r + 4, eshape); ctx.stroke(); ctx.globalAlpha = 1; }
+        // 状态标记保持小而稳定；低特效也保留这些玩法信息。
+        const pulse = 0.88 + 0.12 * Math.sin((state.time || 0) * 4 + e.id);
+        if (e.poison > 0) { ctx.fillStyle="#9bff5a";ctx.globalAlpha=.8;const n=Math.min(3,e.poisonStacks||1);for(let k=0;k<n;k++){ctx.beginPath();ctx.arc(e.x-e.r*.55+k*4,e.y+e.r*.72-(k&1)*3,1.8+k*.35,0,U.TAU);ctx.fill();}ctx.globalAlpha=1; }
+        if (e.slow > 0 && !(e.frozen > 0)) drawSlowFracture(ctx,e,eshape,pulse,SV.Effects.isReduced());
+        if (e.hex > 0) { const left=U.clamp(e.hex/Math.max(.01,e.hexMax||e.hex),0,1),rr=e.r+3+3*left;ctx.save();ctx.strokeStyle=e.hexChild?"#ddbaff":"#c78cff";ctx.globalAlpha=(.66+.18*(1-left))*pulse;ctx.lineWidth=e.hexChild?1.5:2;ctx.setLineDash(e.hexChild?[3,4]:[]);ctx.beginPath();ctx.arc(e.x,e.y,rr,0,U.TAU);ctx.stroke();if(!e.hexChild){ctx.beginPath();ctx.arc(e.x,e.y,rr-4,0,U.TAU);ctx.stroke();for(let k=0;k<4;k++){const a=k*Math.PI/2;ctx.beginPath();ctx.moveTo(e.x+Math.cos(a)*(rr+2),e.y+Math.sin(a)*(rr+2));ctx.lineTo(e.x+Math.cos(a)*(rr-3),e.y+Math.sin(a)*(rr-3));ctx.stroke();}}else{ctx.fillStyle="#ead8ff";ctx.setLineDash([]);for(let k=0;k<3;k++){const a=k*U.TAU/3;ctx.beginPath();ctx.arc(e.x+Math.cos(a)*rr,e.y+Math.sin(a)*rr,1.8,0,U.TAU);ctx.fill();}}ctx.restore(); }
+        if (e.armorBreak > 0) { const x=e.x+e.r*.72,y=e.y-e.r*.7,rr=Math.max(5,e.r*.32);ctx.save();ctx.strokeStyle="#ffad55";ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(x-rr,y-rr*.7);ctx.lineTo(x,y-rr);ctx.lineTo(x+rr,y-rr*.7);ctx.lineTo(x+rr*.7,y+rr*.5);ctx.lineTo(x,y+rr);ctx.lineTo(x-rr*.7,y+rr*.5);ctx.closePath();ctx.stroke();ctx.beginPath();ctx.moveTo(x-rr*.15,y-rr);ctx.lineTo(x+rr*.15,y-rr*.15);ctx.lineTo(x-rr*.25,y+rr*.2);ctx.lineTo(x+rr*.15,y+rr);ctx.stroke();ctx.restore(); }
+        if ((e._corrode||0)>0) { ctx.save();ctx.strokeStyle="#668f3a";ctx.lineWidth=2;for(let k=0;k<Math.min(5,e._corrode);k++){const a=-2.7+k*.27,rr=e.r+7;ctx.beginPath();ctx.moveTo(e.x+Math.cos(a)*rr,e.y+Math.sin(a)*rr);ctx.lineTo(e.x+Math.cos(a)*(rr+5),e.y+Math.sin(a)*(rr+5));ctx.stroke();}ctx.restore(); }
+        if ((e._judgeHits||0)>0) { ctx.save();ctx.fillStyle="#c99aff";for(let k=0;k<Math.min(5,e._judgeHits);k++)ctx.fillRect(e.x-(Math.min(5,e._judgeHits)*4-1)/2+k*4,e.y-e.r-14,3,5);ctx.restore(); }
         // 时之诅咒炸弹羊:脉冲时钟环,剩余越少闪烁越快。
         if (e.sheepBomb && !e.sheepBombDone) {
           const left = U.clamp(e.sheep / Math.max(0.01, e.sheepBombMax || e.sheep), 0, 1);
@@ -657,6 +690,8 @@
           ctx.globalAlpha = 0.22; ctx.lineWidth = 9;
           ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, U.TAU); ctx.stroke();
           ctx.restore();
+        } else if (p.moonArc) {
+          const a=Math.atan2(p.vy,p.vx);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(a);ctx.strokeStyle=p.color;ctx.lineCap="round";ctx.globalAlpha=.9;ctx.lineWidth=Math.max(5,p.r*.18);ctx.beginPath();ctx.arc(0,0,p.r*.68,-1.05,1.05);ctx.stroke();ctx.globalAlpha=.55;ctx.lineWidth=Math.max(2,p.r*.08);ctx.beginPath();ctx.arc(-p.r*.16,0,p.r*.7,-.9,.9);ctx.stroke();ctx.restore();
         } else if (p.shape === "star") {
           ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot || 0);
           ctx.fillStyle = p.color; ctx.strokeStyle = "#fff"; ctx.lineWidth = 1;
@@ -808,6 +843,8 @@
       ctx.globalAlpha = 1;
     },
     _drawSwings: function () {
+      const fields = SV.Weapons.arcFields || [];
+      for (let i=0;i<fields.length;i++) { const f=fields[i],t=f.life/f.max;if(f.x<view.l-f.outer||f.x>view.r+f.outer||f.y<view.t-f.outer||f.y>view.b+f.outer)continue;ctx.save();ctx.strokeStyle=f.color;ctx.globalAlpha=.16+.2*t;ctx.lineWidth=Math.max(3,f.outer-f.inner);if(f.kind==="sector"){ctx.beginPath();ctx.arc(f.x,f.y,(f.inner+f.outer)/2,f.dir-f.arc/2,f.dir+f.arc/2);ctx.stroke();}else{ctx.lineCap="round";ctx.beginPath();ctx.arc(f.x,f.y,(f.inner+f.outer)/2,f.dir-1.0,f.dir+1.0);ctx.stroke();}ctx.restore(); }
       const swings = SV.Weapons.swings || [];
       for (let i = 0; i < swings.length; i++) {
         const g = swings[i];

@@ -135,7 +135,7 @@
       revealed: false, _shieldedByAura: false, _shieldDr: 0, _speedBuff: 1, _speedBuffT: 0,
       flash: 0, slow: 0, slowF: 0, frozen: 0, bladeCd: 0,
       poison: 0, poisonDmg: 0, poisonTick: 0, poisonWid: "", poisonHexCut: 0,
-      hex: 0, hexDmg: 0, hexFrac: 0, hexSpread: 0, hexWid: "", hexPoisonDmg: 0, hexPoisonDur: 0, hexFuseCut: 0,
+      hex: 0, hexMax: 0, hexChild: false, hexDmg: 0, hexFrac: 0, hexSpread: 0, hexWid: "", hexPoisonDmg: 0, hexPoisonDur: 0, hexFuseCut: 0,
       sheep: 0, armorBreak: 0, sheepBomb: false, sheepBombDone: false, sheepBombMax: 0,
       sheepBombDmg: 0, sheepBombRadius: 0, sheepBombFreeze: 0, sheepBombWid: "",
       // ai 局部状态
@@ -421,8 +421,8 @@
 
   // 诅咒引爆:对 e 结算 固定伤害+百分比maxHp 伤害(可选,引信到期 e 还活着时) + 向周围蔓延 + 视觉;清印记
   function hexDetonate(state, e, damageToo) {
-    // 百分比项对 Boss ×1/4(防 %maxHp 对 Boss 过强;固定项不受影响)
-    const frac = (e.hexFrac || 0) * (e.isBoss ? 1 / 4 : 1);
+    // 百分比项对 Boss ×1/5；子印记的全部载荷已在传播时减半。
+    const frac = (e.hexFrac || 0) * (e.isBoss ? 1 / 5 : 1);
     const dmg = (e.hexDmg || 0) + e.maxHp * frac;
     if (damageToo) {
       damageEnemy(state, e, dmg, { text: false, wid: e.hexWid });
@@ -436,23 +436,23 @@
       for (let j = 0; j < sn.length && s < spread; j++) {
         const o = sn[j];
         if (o !== e && o.hp > 0 && !(o.hex > 0)) {
-          o.hex = 0.8; o.hexDmg = e.hexDmg; o.hexFrac = e.hexFrac; o.hexSpread = 0; o.hexWid = e.hexWid;
+          o.hex = 0.8; o.hexMax = 0.8; o.hexChild = true; o.hexDmg = e.hexDmg * 0.5; o.hexFrac = e.hexFrac * 0.5; o.hexSpread = 0; o.hexWid = e.hexWid;
           if (e.hexEchoDmg > 0) {
-            damageEnemy(state, o, e.hexEchoDmg, { text: false, wid: e.hexWid });
-            o.hexEchoDmg = e.hexEchoDmg;
+            damageEnemy(state, o, e.hexEchoDmg * 0.5, { text: false, wid: e.hexWid });
+            o.hexEchoDmg = e.hexEchoDmg * 0.5;
             SV.Effects.text(o.x, o.y - o.r - 6, "月", "#ba8cff", 13);
           }
           // 腐朽天灾的爆炸传播同时带毒;传播印记的 spread=0,不会继续扩散。
           if (e.hexPoisonDmg > 0) {
             o.poisonStacks = Math.min(3, (o.poisonStacks || 0) + 1); o.poison = e.hexPoisonDur;
-            o.poisonDmg = e.hexPoisonDmg * (1 + 0.4 * (o.poisonStacks - 1)); o.poisonTick = 0; o.poisonWid = e.hexWid;
-            o.poisonHexCut = e.hexFuseCut || 0; o.hexPoisonDmg = e.hexPoisonDmg; o.hexPoisonDur = e.hexPoisonDur; o.hexFuseCut = e.hexFuseCut;
+            o.poisonDmg = e.hexPoisonDmg * 0.5 * (1 + 0.4 * (o.poisonStacks - 1)); o.poisonTick = 0; o.poisonWid = e.hexWid;
+            o.poisonHexCut = e.hexFuseCut || 0; o.hexPoisonDmg = e.hexPoisonDmg * 0.5; o.hexPoisonDur = e.hexPoisonDur; o.hexFuseCut = e.hexFuseCut;
           }
           s++;
         }
       }
     }
-    e.hex = 0; e.hexSpread = 0; e.hexPoisonDmg = 0; e.hexPoisonDur = 0; e.hexFuseCut = 0; e.hexEchoDmg = 0;
+    e.hex = 0; e.hexMax = 0; e.hexChild = false; e.hexDmg = 0; e.hexFrac = 0; e.hexSpread = 0; e.hexWid = ""; e.hexPoisonDmg = 0; e.hexPoisonDur = 0; e.hexFuseCut = 0; e.hexEchoDmg = 0;
   }
 
   // 时之诅咒:变羊自然结束或宿主提前死亡时仅爆炸一次。控制时长对 Boss 继续套 CC_BOSS_MUL。
@@ -590,6 +590,13 @@
     state.eshots.push({ x: x, y: y, vx: vx, vy: vy, life: 4.0, dmg: dmg, color: color || "#ff7d8e", r: r || 6, srcType: srcType || null, boss: !!bd, style: bd ? (bd.shotStyle || "ring") : null });
   }
 
+  // 点到线段距离平方；连续毒径用胶囊碰撞，让可见路径与危险范围一致。
+  function segmentDist2(px, py, a, b) {
+    const dx=b.x-a.x,dy=b.y-a.y,dd=dx*dx+dy*dy;
+    const t=dd>0?U.clamp(((px-a.x)*dx+(py-a.y)*dy)/dd,0,1):0;
+    const x=a.x+dx*t,y=a.y+dy*t; return U.dist2(px,py,x,y);
+  }
+
   // ── 玩家更新
   function updatePlayer(state, dt) {
     const p = state.player;
@@ -635,7 +642,7 @@
     p.maxHp = m.maxHp;
     p.pickupRadius = C.PICKUP_RADIUS * m.pickupMul;
 
-    // 危险区:地图灼烧/毒径(只伤玩家,带 warm 预警) + 陨石焦土 scorch(只伤敌人,无 warm)
+    // 危险区:地图灼烧/连续毒径(只伤玩家,带 warm 预警) + 陨石焦土 scorch(只伤敌人,无 warm)
     const hazards = state.hazards;
     if (hazards && hazards.length) {
       // 全局 scorch tick:每 0.5s 同步触发一次,同一敌人在本 tick 内只受一个 scorch 影响(重叠区域不重复算伤害)
@@ -645,6 +652,20 @@
       if (state._scorchAccum >= 0.5) { state._scorchAccum -= 0.5; scorchFire = true; state._scorchTickId = (state._scorchTickId || 0) + 1; }
       for (let i = hazards.length - 1; i >= 0; i--) {
         const h = hazards[i];
+        if (h.kind === "poisonTrail") {
+          h.tick -= dt;
+          const pts=h.points||[];
+          for(let j=pts.length-1;j>=0;j--)pts[j].life-=dt;
+          while(pts.length&&pts[0].life<=0)pts.shift();
+          if(!pts.length){hazards.splice(i,1);continue;}
+          h.x=pts[pts.length-1].x;h.y=pts[pts.length-1].y;
+          if(h.tick<=0){
+            const rr=p.r+h.r,rr2=rr*rr;let touching=U.dist2(p.x,p.y,pts[0].x,pts[0].y)<rr2;
+            for(let j=1;j<pts.length&&!touching;j++)touching=segmentDist2(p.x,p.y,pts[j-1],pts[j])<rr2;
+            if(touching){h.tick=0.5;damagePlayer(state,h.dmg,true,h.srcType||null);}
+          }
+          continue;
+        }
         if (h.kind === "scorch") {                       // 陨石焦土:0.5s 灼烧范围内敌人(带 wid 计统计),不伤玩家;重叠去重
           h.life -= dt;
           if (h.life <= 0) { hazards.splice(i, 1); continue; }

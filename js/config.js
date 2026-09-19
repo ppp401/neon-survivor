@@ -257,7 +257,7 @@
     },
     hex: {
       name: "诅咒", icon: "✟", color: "#b06bff", max: 8, kind: "hex",
-      desc: "锁定视野内血量最高的敌人(优先Boss),延迟引爆:固定伤害 + 百分比最大生命伤害(对Boss百分比降至1/4),目标被提前击杀则诅咒蔓延。",
+      desc: "锁定视野内血量最高的敌人(优先Boss),延迟引爆:固定伤害 + 百分比最大生命伤害(对Boss百分比降至1/5),目标被提前击杀则诅咒蔓延。",
       tags: ["spell"],
       stats: function (lv) {
         return { damage: (10 + (lv - 1) * 3) * 0.5625, frac: Math.min(0.12, 0.05 + (lv - 1) * 0.01), count: 1 + Math.floor((lv - 1) / 2), spread: 2 + Math.floor((lv - 1) / 3), delay: 2.2, cooldown: Math.max(0.9, 1.8 - (lv - 1) * 0.1) * 1.2 };
@@ -375,12 +375,12 @@
     aura_poison: Object.assign({}, WEAPONS.aura, { name: "蚀界黑洞", color: "#a7ff64", icon: "◉", evo: true, kind: "fusion", showPlayerRadius: true, tags: ["melee", "spell"], fuse: ["aura_evo", "poison_evo"], stats: function () { return { damage: 35, radius: 205, tick: 0.15, pull: 160, stackMul: 0.22, maxStacks: 5, stackGrace: 1 }; } }),
     shotgun_shockwave: Object.assign({}, WEAPONS.shotgun, { name: "震荡霰阵", color: "#d6ec8b", icon: "≋", evo: true, kind: "fusion", tags: ["ranged"], fuse: ["shotgun_evo", "shockwave_evo"], stats: function () { return { damage: 70.11, cooldown: 0.85, count: 12, speed: 350, life: 1.45, cone: 1.15, pierce: 1, resonanceHits: 3, resonanceWindow: 0.4, resonanceLock: 0.6, burstDmg: 125.46, burstR: 65, knock: 45 }; } }),
     shotgun_spear: Object.assign({}, WEAPONS.spear, { name: "破阵枪", color: "#ffe28a", icon: "➷", evo: true, kind: "fusion", tags: ["melee", "ranged"], fuse: ["shotgun_evo", "spear_evo"], stats: function () { return { damage: 619.92, cooldown: 0.9, radius: 245, arc: 0.48, armorBreak: 1.2, pelletDamage: 154.98, pelletCount: 4, pelletCap: 16, pelletSpeed: 360, pelletLife: 0.5, pelletCone: 0.35 }; } }),
-    boomerang_crescent: Object.assign({}, WEAPONS.boomerang, { name: "月轮归刃", color: "#8fe8c8", icon: "☽", evo: true, kind: "fusion", tags: ["melee", "ranged"], fuse: ["boomerang_evo", "crescent_evo"], stats: function () { return { damage: 151.36, cooldown: 0.9, count: 4, speed: 340, life: 1.8, spread: 0.28, pierce: 99 }; } }),
+    boomerang_crescent: Object.assign({}, WEAPONS.boomerang, { name: "月轮归刃", color: "#8fe8c8", icon: "☽", evo: true, kind: "fusion", tags: ["melee", "ranged"], fuse: ["boomerang_evo", "crescent_evo"], stats: function () { return { damage: 92, cooldown: 1.05, count: 3, speed: 300, life: 1.8, outbound: 0.75, spread: 0.38, minR: 30, maxR: 62, trailEvery: 0.18, trailLife: 0.65, trailTick: 0.3, trailDmg: 24 }; } }),
     grenade_meteor: Object.assign({}, WEAPONS.grenade, { name: "天火母弹", color: "#ff934d", icon: "☄", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["grenade_evo", "meteor_evo"], stats: function () { return { damage: 221.6, cooldown: 2.2, count: 2, radius: 105, speed: 300, life: 1.1, childCount: 3, childDmg: 152.35, childR: 65, childDelay: 0.15, burn: 22.16, burnDur: 1.8 }; } }),
     railgun_timestop: Object.assign({}, WEAPONS.railgun, { name: "零时轨道", color: "#e2bfff", icon: "⟾", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["railgun_evo", "timestop_evo"], stats: function () { return { damage: 372.5, cooldown: 1.9, speed: 900, corridorWidth: 90, corridorLife: 1, corridorDmg: 62, corridorTick: 0.2, freeze: 0.6, length: 720 }; } }),
     vortex_meteor: Object.assign({}, WEAPONS.vortex, { name: "炼狱风眼", color: "#ff9d55", icon: "♨", evo: true, kind: "fusion", tags: ["spell"], fuse: ["vortex_evo", "meteor_evo"], stats: function () { return { damage: 31.92, cooldown: 2.4, count: 2, speed: 130, life: 4, radius: 85, pull: 260, trailTick: 0.5, burn: 45.6, burnR: 55, burnDur: 1.5 }; } }),
     vortex_detonate: Object.assign({}, WEAPONS.vortex, { name: "坍缩爆心", color: "#ff7f83", icon: "✹", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["vortex_evo", "detonate_evo"], stats: function () { return { damage: 10, cooldown: 2.2, count: 2, speed: 125, life: 3.8, radius: 90, pull: 280, captureMax: 6, boomBase: 138, boomPer: 20, boomR: 100, boomRPer: 5 }; } }),
-    sentry_hex: Object.assign({}, WEAPONS.sentry, { name: "裁决阵列", color: "#c99aff", icon: "⌬", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["sentry_evo", "hex_evo"], stats: function () { return { damage: 143.04, count: 6, fireCd: 0.55, radius: 125, projSpeed: 400, spin: 1.45, interceptR: 34, judgeHits: 5, judgeDmg: 290.55, judgeFrac: 0.05, judgeLock: 1.5 }; } }),
+    sentry_hex: Object.assign({}, WEAPONS.sentry, { name: "裁决阵列", color: "#c99aff", icon: "⌬", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["sentry_evo", "hex_evo"], stats: function () { return { damage: 65, count: 5, fireCd: 0.55, radius: 125, projSpeed: 400, spin: 1.45, interceptR: 34, judgeHits: 5, judgeDmg: 120, judgeFrac: 0.06, judgeLock: 1.5 }; } }),
     shockwave_polymorph: Object.assign({}, WEAPONS.shockwave, { name: "牧群冲击", color: "#fff0b0", icon: "♈", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["shockwave_evo", "polymorph_evo"], stats: function () { return { damage: 145, cooldown: 1.1, count: 3, radius: 190, expand: 650, knock: 55, sheep: 1.6, sheepMax: 4, collideDmg: 131.85, collideR: 60 }; } }),
     hex_crescent: Object.assign({}, WEAPONS.crescent, { name: "蚀月刻印", color: "#ba8cff", icon: "☾", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["hex_evo", "crescent_evo"], stats: function () { return { damage: 81.48, cooldown: 1, count: 2, radius: 190, arc: 2.1, delay: 1.1, hexDmg: 61.11, frac: 0.15, spread: 2, echoDmg: 43.65 }; } }),
     detonate_polymorph: Object.assign({}, WEAPONS.polymorph, { name: "爆裂羊群", color: "#ffb079", icon: "♉", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["detonate_evo", "polymorph_evo"], stats: function () { return { damage: 77.4, cooldown: 2, count: 3, speed: 280, life: 2.7, dur: 2.2, bombDmg: 193.5, bombRadius: 85, spreadChance: 0.4, spreadDur: 1.1 }; } }),
@@ -462,8 +462,8 @@
   };
 
   // 武器「数量」字段的中文量词(用于升级文案/暂停摘要)
-  const COUNT_NOUN = { blade: "光刃", missile: "导弹", shotgun: "弹丸", boomerang: "回旋", sentry: "炮塔", grenade: "榴弹", meteor: "陨石", shockwave: "波", hex: "印记", polymorph: "变形弹", polymorph_timestop: "变形弹", timestop: "力场",
-    blade_boomerang: "光刃", blade_frost: "光刃", missile_aura: "导弹", missile_railgun: "天矛", chain_sentry: "炮塔", shotgun_shockwave: "弹丸", boomerang_crescent: "月轮", grenade_meteor: "母弹", vortex_meteor: "龙卷", vortex_detonate: "龙卷", sentry_hex: "炮塔", shockwave_polymorph: "波", hex_crescent: "月牙", detonate_polymorph: "变形弹" };
+  const COUNT_NOUN = { blade: "光刃", missile: "导弹", shotgun: "弹丸", boomerang: "回旋", sentry: "炮塔", grenade: "榴弹", meteor: "陨石", shockwave: "波", hex: "印记", crescent: "月牙", vortex: "龙卷", detonate: "殉爆", polymorph: "变形弹", polymorph_timestop: "变形弹", timestop: "力场",
+    blade_boomerang: "光刃", blade_frost: "光刃", missile_aura: "导弹", missile_railgun: "天矛", chain_sentry: "炮塔", shotgun_shockwave: "弹丸", shockwave_frost: "波", boomerang_crescent: "月轮", grenade_meteor: "母弹", vortex_meteor: "龙卷", vortex_detonate: "龙卷", sentry_hex: "炮塔", shockwave_polymorph: "波", hex_crescent: "月牙", detonate_polymorph: "变形弹" };
   // 升级 delta 文案的字段→模板(N=变化量;count 用 COUNT_NOUN)
   const STAT_LABEL = {
     count: "count", damage: "伤害 +{N}", cooldown: "冷却 ↓{N}s", radius: "范围 +{N}",
@@ -538,7 +538,7 @@
     overdriver: { name: "狂热者", hp: 60, speed: 50, dmg: 12, xp: 7, r: 16, color: "#c084fc", ai: "speed_aura", shape: "triangle", pattern: "chevron", auraR: 150, auraSpeed: 1.4, skill: "加速周围敌人(光环范围随时间扩大)" },
     burster: { name: "爆巢者", hp: 40, speed: 64, dmg: 12, xp: 6, r: 18, color: "#ff7a3c", ai: "chase", shape: "blob", pattern: "cells", burstCount: 5, burstType: "swarmer", skill: "死亡爆出一群食脑蛛" },
     stalker: { name: "潜伏者", hp: 35, speed: 78, dmg: 16, xp: 7, r: 15, color: "#a8e8ff", ai: "stalker", shape: "diamond", pattern: "broken", stealth: true, skill: "隐身接近,近身现身突袭(首击破隐)" },
-    slimer: { name: "腐泥", hp: 28, speed: 58, dmg: 10, xp: 5, r: 14, color: "#9bff5a", ai: "slime", shape: "blob", trailInterval: 0.45, trailDur: 2.0, trailDmg: 8, skill: "摇摆追击,路径留下毒径" }
+    slimer: { name: "腐泥", hp: 28, speed: 58, dmg: 10, xp: 5, r: 14, color: "#9bff5a", ai: "slime", shape: "blob", trailInterval: 0.30, trailDur: 3.5, trailDmg: 8, skill: "摇摆追击,路径留下连续毒径" }
   };
 
   // ── Boss(8 种)。tier:难度级(每关按 5/10/15min 依 T1→T2→T3 递增出)。skill 为图鉴文案。
