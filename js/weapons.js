@@ -419,8 +419,6 @@
       const e = near[i];
       if (U.dist2(p.x, p.y, e.x, e.y) <= s.radius * s.radius) {
         dmgEnemy(e, s.damage, w.id);
-        // 减速场:圈内敌人减速 32%
-        ccSlow(e, 0.5, 0.32);
         if (def.evo && s.pull) {
           const a = U.angleTo(e.x, e.y, p.x, p.y);
           const d = U.dist(e.x, e.y, p.x, p.y);

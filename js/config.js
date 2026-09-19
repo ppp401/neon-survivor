@@ -160,7 +160,7 @@
       tags: ["melee"],
       stats: function (lv) {
         // 伤害频率(tick)在 weapons.js 受冷却缩减影响(仅光环系)
-        return { damage: 4.8 + (lv - 1) * 0.85, radius: 65 + (lv - 1) * 12, tick: 0.48 - (lv - 1) * 0.04 };
+        return { damage: 5.0 + (lv - 1) * 1.0, radius: 80 + (lv - 1) * 10, tick: 0.48 - (lv - 1) * 0.04 };
       }
     },
     shotgun: {
@@ -185,7 +185,7 @@
       desc: "环绕玩家旋转的高能激光,触碰的敌人受创一次(一次触碰仅一次,离开后再触碰可再触发)。判定为一条线,靠敌人自身体积触发。",
       tags: ["ranged"],
       stats: function (lv) {
-        return { damage: (11.2 + (lv - 1) * 3) * 1.1, spin: 1.52 + (lv - 1) * 0.19, length: 175 + (lv - 1) * 20, width: 6 };
+        return { damage: 11.2 + (lv - 1) * 3, spin: 1.52 + (lv - 1) * 0.19, length: 175 + (lv - 1) * 20, width: 6 };
       }
     },
     boomerang: {
@@ -194,7 +194,7 @@
       tags: ["ranged"],
       stats: function (lv) {
         // 弹速/射程成长强化:L1 小幅提升至 300,L8 大幅提升至 450;life 仍随等级成长
-        return { damage: (12 + (lv - 1) * 3.4) * 1.1, count: 1 + (lv >= 3 ? 1 : 0) + (lv >= 6 ? 1 : 0), cooldown: Math.max(0.7, 1.7 - (lv - 1) * 0.085), speed: 300 + (lv - 1) * (150 / 7), life: 1.1 + (lv - 1) * 0.07, spin: 14 };
+        return { damage: 12 + (lv - 1) * 3.4, count: 1 + (lv >= 3 ? 1 : 0) + (lv >= 6 ? 1 : 0), cooldown: Math.max(0.7, 1.7 - (lv - 1) * 0.085), speed: 300 + (lv - 1) * (150 / 7), life: 1.1 + (lv - 1) * 0.07, spin: 14 };
       }
     },
     grenade: {
@@ -211,7 +211,7 @@
       tags: ["ranged"],
       stats: function (lv) {
         // 定向远程基础伤害 +10%；进化/融合定义保持原有最终伤害。
-        return { damage: (27 + (lv - 1) * 12) * 1.1, cooldown: Math.max(1.7, 2.06 + (8 - lv) * 0.3), speed: 900 };
+        return { damage: 27 + (lv - 1) * 12, cooldown: Math.max(1.7, 2.06 + (8 - lv) * 0.3), speed: 900 };
       }
     },
     poison: {
@@ -284,7 +284,7 @@
       desc: "向前突刺长矛,窄锥贯穿沿途所有敌人,高单体爆发。",
       tags: ["melee"],
       stats: function (lv) {
-        return { damage: (21.8 + (lv - 1) * 7) * 1.2, cooldown: Math.max(0.9, 1.9 - (lv - 1) * 0.1), radius: 130 + (lv - 1) * 14, arc: 0.32 };
+        return { damage: (21.8 + (lv - 1) * 7) * 1.1, cooldown: Math.max(0.9, 1.9 - (lv - 1) * 0.1), radius: 130 + (lv - 1) * 14, arc: 0.20 };
       }
     },
     polymorph: {
@@ -335,7 +335,7 @@
     blade_evo: Object.assign({}, WEAPONS.blade, { name: EVOLUTIONS.blade.name, color: EVOLUTIONS.blade.color, icon: EVOLUTIONS.blade.icon, evo: true, stats: function (lv) { const s = WEAPONS.blade.stats(8); return { damage: 57.84, count: 8, radius: s.radius * 1.5, spin: s.spin + 1.0 }; } }),
     missile_evo: Object.assign({}, WEAPONS.missile, { name: EVOLUTIONS.missile.name, color: EVOLUTIONS.missile.color, icon: EVOLUTIONS.missile.icon, evo: true, desc: EVOLUTIONS.missile.desc, stats: function (lv) { const s = WEAPONS.missile.stats(8); return Object.assign({}, s, { damage: 150, cooldown: 1.9, count: 3, chase: 99, infiniteChase: true, chaseDecay: 1 }); } }),
     chain_evo: Object.assign({}, WEAPONS.chain, { name: EVOLUTIONS.chain.name, color: EVOLUTIONS.chain.color, icon: EVOLUTIONS.chain.icon, evo: true, stats: function (lv) { const s = WEAPONS.chain.stats(8); return Object.assign({}, s, { damage: 47.5, chains: 8, range: s.range + 60 }); } }),
-    aura_evo: Object.assign({}, WEAPONS.aura, { name: EVOLUTIONS.aura.name, color: EVOLUTIONS.aura.color, icon: EVOLUTIONS.aura.icon, evo: true, stats: function (lv) { return { damage: 14.5, radius: 180, tick: 0.24, pull: 210 }; } }),
+    aura_evo: Object.assign({}, WEAPONS.aura, { name: EVOLUTIONS.aura.name, color: EVOLUTIONS.aura.color, icon: EVOLUTIONS.aura.icon, evo: true, stats: function (lv) { return { damage: 15.95, radius: 180, tick: 0.24, pull: 210 }; } }),
     frost_evo: Object.assign({}, WEAPONS.frost, { name: EVOLUTIONS.frost.name, color: EVOLUTIONS.frost.color, icon: EVOLUTIONS.frost.icon, evo: true, stats: function (lv) { const s = WEAPONS.frost.stats(8); return Object.assign({}, s, { damage: 39.2, cooldown: 0.94, freeze: 0.6, freezeHits: 3, freezeVuln: 1.5, slow: 0.8 }); } }),
     boomerang_evo: Object.assign({}, WEAPONS.boomerang, { name: EVOLUTIONS.boomerang.name, color: EVOLUTIONS.boomerang.color, icon: EVOLUTIONS.boomerang.icon, evo: true, stats: function (lv) { const s = WEAPONS.boomerang.stats(8); return Object.assign({}, s, { damage: 45.8, count: 5, pierce: true }); } }),
     shotgun_evo: Object.assign({}, WEAPONS.shotgun, { name: EVOLUTIONS.shotgun.name, color: EVOLUTIONS.shotgun.color, icon: EVOLUTIONS.shotgun.icon, evo: true, stats: function (lv) { const s = WEAPONS.shotgun.stats(8); return Object.assign({}, s, { damage: s.damage - 6, count: s.count * 2, cone: s.cone * 1.4, pierce: 1 }); } }),
