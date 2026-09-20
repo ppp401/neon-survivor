@@ -169,7 +169,7 @@
       tags: ["ranged"],
       stats: function (lv) {
         // L1 伤害 -21%,L8 精确不变;子弹存在时长(即射程)随等级成长:L8=1.69s ≈ L1(0.85s) 的 2 倍
-        return { damage: 7.9 + (lv - 1) * 2.9, count: 4 + (lv - 1), cooldown: Math.max(0.6, 1.4 - (lv - 1) * 0.1), speed: 330, life: 0.85 + (lv - 1) * 0.12, cone: (35 + (lv - 1) * 3) * Math.PI / 180 };
+        return { damage: 6.5 + (lv - 1) * 2.5, count: 3 + (lv - 1), cooldown: Math.max(0.6, 1.4 - (lv - 1) * 0.1), speed: 330, life: 0.80 + (lv - 1) * 0.06, cone: (35 + (lv - 1) * 3) * Math.PI / 180 };
       }
     },
     frost: {
