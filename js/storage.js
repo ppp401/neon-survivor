@@ -11,6 +11,8 @@
     autoMode: false,                 // 全自动模式开关(SV.Auto)
     eshotMark: false,                // 敌方子弹标红(边缘描红,便于与己方弹幕区分)
     musicVol: 1.0, sfxVol: 1.0,   // 音乐/音效音量(0..1);默认均满档
+    language: "en",              // 界面语言: en | zh-CN（旧存档缺失时默认英文）
+    savedRun: null,               // 单槽局内快照（由 Game 负责版本与内容校验）
     lastStage: "ruins", lastDiff: "normal", lastChar: "bulwark",
     lastStartWeapons: {}       // charId -> 最近一次合法起手武器
   };
@@ -38,9 +40,9 @@
   }
   function writeNow() {
     flushTimer = null;
-    if (!data) return;
+    if (!data) return false;
     dirty = false;
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* 忽略 */ }
+    try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
   }
   function scheduleFlush() {
     dirty = true;
@@ -61,6 +63,15 @@
     setChar: function (id) { load().lastChar = id; writeNow(); },
     getStartWeapon: function (charId) { return load().lastStartWeapons[charId] || null; },
     setStartWeapon: function (charId, weaponId) { load().lastStartWeapons[charId] = weaponId; writeNow(); },
+    getSavedRun: function () { return load().savedRun || null; },
+    saveRun: function (snapshot) {
+      const d = load(), prev = d.savedRun;
+      d.savedRun = snapshot;
+      if (writeNow()) return true;
+      d.savedRun = prev;
+      return false;
+    },
+    clearSavedRun: function () { load().savedRun = null; return writeNow(); },
 
     getBest: function (stageId, diff, charId, endless) {
       const b = load().bests[bkey(stageId, diff, charId, endless)];

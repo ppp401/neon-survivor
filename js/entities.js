@@ -7,6 +7,7 @@
   const EN = SV.Config.ENEMIES;
   const BOSSES = SV.Config.BOSSES;
   const CU = SV.Config.CURVES;
+  function L(en, zh) { return SV.I18n ? SV.I18n.pick(en, zh) : zh; }
 
   let _id = 1;
 
@@ -362,7 +363,7 @@
     if (e.stealth && !e.revealed) { // 潜伏者:首击破隐免疫
       e.revealed = true; e.flash = 0.3;
       SV.Effects.hit(e.x, e.y, e.color);
-      SV.Effects.text(e.x, e.y - e.r - 4, "破隐!", "#a8e8ff", 14);
+      SV.Effects.text(e.x, e.y - e.r - 4, L("REVEALED!", "破隐!"), "#a8e8ff", 14);
       return;
     }
     if (opts.vuln) dmg *= opts.vuln;
@@ -403,7 +404,7 @@
     if (opts.skill && state.skillDamage) state.skillDamage[opts.skill] = (state.skillDamage[opts.skill] || 0) + real;
     e.flash = 0.12;
     if (opts.text !== false && (e.isBoss || real >= 8 || U.chance(0.5) || isCrit)) {
-      SV.Effects.text(e.x, e.y - e.r - 4, (isCrit ? "暴" : "") + Math.round(real), isCrit ? "#ffd86b" : "#ffe9c2", isCrit ? 18 : 14);
+      SV.Effects.text(e.x, e.y - e.r - 4, (isCrit ? L("CRIT ", "暴") : "") + Math.round(real), isCrit ? "#ffd86b" : "#ffe9c2", isCrit ? 18 : 14);
     }
   }
 
@@ -440,7 +441,7 @@
           if (e.hexEchoDmg > 0) {
             damageEnemy(state, o, e.hexEchoDmg * 0.5, { text: false, wid: e.hexWid });
             o.hexEchoDmg = e.hexEchoDmg * 0.5;
-            SV.Effects.text(o.x, o.y - o.r - 6, "月", "#ba8cff", 13);
+            SV.Effects.text(o.x, o.y - o.r - 6, L("MOON", "月"), "#ba8cff", 13);
           }
           // 腐朽天灾的爆炸传播同时带毒;传播印记的 spread=0,不会继续扩散。
           if (e.hexPoisonDmg > 0) {
@@ -520,7 +521,7 @@
           if (o !== e && o.bossType === "twins" && o.hp > 0) {
             o.enrage = true;
             damageEnemy(state, o, o.maxHp * 0.25, { text: false, nocrit: true });
-            SV.Effects.text(o.x, o.y - o.r - 8, "镜像反噬 -25%", "#ff5d73", 16);
+            SV.Effects.text(o.x, o.y - o.r - 8, L("MIRROR BACKLASH -25%", "镜像反噬 -25%"), "#ff5d73", 16);
           }
         }
       }
@@ -739,13 +740,13 @@
     else if (kind === "magnet") {
       for (let i = 0; i < state.gems.length; i++) state.gems[i].pulled = true;
       for (let i = 0; i < state.pickups.length; i++) if (state.pickups[i].kind === "treasure") state.pickups[i].pulled = true; // 连 Boss 宝箱一起吸过来
-      SV.Effects.text(p.x, p.y - 20, "磁吸!", SV.Config.COLORS.gold);
+      SV.Effects.text(p.x, p.y - 20, L("MAGNET!", "磁吸!"), SV.Config.COLORS.gold);
     }
-    else if (kind === "treasure") { gainXP(state, C.TREASURE_XP * m.xpMul); SV.Effects.text(p.x, p.y - 20, "宝箱!", SV.Config.COLORS.gold); }
+    else if (kind === "treasure") { gainXP(state, C.TREASURE_XP * m.xpMul); SV.Effects.text(p.x, p.y - 20, L("CHEST!", "宝箱!"), SV.Config.COLORS.gold); }
     else if (kind === "bomb") {
       SV.Effects.shake(10, 0.4);
       for (let i = 0; i < state.enemies.length; i++) { const e = state.enemies[i]; if (!e.isBoss) { damageEnemy(state, e, e.maxHp, { text: false }); } }
-      SV.Effects.text(p.x, p.y - 20, "清场!", "#ff5d73");
+      SV.Effects.text(p.x, p.y - 20, L("PURGE!", "清场!"), "#ff5d73");
     }
   }
 
@@ -935,19 +936,19 @@
         mkBurn(hx, hy);
       }
       for (let z = first; z < nz; z++) mkBurn(rx(), ry());
-      if (nz > 0) SV.HUD.toast("⚠ 灼烧区域!");
+      if (nz > 0) SV.HUD.toast(L("⚠ BURN ZONES!", "⚠ 灼烧区域!"));
     } else if (env.type === "freeze") {
       // 减速时长随时间增长,上限为触发间隔的 1/3(避免无限冰冻)
       p.slow = Math.min(env.interval / 3, env.dur * (1 + 0.5 * t)); p.slowF = env.slowF;
       state._envDebuffMax = p.slow; state._envDebuffPulse = 0.45;
-      SV.HUD.toast("❄ 冰冻冲击!");
+      SV.HUD.toast(L("❄ FREEZING BLAST!", "❄ 冰冻冲击!"));
       SV.Effects.ring(p.x, p.y, "#a8f0ff", 10, 120, 0.4, 3);
     } else if (env.type === "gravity") {
       // 随机方向牵引,时长随时间增长,上限为触发间隔的 1/3
       state._voidPullDir = U.rand(0, U.TAU);
       state._voidPull = Math.min(env.interval / 3, env.dur * (1 + 0.5 * t));
       state._envDebuffMax = state._voidPull; state._envDebuffPulse = 0.45;
-      SV.HUD.toast("⛓ 引力牵引!");
+      SV.HUD.toast(L("⛓ GRAVITY PULL!", "⛓ 引力牵引!"));
     }
   }
 
@@ -973,6 +974,7 @@
     makeBoss: makeBoss,
     makeGem: makeGem,
     makePickup: makePickup,
+    reserveEntityId: function (nextId) { if (isFinite(nextId) && nextId > _id) _id = Math.floor(nextId); },
     addEnemy: addEnemy,
     addBoss: addBoss,
     addEShot: addEShot,

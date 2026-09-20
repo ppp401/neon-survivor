@@ -3,6 +3,7 @@
   "use strict";
   const SV = window.SV;
   const U = SV.Util;
+  function L(en, zh) { return SV.I18n ? SV.I18n.pick(en, zh) : zh; }
 
   let el = {};
   let toastTimer = null;
@@ -33,7 +34,7 @@
         let tag = state.stage.name + " · " + SV.Config.DIFFICULTY[state.difficulty].name;
         const ch = SV.Config.CHARACTERS[state.charId];
         if (ch) tag += " · " + ch.name;
-        if (state.endless) tag += " · ∞无尽";
+        if (state.endless) tag += L(" · ∞ Endless", " · ∞无尽");
         el.stageTag.textContent = tag;
       }
 
@@ -62,7 +63,7 @@
           const def = SV.Config.BOSSES[b.bossType] || {};
           const col = def.color || "#ff5d73";
           const pct = U.clamp(b.hp / b.maxHp, 0, 1) * 100;
-          const enrage = b.enrage ? " ⚠狂暴" : "";
+          const enrage = b.enrage ? L(" ⚠ ENRAGED", " ⚠狂暴") : "";
           html += '<div class="boss-row">';
           html += '<div class="boss-name" style="color:' + col + '">' + (def.icon || "☠") + " " + (def.name || b.bossType) + enrage + "</div>";
           html += '<div class="boss-track"><div class="boss-fill" style="width:' + pct + "%;background:linear-gradient(90deg," + col + ",#fff);box-shadow:0 0 12px " + col + '"></div></div>';
@@ -82,11 +83,11 @@
     },
 
     showLevelUp: function (choices, onSelect) {
-      el.lvTitle.textContent = "升到 " + SV.Game.state.level + " 级!选择一项强化";
+      el.lvTitle.textContent = L("LEVEL " + SV.Game.state.level + "! CHOOSE AN UPGRADE", "升到 " + SV.Game.state.level + " 级!选择一项强化");
       let html = "";
       for (let i = 0; i < choices.length; i++) {
         const c = choices[i];
-        const tag = c.kind === "evolve" ? "进化" : c.kind === "newweapon" ? "新武器" : (c.kind === "passive" ? "被动" : "强化");
+        const tag = c.kind === "evolve" ? L("EVOLUTION", "进化") : c.kind === "fuse" ? L("FUSION", "融合") : c.kind === "newweapon" ? L("NEW WEAPON", "新武器") : (c.kind === "passive" ? L("PASSIVE", "被动") : L("UPGRADE", "强化"));
         html += '<button class="card rarity-' + c.rarity + '" data-idx="' + i + '">';
         html += '<div class="card-tag">' + tag + "</div>";
         html += '<div class="card-icon">' + ((c.id && c.kind !== "passive") ? SV.Config.weaponIconHTML(c.kind === "evolve" ? SV.Config.EVOLUTIONS[c.id].to : c.id, "card-weapon-mark") : '<span style="color:' + c.color + '">' + c.icon + '</span>') + "</div>";

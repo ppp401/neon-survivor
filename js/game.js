@@ -6,13 +6,47 @@
   const C = SV.Config.CONST;
   const CU = SV.Config.CURVES;
   const STAGES = SV.Config.STAGES;
+  const SAVE_VERSION = 1;
+  function L(en, zh) { return SV.I18n ? SV.I18n.pick(en, zh) : zh; }
 
   const Game = {
     state: null,
-    mode: "menu" // menu | select | charselect | weaponselect | playing | paused | levelup | endlessprompt | gameover
+    mode: "menu" // menu | select | charselect | weaponselect | playing | paused | levelup | endlessprompt | gameover | exited
   };
 
   let selStage = "ruins", selDiff = "normal", selChar = "bulwark", selStartWeapon = null;
+
+  function cloneRunState(state) {
+    const copy = Object.assign({}, state);
+    delete copy.stage; delete copy._mods; delete copy.hudAccum; delete copy.ended;
+    copy.player = Object.assign({}, state.player, { blades: [], sentries: [] });
+    return JSON.parse(JSON.stringify(copy));
+  }
+
+  function createSaveSnapshot() {
+    const s = Game.state;
+    return JSON.parse(JSON.stringify({
+      version: SAVE_VERSION,
+      savedAt: Date.now(),
+      summary: { stageId:s.stageId, difficulty:s.difficulty, charId:s.charId, time:s.time, level:s.level, kills:s.kills, hp:s.player.hp, maxHp:s.player.maxHp },
+      state: cloneRunState(s),
+      runtime: SV.Weapons.snapshotRuntime()
+    }));
+  }
+
+  function validSnapshot(save) {
+    if (!save || save.version !== SAVE_VERSION || !save.state || !save.runtime) return false;
+    const s = save.state;
+    return !!(STAGES[s.stageId] && SV.Config.DIFFICULTY[s.difficulty] && SV.Config.CHARACTERS[s.charId] &&
+      s.player && Array.isArray(s.enemies) && Array.isArray(s.weapons) && isFinite(s.time) && isFinite(s.level));
+  }
+
+  function getSavedRun() {
+    const save = SV.Storage.getSavedRun ? SV.Storage.getSavedRun() : null;
+    if (validSnapshot(save)) return save;
+    if (save && SV.Storage.clearSavedRun) SV.Storage.clearSavedRun();
+    return null;
+  }
 
   function resolveStartWeapon() {
     const ch = SV.Config.CHARACTERS[selChar] || SV.Config.CHARACTERS.bulwark;
@@ -91,13 +125,72 @@
     if (hud) hud.classList.toggle("hidden", !on);
   }
 
-  function startRun() {
+  function startRun(clearSave) {
+    if (clearSave && SV.Storage.clearSavedRun) SV.Storage.clearSavedRun();
     reset();
     Game.mode = "playing";
     SV.Menus.hideAll();
     showHud(true);
     SV.HUD.refresh(Game.state);
     SV.Audio.startBgm(Game.state.stage && Game.state.stage.bgm);
+  }
+
+  function continueSavedRun() {
+    const save = getSavedRun();
+    if (!save) { refreshTitleBest(); return false; }
+    const saved = JSON.parse(JSON.stringify(save.state));
+    selStage = saved.stageId; selDiff = saved.difficulty; selChar = saved.charId; selStartWeapon = saved.startWeaponId || null;
+    reset();
+    const s = Game.state;
+    for (const k in s) delete s[k];
+    for (const k in saved) s[k] = saved[k];
+    const ch = SV.Config.CHARACTERS[s.charId];
+    s.stage = STAGES[s.stageId];
+    s.charMul = { hpMul:ch.hpMul, speedMul:ch.speedMul };
+    s.charMods = ch.charMods || {};
+    s.special = ch.special || null;
+    s.hudAccum = 0; s.ended = false; s._mods = null;
+    if (!s.player.blades) s.player.blades = [];
+    if (!s.player.sentries) s.player.sentries = [];
+    SV.Weapons.restoreRuntime(s, save.runtime);
+    let maxId = 0;
+    for (let i = 0; i < s.enemies.length; i++) if (s.enemies[i].id > maxId) maxId = s.enemies[i].id;
+    if (SV.Entities.reserveEntityId) SV.Entities.reserveEntityId(maxId + 1);
+    SV.Entities.invalidateMods(s);
+    SV.Entities.rebuildGrid(s);
+    SV.Effects.clear();
+    SV.Renderer.setPalette(s.stage.palette);
+    SV.Renderer.snapCam(s.player.x, s.player.y);
+    Game.mode = "playing";
+    SV.Menus.hideAll(); showHud(true); SV.HUD.refresh(s);
+    SV.Audio.startBgm(s.stage.bgm);
+    return true;
+  }
+
+  function saveAndExit() {
+    if (Game.mode !== "paused") return false;
+    let snapshot;
+    try { snapshot = createSaveSnapshot(); } catch (e) { snapshot = null; }
+    if (!snapshot || !SV.Storage.saveRun || !SV.Storage.saveRun(snapshot)) {
+      SV.HUD.toast(L("Save failed — storage is unavailable or full", "保存失败：存储不可用或空间不足"));
+      return false;
+    }
+    Game.mode = "menu";
+    reset();
+    SV.Audio.startBgm(SV.Config.MENU_BGM);
+    refreshTitleBest();
+    SV.Menus.show("title"); showHud(false);
+    return true;
+  }
+
+  function exitGame() {
+    Game.mode = "exited";
+    SV.Audio.stopBgm();
+    showHud(false);
+    SV.Menus.hideAll();
+    try { if (typeof window.close === "function") window.close(); } catch (e) {}
+    // 普通浏览器通常拒绝关闭并非由脚本打开的标签页，显示明确的只读降级页。
+    SV.Menus.show("exit");
   }
 
   function showCharSelect() {
@@ -133,7 +226,7 @@
     SV.Menus.hideAll();
     showHud(true);
     SV.HUD.refresh(Game.state);
-    SV.HUD.toast("∞ 无尽模式!敌人将不断增强");
+    SV.HUD.toast(L("∞ Endless Mode! Enemies will keep growing stronger", "∞ 无尽模式!敌人将不断增强"));
   }
 
   function togglePause() {
@@ -176,6 +269,7 @@
   function endRun(won) {
     if (Game.state.ended) return;
     Game.state.ended = true;
+    if (SV.Storage.clearSavedRun) SV.Storage.clearSavedRun();
     Game.mode = "gameover";
     SV.Audio.stopBgm();
     const s = Game.state;
@@ -196,7 +290,13 @@
 
   // ── 菜单/按钮动作
   function handleAct(act, el) {
-    if (act === "start") showSelect(); // 标题 → 选图(第一步)
+    if (act === "start" || act === "newGame") {
+      if (getSavedRun()) SV.Menus.show("newgameconfirm");
+      else showSelect();
+    }
+    else if (act === "confirmNewGame") { if (SV.Storage.clearSavedRun) SV.Storage.clearSavedRun(); refreshTitleBest(); showSelect(); }
+    else if (act === "cancelNewGame") SV.Menus.show("title");
+    else if (act === "continueRun") continueSavedRun();
     else if (act === "pickStage") { // 选图:只选中并重绘,留在本屏
       selStage = el.getAttribute("data-stage");
       SV.Storage.setSelection(selStage, selDiff);
@@ -225,17 +325,29 @@
       }
     }
     else if (act === "toCharBack") showCharSelect();
-    else if (act === "beginRun") startRun();
+    else if (act === "beginRun") startRun(true);
     else if (act === "endlessYes") enterEndless();
     else if (act === "endlessNo") endRun(true);
-    else if (act === "restart") startRun();
+    else if (act === "restart") startRun(true);
     else if (act === "pause" || act === "resume") togglePause();
+    else if (act === "saveExit") saveAndExit();
+    else if (act === "exitGame") exitGame();
     else if (act === "menu") { Game.mode = "menu"; reset(); SV.Audio.startBgm(SV.Config.MENU_BGM); refreshTitleBest(); SV.Menus.show("title"); showHud(false); }
     else if (act === "toggleSound") { const m = !SV.Audio.isMuted(); SV.Audio.setMuted(m); SV.Menus.setSoundToggle(m); }
+    else if (act === "setLanguage") {
+      const lang = el.getAttribute("data-lang");
+      if (SV.I18n) SV.I18n.setLanguage(lang);
+      SV.Menus.setDiffHighlight(selDiff);
+      SV.Menus.setSoundToggle(SV.Audio.isMuted());
+      SV.Menus.setFxToggle(SV.Effects.isReduced());
+      if (SV.Menus.setAutoToggle && SV.Auto) SV.Menus.setAutoToggle(!!SV.Auto.enabled);
+      if (SV.Menus.setEshotToggle && SV.Renderer) SV.Menus.setEshotToggle(SV.Renderer.getEshotMark());
+      refreshTitleBest();
+    }
     else if (act === "toggleFx") {
       const v = !SV.Storage.get("reducedFx"); SV.Storage.setReducedFx(v); SV.Effects.setReducedFx(v);
       SV.Menus.setFxToggle(v);
-      SV.HUD.toast(v ? "已开启省电模式" : "已关闭省电模式");
+      SV.HUD.toast(v ? L("Battery Saver enabled", "已开启省电模式") : L("Battery Saver disabled", "已关闭省电模式"));
     }
     else if (act === "toggleAuto") { if (SV.Auto && SV.Auto.toggle) SV.Auto.toggle(); }
     else if (act === "toggleEshotMark") {
@@ -243,7 +355,7 @@
       SV.Renderer.setEshotMark(v);
       SV.Storage.setEshotMark(v);
       SV.Menus.setEshotToggle(v);
-      SV.HUD.toast(v ? "敌弹标红已开启" : "敌弹标红已关闭");
+      SV.HUD.toast(v ? L("Enemy bullet markers enabled", "敌弹标红已开启") : L("Enemy bullet markers disabled", "敌弹标红已关闭"));
     }
   }
 
@@ -255,6 +367,19 @@
     const df = SV.Config.DIFFICULTY[selDiff] || SV.Config.DIFFICULTY.normal;
     const best = SV.Storage.getBest(selStage, selDiff, selChar).time;
     tb.textContent = ch.name + " · " + st.name + " · " + df.name + " · " + U.fmtTime(best);
+    const save = getSavedRun();
+    const btn = document.getElementById("btnContinueRun"), progress = document.getElementById("savedRunProgress");
+    const actions = document.querySelector("#titleScreen .title-actions");
+    if (actions) actions.classList.toggle("has-save", !!save);
+    if (btn) btn.classList.toggle("hidden", !save);
+    if (progress) {
+      progress.classList.toggle("hidden", !save);
+      if (save) {
+        const q = save.summary || save.state, sch = SV.Config.CHARACTERS[q.charId], sst = STAGES[q.stageId], sdf = SV.Config.DIFFICULTY[q.difficulty];
+        const hp = Math.max(0, Math.round((q.hp || 0) / Math.max(1, q.maxHp || 1) * 100));
+        progress.textContent = "▣ " + sch.name + " · " + sst.name + " · " + sdf.name + " · " + U.fmtTime(q.time) + " · " + L("Lv ", "等级 ") + q.level + " · " + L("HP ", "生命 ") + hp + "%";
+      }
+    }
   }
 
   // ── 每帧输入(始终运行)
@@ -264,9 +389,9 @@
     }
     if (SV.Input.consumeMute()) { const m = !SV.Audio.isMuted(); SV.Audio.setMuted(m); SV.Menus.setSoundToggle(m); }
     if (SV.Input.consumeConfirm()) {
-      if (Game.mode === "menu") showSelect();
+      if (Game.mode === "menu") { if (getSavedRun()) continueSavedRun(); else showSelect(); }
       else if (Game.mode === "endlessprompt") enterEndless(); // 回车默认进入无尽
-      else if (Game.mode === "gameover") startRun();
+      else if (Game.mode === "gameover") startRun(true);
       else if (Game.mode === "paused") togglePause();
     }
   }
@@ -317,6 +442,7 @@
   // ── 启动
   Game.boot = function () {
     Game.state = {};
+    if (SV.I18n && SV.I18n.init) SV.I18n.init();
     selStage = SV.Storage.get("lastStage") || "ruins";
     selDiff = SV.Storage.get("lastDiff") || "normal";
     selChar = SV.Storage.get("lastChar") || "bulwark";
@@ -379,6 +505,11 @@
 
     requestAnimationFrame(frame);
   };
+
+  Game.createSaveSnapshot = createSaveSnapshot;
+  Game.continueSavedRun = continueSavedRun;
+  Game.saveAndExit = saveAndExit;
+  Game.exitGame = exitGame;
 
   SV.Game = Game;
 })();

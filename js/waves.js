@@ -4,6 +4,7 @@
   const SV = window.SV;
   const U = SV.Util;
   const C = SV.Config.CONST;
+  function L(en, zh) { return SV.I18n ? SV.I18n.pick(en, zh) : zh; }
   const CFG = SV.Config;
   const CU = CFG.CURVES;
 
@@ -156,7 +157,7 @@
       SV.Audio.bossWarn();
       SV.Effects.shake(8, 0.6);
       const one = bossTypes.length === 1 && CFG.BOSSES[bossTypes[0]];
-      SV.HUD.toast(one ? "⚠ " + one.name + " 降临" : "⚠ 强敌集群来袭（" + spawned + "名）");
+      SV.HUD.toast(one ? L("⚠ " + one.name + " has arrived", "⚠ " + one.name + " 降临") : L("⚠ Elite wave incoming (" + spawned + ")", "⚠ 强敌集群来袭（" + spawned + "名）"));
     }
   };
 

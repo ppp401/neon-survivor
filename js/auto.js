@@ -7,6 +7,7 @@
   const U = SV.Util;
   const A = SV.Config.AUTO;
   const CC = SV.Config.CONST;
+  function L(en, zh) { return SV.I18n ? SV.I18n.pick(en, zh) : zh; }
 
   const Auto = {
     enabled: false,
@@ -418,7 +419,7 @@
     Auto.enabled = !!b;
     SV.Storage.set("autoMode", Auto.enabled);
     syncButton();
-    if (SV.HUD && SV.HUD.toast) SV.HUD.toast(Auto.enabled ? "已开启全自动模式" : "已关闭全自动模式");
+    if (SV.HUD && SV.HUD.toast) SV.HUD.toast(Auto.enabled ? L("Auto Mode enabled", "已开启全自动模式") : L("Auto Mode disabled", "已关闭全自动模式"));
   }
   function toggle() { setEnabled(!Auto.enabled); }
 

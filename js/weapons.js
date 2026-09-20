@@ -5,6 +5,7 @@
   const U = SV.Util;
   const C = SV.Config.CONST;
   const Entities = SV.Entities;
+  function L(en, zh) { return SV.I18n ? SV.I18n.pick(en, zh) : zh; }
 
   // ── 投射物池
   function pFactory() {
@@ -708,7 +709,7 @@
         e.poisonDmg = s.dot * (1 + 0.4 * ((e.poisonStacks || 1) - 1)); e.poisonTick = 0; e.poisonWid = w.id;
         e.poisonHexCut = s.fuseCut || 0; e.hexPoisonDmg = s.dot; e.hexPoisonDur = s.dotDur; e.hexFuseCut = s.fuseCut || 0;
       } // 融合:腐朽天灾
-      SV.Effects.text(e.x, e.y - e.r - 6, "诅", "#d0a0ff", 13);
+      SV.Effects.text(e.x, e.y - e.r - 6, L("HEX", "诅"), "#d0a0ff", 13);
       marked++;
     }
     if (marked) SV.Audio.hit();
@@ -1156,7 +1157,7 @@
             e.sheepBombFreeze = pr.tsFreeze; e.sheepBombWid = pr.weaponId;
             e.sheepBombSpreadChance = pr.spreadChance || 0; e.sheepBombSpreadDur = pr.spreadDur || 0;
           }
-          SV.Effects.text(e.x, e.y - e.r - 6, "咩", pr.color, 13);
+          SV.Effects.text(e.x, e.y - e.r - 6, L("BAA", "咩"), pr.color, 13);
           if (pr.sheepPierce > 0) { pr.sheepPierce--; return false; } // 进化/融合:穿透继续
           return true;                                            // 基础:命中即消耗(单体)
         }
@@ -1684,12 +1685,48 @@
     state.player.sentries = [];
   }
 
+  function snapshotRuntime() {
+    const projectiles = [];
+    for (let i = 0; i < proj.list.length; i++) {
+      const src = proj.list[i], out = {};
+      for (const k in src) {
+        if (k === "target" || k === "beamRef") continue;
+        out[k] = src[k];
+      }
+      out.targetId = src.target && src.target.id != null ? src.target.id : null;
+      projectiles.push(out);
+    }
+    return { projectiles: projectiles, arcFields: JSON.parse(JSON.stringify(arcFields)) };
+  }
+
+  function restoreRuntime(state, saved) {
+    proj.clear(); beams.length = 0; swings.length = 0; arcFields.length = 0;
+    const byId = {};
+    for (let i = 0; i < state.enemies.length; i++) byId[state.enemies[i].id] = state.enemies[i];
+    const ps = saved && Array.isArray(saved.projectiles) ? saved.projectiles : [];
+    for (let i = 0; i < ps.length && i < C.MAX_PROJECTILES; i++) {
+      const src = ps[i], p = proj.acquire();
+      for (const k in src) if (k !== "targetId") p[k] = src[k];
+      p.target = src.targetId != null ? (byId[src.targetId] || null) : null;
+      if (p.beamLen > 0) {
+        p.beamRef = { pts:[[p.x,p.y],[p.x,p.y]], life:Infinity, max:Infinity, color:p.color, width:p.beamWidth, lance:true, evo:true };
+        beams.push(p.beamRef);
+      }
+    }
+    const fields = saved && Array.isArray(saved.arcFields) ? saved.arcFields : [];
+    for (let i = 0; i < fields.length; i++) arcFields.push(fields[i]);
+    state.player.blades = [];
+    state.player.sentries = [];
+  }
+
   const Weapons = {
     proj: proj,
     beams: beams,
     swings: swings,
     arcFields: arcFields,
     init: init,
+    snapshotRuntime: snapshotRuntime,
+    restoreRuntime: restoreRuntime,
     stats: stats,
     updateAll: function (state, dt) {
       updateArcFields(state, dt);

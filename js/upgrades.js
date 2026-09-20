@@ -5,6 +5,7 @@
   const U = SV.Util;
   const C = SV.Config.CONST;
   const CFG = SV.Config;
+  function L(en, zh) { return SV.I18n ? SV.I18n.pick(en, zh) : zh; }
 
   function ownedSet(state) {
     const s = {};
@@ -19,7 +20,7 @@
     const mk = function (lv) { return SV.Weapons.stats({ id: w.id, level: lv, cd: 0, angle: 0, evolved: !!w.evolved }, state); };
     const a = mk(from), b = mk(from + 1);
     const CL = CFG.STAT_LABEL, CN = CFG.COUNT_NOUN;
-    const noun = CN[w.id] || CN[w.id.replace(/_evo$/, "")] || "数量";
+    const noun = CN[w.id] || CN[w.id.replace(/_evo$/, "")] || L("Count", "数量");
     const parts = []; let milestone = false;
     for (const k in b) {
       const av = a[k], bv = b[k];
@@ -38,13 +39,14 @@
     }
     if (!parts.length) {
       const dd = (b.damage || 0) - (a.damage || 0);
-      if (Math.abs(dd) >= 0.05) parts.push("伤害 +" + (Math.abs(dd) < 1 ? Math.round(dd * 10) / 10 : Math.round(dd)));
+      if (Math.abs(dd) >= 0.05) parts.push(L("Damage +", "伤害 +") + (Math.abs(dd) < 1 ? Math.round(dd * 10) / 10 : Math.round(dd)));
     }
     return { text: parts.join(" · "), milestone: milestone };
   }
 
   // 多伤害来源武器的补充说明(暂停面板用):把每种伤害成分的数值分别说清楚
   function extraSummary(id, s) {
+    if (SV.I18n && SV.I18n.getLanguage() === "en") return extraSummaryEn(id, s);
     const R = Math.round;
     const F10 = function (v) { return Math.round((v || 0) * 100) / 100; };
     const out = [];
@@ -151,6 +153,47 @@
     return out;
   }
 
+  function extraSummaryEn(id, s) {
+    const R=Math.round, F=function(v){return Math.round((v||0)*100)/100;}, out=[];
+    switch(id){
+      case "meteor_evo": case "meteor_chain": if(s.burn)out.push("Scorch "+R(s.burn)+"/0.5s×"+F(s.burnDur)+"s");if(id==="meteor_chain")out.push("Impact chains×"+(s.chainHops||0));break;
+      case "lance":out.push("One hit per contact");break; case "lance_evo":out.push("Beam hits every 0.1s");break;
+      case "lance_vortex":out.push("Vortex "+R(s.damage)+"/0.2s · Laser "+R(s.beamDmg||0)+"/"+F(s.beamTick||.1)+"s");break;
+      case "spear_evo":if(s.armorBreak)out.push("Armor break "+F(s.armorBreak)+"s (+50% damage, refreshes)");break;
+      case "missile_chain":out.push("Impact lightning "+R(s.damage*.6)+"/jump×"+(s.chainHops||3));out.push("Kill pursuit "+(s.chase||0));break;
+      case "frost_poison":if(s.freeze)out.push("Freeze "+F(s.freeze)+"s (+50% damage)");if(s.dot)out.push("Poison "+R(s.dot)+"/0.5s×"+F(s.dotDur)+"s");break;
+      case "shotgun_grenade":if(s.splash)out.push("Each hit splashes "+R(s.damage*s.splashMul)+" (radius "+R(s.splash)+")");break;
+      case "grenade_evo":out.push("Sub-blast "+R(s.damage*.55)+"×"+(typeof s.cluster==="number"?s.cluster:2));break;
+      case "railgun_evo":case "railgun_grenade":if(s.explode)out.push("Pierce blast "+R(s.damage)+" · radius "+R(s.explode));if(id==="railgun_grenade")out.push("Every pierce triggers; first splits "+(s.cluster||0));break;
+      case "detonate":case "detonate_evo":case "crescent_detonate":if(s.explodeDmg)out.push("Detonation "+R(s.explodeDmg)+" (radius "+R(s.explodeR)+", "+Math.round((s.explodeChance||0)*100)+"%)"+(s.chainHops?" · "+s.chainHops+" chains":""));break;
+      case "shockwave_frost":if(s.freeze)out.push("Freeze "+F(s.freeze)+"s");if(s.shatter)out.push("Re-hit shatters for 50% (radius "+R(s.shatter)+")");break;
+      case "polymorph_timestop":out.push("End/death blast "+R(s.bombDmg)+" (radius "+R(s.bombRadius)+") · Freeze "+F(s.freeze)+"s");break;
+      case "timestop_evo":if(s.shatter)out.push("Shatter "+R(s.damage*.5));if(s.freeze)out.push("Impact freeze "+F(s.freeze)+"s");break;
+      case "blade_aura":if(s.splash)out.push("Splash "+R(s.damage*s.splashMul));if(s.pull)out.push("Pull "+R(s.pull));out.push("Blade 0.25s · ring 0.4s");break;
+      case "crescent_evo":if(s.leaveTrail)out.push("Arc field "+R(s.damage*.25)+"/0.5s×1.2s");break;
+      case "chain_evo":out.push("Damage ×1.1 per jump");break;
+      case "hex_poison":out.push("Poison "+R(s.dot)+"/0.5s×"+F(s.dotDur)+"s");out.push("Fuse -"+s.fuseCut+"s per jump");out.push("Blast spreads hex + poison");if(s.frac)out.push("Blast +"+Math.round(s.frac*100)+"% max HP (Boss ÷5)");break;
+      case "hex":case "hex_evo":if(s.frac)out.push("Blast +"+Math.round(s.frac*100)+"% max HP (Boss ÷5)");if(s.delay)out.push("Fuse "+F(s.delay)+"s · spreads to "+(s.spread||0));break;
+      case "missile_evo":out.push("Unlimited pursuit during lifetime · no decay");break; case "boomerang_evo":out.push("Pierces outbound and returning");break;
+      case "shotgun_evo":case "polymorph_evo":out.push("Pierces "+(s.pierce||0)+" per shot");break;case "sentry_evo":out.push("Turret rounds pierce "+(s.pierce||0));break;
+      case "frost_evo":out.push("Every "+(s.freezeHits||1)+" hits freezes "+F(s.freeze)+"s (+50% damage)");break;case "poison_evo":out.push(F(s.dotDur)+"s · spreads and slows "+Math.round(s.slow*100)+"%/"+F(s.slowDur)+"s");break;
+      case "vortex_evo":out.push("Vortex damage every 0.2s×"+F(s.life)+"s · Pull "+R(s.pull));break;case "shockwave_evo":out.push("Hit freezes "+F(s.freeze)+"s");break;
+      case "boomerang_sentry":out.push("Each turret fires every "+F(s.fireCd)+"s · pierce "+(s.pierce||0));break;case "blade_evo":out.push("0.25s hit interval per enemy");break;
+      case "blade_boomerang":out.push("Blades hunt and return in sequence · ring interval "+F(s.hitCd)+"s");break;case "blade_frost":out.push("Every "+s.frostHits+" hits: ice burst "+R(s.burstDmg)+" (radius "+R(s.burstR)+") · freeze "+F(s.freeze)+"s");break;
+      case "missile_aura":out.push("Split tracking · gravity radius "+R(s.fieldR)+" · field "+R(s.fieldDmg)+"/"+F(s.fieldTick)+"s · pursuits "+s.chase);break;case "missile_railgun":out.push("Guides for "+F(s.calibrate)+"s, then pierces infinitely");break;
+      case "chain_sentry":out.push("Each turret fires every "+F(s.fireCd)+"s · "+s.chainHops+" jumps");break;case "aura_poison":out.push("Corrosion stacks to "+s.maxStacks+" · +"+Math.round(s.stackMul*100)+"% damage each");break;
+      case "shotgun_shockwave":out.push(s.resonanceHits+" hits trigger "+R(s.burstDmg)+" resonance (radius "+R(s.burstR)+")");break;case "shotgun_spear":out.push(s.pelletCount+" fragments per pierce · max "+s.pelletCap+" per volley");break;
+      case "boomerang_crescent":out.push("Hits out and back · 0.75s turn · radius "+s.minR+"→"+s.maxR+" · trail "+R(s.trailDmg)+"/"+F(s.trailTick)+"s");break;
+      case "grenade_meteor":out.push(s.count+" carriers · each blast "+R(s.damage)+" summons "+s.childCount+" meteors×"+R(s.childDmg));break;
+      case "railgun_timestop":out.push("Beam "+R(s.damage)+" · corridor "+R(s.corridorDmg)+"/"+F(s.corridorTick)+"s · freeze "+F(s.freeze)+"s");break;
+      case "vortex_meteor":out.push("Vortex "+R(s.damage)+"/0.2s · scorch "+R(s.burn)+"/0.5s");break;case "vortex_detonate":out.push("Final blast "+R(s.boomBase)+" + "+R(s.boomPer)+" per capture, max "+s.captureMax);break;
+      case "sentry_hex":out.push("2 focus + 3 spread · judgment after "+s.judgeHits+" hits: "+R(s.judgeDmg)+" + "+Math.round(s.judgeFrac*100)+"% max HP");break;
+      case "shockwave_polymorph":out.push("First wave polymorphs "+F(s.sheep)+"s · next impact blasts "+R(s.collideDmg));break;case "hex_crescent":out.push("Moon brand · blast "+R(s.hexDmg)+" + "+Math.round(s.frac*100)+"% max HP and spreads");break;
+      case "detonate_polymorph":out.push("End/death blast "+R(s.bombDmg)+" · "+Math.round(s.spreadChance*100)+"% one-time spread");break;case "spear_timestop":out.push("Replay after "+F(s.echoDelay)+"s for "+R(s.echoDmg)+" and freeze "+F(s.freeze)+"s");break;
+      case "lance_chain":out.push("Each beam sweeps every "+F(s.tick)+"s · lightning jumps "+s.chainHops);break;
+    } return out;
+  }
+
   // 武器当前生效数值摘要(暂停面板用)
   function summary(w, state) {
     const def = CFG.weaponDef(w.id);
@@ -160,21 +203,21 @@
     const noun = CN[w.id] || CN[w.id.replace(/_evo$/, "")] || "";
     const p = [];
     if (s.count != null && noun) p.push(s.count + " " + noun);
-    if (s.damage != null) p.push(Math.round(s.damage) + " 伤害");
+    if (s.damage != null) p.push(Math.round(s.damage) + L(" damage", " 伤害"));
     if (s.cooldown != null) p.push("CD " + (Math.round(s.cooldown * 100) / 100) + "s");
-    if (s.radius != null) p.push("半径 " + Math.round(s.radius));
-    if (s.vrad != null) p.push("卷半径 " + Math.round(s.vrad));
-    if (s.length != null) p.push("长 " + Math.round(s.length));
-    if (s.beams != null) p.push(s.beams + " 光束");
-    if (s.chains != null) p.push("连跳 " + (s.chains >= 99 ? "∞" : s.chains));
-    if (s.chase != null) p.push("追击 " + (s.chase >= 99 ? "∞" : s.chase));
-    if (s.dot != null) p.push("毒 " + Math.round(s.dot) + "/跳");
-    if (s.fireCd != null) p.push("射速 " + (Math.round(s.fireCd * 100) / 100) + "s");
-    if (s.tick != null) p.push("每 " + (Math.round(s.tick * 100) / 100) + "s");
-    if (s.slow != null) p.push("减速 " + Math.round(s.slow * 100) + "%");
-    if (s.dur != null) p.push("变形 " + (Math.round(s.dur * 10) / 10) + "s");
-    if (s.interceptR != null) p.push("拦截半径 " + F(s.interceptR));
-    if (w.id === "spear_lance") p.push("光栅 "+F(s.gridDmg)+"/"+F(s.gridTick)+"s×"+F(s.gridLife)+"s · 长"+F(s.gridLen)+" · 最多"+s.gridMax+"条");
+    if (s.radius != null) p.push(L("Radius ", "半径 ") + Math.round(s.radius));
+    if (s.vrad != null) p.push(L("Vortex radius ", "卷半径 ") + Math.round(s.vrad));
+    if (s.length != null) p.push(L("Length ", "长 ") + Math.round(s.length));
+    if (s.beams != null) p.push(s.beams + L(" beams", " 光束"));
+    if (s.chains != null) p.push(L("Chains ", "连跳 ") + (s.chains >= 99 ? "∞" : s.chains));
+    if (s.chase != null) p.push(L("Pursuits ", "追击 ") + (s.chase >= 99 ? "∞" : s.chase));
+    if (s.dot != null) p.push(L("Poison ", "毒 ") + Math.round(s.dot) + L("/tick", "/跳"));
+    if (s.fireCd != null) p.push(L("Fire interval ", "射速 ") + (Math.round(s.fireCd * 100) / 100) + "s");
+    if (s.tick != null) p.push(L("Every ", "每 ") + (Math.round(s.tick * 100) / 100) + "s");
+    if (s.slow != null) p.push(L("Slow ", "减速 ") + Math.round(s.slow * 100) + "%");
+    if (s.dur != null) p.push(L("Polymorph ", "变形 ") + (Math.round(s.dur * 10) / 10) + "s");
+    if (s.interceptR != null) p.push(L("Intercept radius ", "拦截半径 ") + F(s.interceptR));
+    if (w.id === "spear_lance") p.push(L("Grid ", "光栅 ")+F(s.gridDmg)+"/"+F(s.gridTick)+"s×"+F(s.gridLife)+"s · "+L("length ","长")+F(s.gridLen)+" · "+L("max ","最多")+s.gridMax+L(" lines","条"));
     const ex = extraSummary(w.id, s);
     for (let i = 0; i < ex.length; i++) p.push(ex[i]);
     return p.join(" · ") || def.desc;
@@ -183,16 +226,16 @@
   // 各被动在 Entities.mods() 中的曲线参数(与 entities.js 保持一致),用于计算"下一级真实增量"。
   // 收益递减(rootDim/capDim)后,实际增量小于首级——升级卡需展示真实增量而非首级文案。
   const PASSIVE_CURVE = {
-    maxhp:     { kind: "root", per: 28,    mul: "hp", fmt: function (d) { return "最大生命 +" + Math.round(d); } },
-    speed:     { kind: "root", per: 0.09,  fmt: function (d) { return "移速 +" + Math.round(d * 100) + "%"; } },
-    damage:    { kind: "root", per: 0.11,  fmt: function (d) { return "伤害 +" + Math.round(d * 100) + "%"; } },
-    cooldown:  { kind: "cap", cap: 0.70, v1: 0.075, fmt: function (d) { return "冷却 -" + Math.round(d * 100) + "%"; } },
-    area:      { kind: "root", per: 0.11,  fmt: function (d) { return "范围 +" + Math.round(d * 100) + "%"; } },
-    armor:     { kind: "cap", cap: 0.60, v1: 0.095, fmt: function (d) { return "减伤 -" + Math.round(d * 100) + "%"; } },
-    regen:     { kind: "root", per: 2,     fmt: function (d) { return "再生 +" + (Math.round(d * 10) / 10) + "/s"; } },
-    luck:      { kind: "root", per: 0.17,  fmt: function (d) { return "幸运 +" + Math.round(d * 100) + "%"; } },
-    crit:      { kind: "cap", cap: 1.0, v1: 0.09, fmt: function (d) { return "暴击 +" + Math.round(d * 100) + "%"; } },
-    lifesteal: { kind: "cap", cap: C.LIFESTEAL_ATTR_CAP, v1: C.LIFESTEAL_FIRST, fmt: function (d) { return "吸血 +" + (Math.round(d * 1000) / 10) + "%"; } }
+    maxhp:     { kind: "root", per: 28,    mul: "hp", fmt: function (d) { return L("Max HP +", "最大生命 +") + Math.round(d); } },
+    speed:     { kind: "root", per: 0.09,  fmt: function (d) { return L("Speed +", "移速 +") + Math.round(d * 100) + "%"; } },
+    damage:    { kind: "root", per: 0.11,  fmt: function (d) { return L("Damage +", "伤害 +") + Math.round(d * 100) + "%"; } },
+    cooldown:  { kind: "cap", cap: 0.70, v1: 0.075, fmt: function (d) { return L("Cooldown -", "冷却 -") + Math.round(d * 100) + "%"; } },
+    area:      { kind: "root", per: 0.11,  fmt: function (d) { return L("Area +", "范围 +") + Math.round(d * 100) + "%"; } },
+    armor:     { kind: "cap", cap: 0.60, v1: 0.095, fmt: function (d) { return L("Damage taken -", "减伤 -") + Math.round(d * 100) + "%"; } },
+    regen:     { kind: "root", per: 2,     fmt: function (d) { return L("Regen +", "再生 +") + (Math.round(d * 10) / 10) + "/s"; } },
+    luck:      { kind: "root", per: 0.17,  fmt: function (d) { return L("Luck +", "幸运 +") + Math.round(d * 100) + "%"; } },
+    crit:      { kind: "cap", cap: 1.0, v1: 0.09, fmt: function (d) { return L("Critical +", "暴击 +") + Math.round(d * 100) + "%"; } },
+    lifesteal: { kind: "cap", cap: C.LIFESTEAL_ATTR_CAP, v1: C.LIFESTEAL_FIRST, fmt: function (d) { return L("Life steal +", "吸血 +") + (Math.round(d * 1000) / 10) + "%"; } }
   };
   // 计算某被动「从当前级升到下一级」的真实增量文案(无递减则退回静态文案)
   function passiveLevelText(state, id) {
@@ -213,7 +256,7 @@
     }
     if (id === "lifesteal") {
       const next = E.capDim(lvl + 1, C.LIFESTEAL_ATTR_CAP, C.LIFESTEAL_FIRST);
-      txt += " · 秒回上限升至 " + (Math.round(next * 1000) / 10) + "%最大生命/s";
+      txt += L(" · healing cap rises to ", " · 秒回上限升至 ") + (Math.round(next * 1000) / 10) + L("% max HP/s", "%最大生命/s");
     }
     return txt;
   }
@@ -224,7 +267,7 @@
     const lvl = state.passives[id] || 0;
     const dp = (E.rootDim(lvl + 1, 0.45) - E.rootDim(lvl, 0.45)) * 100;
     const dx = (E.rootDim(lvl + 1, 0.09) - E.rootDim(lvl, 0.09)) * 100;
-    return "拾取 +" + Math.round(dp) + "% · 经验 +" + Math.round(dx) + "%";
+    return L("Pickup +", "拾取 +") + Math.round(dp) + L("% · XP +", "% · 经验 +") + Math.round(dx) + "%";
   }
 
   function canEvolve(state, baseId) {
@@ -260,7 +303,7 @@
       const otherBase = other.replace(/_evo$/, "");
       for (let j = 0; j < state.weapons.length; j++) {
         const w = state.weapons[j];
-        if (w.id === other || w.id === otherBase) return "⚭ 有协同进化";
+        if (w.id === other || w.id === otherBase) return L("⚭ Fusion route available", "⚭ 有协同进化");
       }
     }
     return null;
@@ -275,7 +318,7 @@
       else if (fu.w2 === evoId) other = fu.w1;
       else continue;
       for (let j = 0; j < state.weapons.length; j++) {
-        if (state.weapons[j].id === other && state.weapons[j].evolved) return "⚭ 进化后可协同进化";
+        if (state.weapons[j].id === other && state.weapons[j].evolved) return L("⚭ Enables fusion after evolution", "⚭ 进化后可协同进化");
       }
     }
     return null;
@@ -295,7 +338,7 @@
     const def = CFG.weaponDef(id);
     const t = def && def.tags;
     if (!t || !t.length) return "";
-    const map = { melee: "近战", ranged: "远程", spell: "法术" };
+    const map = { melee: L("Melee", "近战"), ranged: L("Ranged", "远程"), spell: L("Spell", "法术") };
     const parts = [];
     for (let i = 0; i < t.length; i++) if (map[t[i]]) parts.push(map[t[i]]);
     return parts.join("·");
@@ -310,7 +353,7 @@
       const fu = CFG.FUSIONS[i];
       if (canFuse(state, fu) && weaponAllowed(state, CFG.weaponDef(fu.to))) {
         const left = CFG.weaponDef(fu.w1), right = CFG.weaponDef(fu.w2);
-        const source = "⚭ 来源：" + (left ? left.name : fu.w1) + " + " + (right ? right.name : fu.w2);
+        const source = L("⚭ Sources: ", "⚭ 来源：") + (left ? left.name : fu.w1) + " + " + (right ? right.name : fu.w2);
         pool.push({ c: { kind: "fuse", id: fu.to, combo: fu, name: fu.name + " ⚭", desc: fu.desc, trait: traitLabel(fu.to), icon: fu.icon, color: fu.color, rarity: "legend", synergy: source }, weight: 300 });
       }
     }
@@ -320,7 +363,7 @@
         const evo = CFG.EVOLUTIONS[baseId];
         const syn = evolveSynergy(state, baseId);
         const exempt = !passiveAllowed(state, evo.reqPassive);
-        pool.push({ c: { kind: "evolve", id: baseId, name: evo.name, desc: evo.desc + (exempt ? " · 角色豁免：无需对应被动" : ""), trait: traitLabel(evo.to), icon: evo.icon, color: evo.color, rarity: "legend", synergy: exempt ? ((syn ? syn + " · " : "") + "角色豁免") : syn }, weight: 200 });
+        pool.push({ c: { kind: "evolve", id: baseId, name: evo.name, desc: evo.desc + (exempt ? L(" · Character exemption: passive not required", " · 角色豁免：无需对应被动") : ""), trait: traitLabel(evo.to), icon: evo.icon, color: evo.color, rarity: "legend", synergy: exempt ? ((syn ? syn + " · " : "") + L("Character exemption", "角色豁免")) : syn }, weight: 200 });
       }
     }
     // 3) 已有武器升级(显示该级具体收益)
@@ -342,7 +385,7 @@
         const def = CFG.WEAPONS[id];
         if (!weaponAllowed(state, def)) continue;
         const syn = synergyOf(state, id);
-        pool.push({ c: { kind: "newweapon", id: id, name: def.name + " (新)", desc: def.desc, trait: traitLabel(id), icon: def.icon, color: def.color, rarity: "epic", synergy: syn }, weight: 12 + luck * 30 });
+        pool.push({ c: { kind: "newweapon", id: id, name: def.name + L(" (NEW)", " (新)"), desc: def.desc, trait: traitLabel(id), icon: def.icon, color: def.color, rarity: "epic", synergy: syn }, weight: 12 + luck * 30 });
       }
     }
     // 4) 被动升级(超设计满级后为递减的溢出强化)
@@ -352,7 +395,7 @@
       if (lvl < C.PASSIVE_MAX_LEVEL) {
         const def = CFG.PASSIVES[id];
         const inc = passiveLevelText(state, id) || magnetLevelText(state, id);
-        pool.push({ c: { kind: "passive", id: id, name: def.name + " Lv" + (lvl + 1), desc: inc ? ("本次:" + inc + (lvl >= 1 ? "(递减中)" : "")) : (def.desc + " (" + def.per + ")"), icon: def.icon, color: def.color, rarity: lvl >= 3 ? "rare" : "common" }, weight: Math.max(2, 22 - lvl) });
+        pool.push({ c: { kind: "passive", id: id, name: def.name + " Lv" + (lvl + 1), desc: inc ? (L("This level: ", "本次:") + inc + (lvl >= 1 ? L(" (diminishing)", "(递减中)") : "")) : (def.desc + " (" + def.per + ")"), icon: def.icon, color: def.color, rarity: lvl >= 3 ? "rare" : "common" }, weight: Math.max(2, 22 - lvl) });
       }
     }
     return pool;

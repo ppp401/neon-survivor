@@ -511,10 +511,11 @@
       const d = weaponDef(ids[0]);
       return { icon: d.icon, name: d.name };
     }
-    const cn = { melee: "近战", ranged: "远程", spell: "法术" };
+    const zh = !(SV.I18n && SV.I18n.getLanguage && SV.I18n.getLanguage() === "en");
+    const cn = zh ? { melee: "近战", ranged: "远程", spell: "法术" } : { melee: "Melee", ranged: "Ranged", spell: "Spell" };
     const tags = (ch && ch.startWeaponTags) || [];
     const t = tags.map(function (x) { return cn[x] || x; }).join("·");
-    return { icon: "◈", name: t ? "可选" + t + "武器" : "可选 " + ids.length + " 把武器" };
+    return { icon: "◈", name: zh ? (t ? "可选" + t + "武器" : "可选 " + ids.length + " 把武器") : (t ? t + " starting weapons" : ids.length + " starting weapons") };
   }
 
   // ── 敌人(20 种)。hp/speed/dmg 为分钟1 基础值,实际生成时乘难度倍率。shape 控制渲染形状,skill 为图鉴文案。

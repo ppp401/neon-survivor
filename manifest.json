@@ -1,8 +1,8 @@
 {
-  "name": "霓虹幸存者 · Neon Survivor",
-  "short_name": "霓虹幸存者",
-  "description": "在潮水般的敌人中存活 · 收集经验 · 进化你的武器",
-  "lang": "zh-CN",
+  "name": "Neon Survivor",
+  "short_name": "Neon Survivor",
+  "description": "Survive the endless horde, collect XP, and evolve your weapons.",
+  "lang": "en",
   "dir": "ltr",
   "start_url": "./index.html?source=pwa",
   "scope": "./",
