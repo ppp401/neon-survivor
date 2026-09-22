@@ -654,12 +654,17 @@
       for (let i = 0; i < list.length; i++) {
         const p = list[i];
         if (p.shockwave) continue; // 冲击波用描边环绘制,不走辉光(p.r 会变得很大)
-        if (p.x < view.l || p.x > view.r || p.y < view.t || p.y > view.b) continue;
         if (p.grid) {
           const dx = Math.cos(p.gridDir), dy = Math.sin(p.gridDir), h = p.gridLen / 2;
-          ctx.globalAlpha = 0.38 + 0.25 * (p.life / p.maxLife); ctx.strokeStyle = p.color; ctx.lineWidth = p.gridWidth * 2.6;
+          const x0=p.x-dx*h,x1=p.x+dx*h,y0=p.y-dy*h,y1=p.y+dy*h,pad=p.gridWidth*1.5;
+          if(Math.max(x0,x1)<view.l-pad||Math.min(x0,x1)>view.r+pad||Math.max(y0,y1)<view.t-pad||Math.min(y0,y1)>view.b+pad)continue;
+          ctx.globalAlpha = 0.34 + 0.22 * (p.life / p.maxLife); ctx.strokeStyle = p.color; ctx.lineWidth = p.gridWidth * 1.7;
           ctx.beginPath(); ctx.moveTo(p.x - dx * h, p.y - dy * h); ctx.lineTo(p.x + dx * h, p.y + dy * h); ctx.stroke();
           continue;
+        }
+        if (p.x < view.l || p.x > view.r || p.y < view.t || p.y > view.b) continue;
+        if (p.plasmaCore) {
+          const rr=p.coreR||40;ctx.globalAlpha=0.28+0.12*Math.sin((state.time||0)*12);ctx.drawImage(glow(p.color),p.x-rr,p.y-rr,rr*2,rr*2);continue;
         }
         ctx.globalAlpha = 0.9; ctx.drawImage(glow(p.color), p.x - p.r * 3, p.y - p.r * 3, p.r * 6, p.r * 6);
       }
@@ -669,7 +674,10 @@
       const list = SV.Weapons.proj.list;
       for (let i = 0; i < list.length; i++) {
         const p = list[i];
-        if (p.x < view.l || p.x > view.r || p.y < view.t || p.y > view.b) continue;
+        if (p.grid) {
+          const dx=Math.cos(p.gridDir),dy=Math.sin(p.gridDir),h=p.gridLen/2,x0=p.x-dx*h,x1=p.x+dx*h,y0=p.y-dy*h,y1=p.y+dy*h,pad=p.gridWidth;
+          if(Math.max(x0,x1)<view.l-pad||Math.min(x0,x1)>view.r+pad||Math.max(y0,y1)<view.t-pad||Math.min(y0,y1)>view.b+pad)continue;
+        } else if (p.x < view.l || p.x > view.r || p.y < view.t || p.y > view.b) continue;
         const vis = SV.Config.weaponVisual(p.weaponId || "");
         p.visualStyle = p.visualStyle || vis.family;
         const fam = p.visualStyle;

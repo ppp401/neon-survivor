@@ -72,7 +72,7 @@
         out.push("击杀追击 " + (s.chase || 0) + " 次");
         break;
       case "frost_poison":
-        if (s.freeze) out.push("冻结 " + F10(s.freeze) + "s(受伤+50%)");
+        if (s.freeze) out.push("每敌第" + (s.freezeHits || 1) + "击冻结 " + F10(s.freeze) + "s(受伤+50%)");
         if (s.dot) out.push("命中上毒 " + R(s.dot) + "/0.5s×" + F10(s.dotDur) + "s");
         break;
       case "shotgun_grenade":
@@ -132,7 +132,7 @@
       case "blade_evo": out.push("每敌命中间隔0.25s"); break;
       case "blade_boomerang": out.push("环刃轮流离阵追敌并返航 · 环触间隔" + F10(s.hitCd) + "s"); break;
       case "blade_frost": out.push("每敌第" + s.frostHits + "击冰爆" + R(s.burstDmg) + "(半径" + R(s.burstR) + ") · 冻结" + F10(s.freeze) + "s"); break;
-      case "missile_aura": out.push("分头追踪 · 移动引力场半径" + R(s.fieldR) + " · 场伤" + R(s.fieldDmg) + "/" + F10(s.fieldTick) + "s · 击杀追猎" + s.chase + "次"); break;
+      case "missile_aura": out.push("分头追踪 · 命中附着电浆核" + F10(s.coreLife) + "s · 半径" + R(s.coreR) + " · " + R(s.coreDmg) + "/" + F10(s.coreTick) + "s"); break;
       case "missile_railgun": out.push("制导 " + (Math.round(s.calibrate * 100) / 100) + "s 后高速无限贯穿"); break;
       case "chain_sentry": out.push("每塔" + F10(s.fireCd) + "s发射 · 电弹连跳" + s.chainHops + "次"); break;
       case "aura_poison": out.push("停留叠加腐蚀至" + s.maxStacks + "层 · 每层伤害+" + Math.round(s.stackMul * 100) + "%"); break;
@@ -161,7 +161,7 @@
       case "lance_vortex":out.push("Vortex "+R(s.damage)+"/0.2s · Laser "+R(s.beamDmg||0)+"/"+F(s.beamTick||.1)+"s");break;
       case "spear_evo":if(s.armorBreak)out.push("Armor break "+F(s.armorBreak)+"s (+50% damage, refreshes)");break;
       case "missile_chain":out.push("Impact lightning "+R(s.damage*.6)+"/jump×"+(s.chainHops||3));out.push("Kill pursuit "+(s.chase||0));break;
-      case "frost_poison":if(s.freeze)out.push("Freeze "+F(s.freeze)+"s (+50% damage)");if(s.dot)out.push("Poison "+R(s.dot)+"/0.5s×"+F(s.dotDur)+"s");break;
+      case "frost_poison":if(s.freeze)out.push("Every "+(s.freezeHits||1)+" hits freezes "+F(s.freeze)+"s (+50% damage)");if(s.dot)out.push("Poison "+R(s.dot)+"/0.5s×"+F(s.dotDur)+"s");break;
       case "shotgun_grenade":if(s.splash)out.push("Each hit splashes "+R(s.damage*s.splashMul)+" (radius "+R(s.splash)+")");break;
       case "grenade_evo":out.push("Sub-blast "+R(s.damage*.55)+"×"+(typeof s.cluster==="number"?s.cluster:2));break;
       case "railgun_evo":case "railgun_grenade":if(s.explode)out.push("Pierce blast "+R(s.damage)+" · radius "+R(s.explode));if(id==="railgun_grenade")out.push("Every pierce triggers; first splits "+(s.cluster||0));break;
@@ -180,7 +180,7 @@
       case "vortex_evo":out.push("Vortex damage every 0.2s×"+F(s.life)+"s · Pull "+R(s.pull));break;case "shockwave_evo":out.push("Hit freezes "+F(s.freeze)+"s");break;
       case "boomerang_sentry":out.push("Each turret fires every "+F(s.fireCd)+"s · pierce "+(s.pierce||0));break;case "blade_evo":out.push("0.25s hit interval per enemy");break;
       case "blade_boomerang":out.push("Blades hunt and return in sequence · ring interval "+F(s.hitCd)+"s");break;case "blade_frost":out.push("Every "+s.frostHits+" hits: ice burst "+R(s.burstDmg)+" (radius "+R(s.burstR)+") · freeze "+F(s.freeze)+"s");break;
-      case "missile_aura":out.push("Split tracking · gravity radius "+R(s.fieldR)+" · field "+R(s.fieldDmg)+"/"+F(s.fieldTick)+"s · pursuits "+s.chase);break;case "missile_railgun":out.push("Guides for "+F(s.calibrate)+"s, then pierces infinitely");break;
+      case "missile_aura":out.push("Split tracking · attached plasma core "+F(s.coreLife)+"s · radius "+R(s.coreR)+" · "+R(s.coreDmg)+"/"+F(s.coreTick)+"s");break;case "missile_railgun":out.push("Guides for "+F(s.calibrate)+"s, then pierces infinitely");break;
       case "chain_sentry":out.push("Each turret fires every "+F(s.fireCd)+"s · "+s.chainHops+" jumps");break;case "aura_poison":out.push("Corrosion stacks to "+s.maxStacks+" · +"+Math.round(s.stackMul*100)+"% damage each");break;
       case "shotgun_shockwave":out.push(s.resonanceHits+" hits trigger "+R(s.burstDmg)+" resonance (radius "+R(s.burstR)+")");break;case "shotgun_spear":out.push(s.pelletCount+" fragments per pierce · max "+s.pelletCap+" per volley");break;
       case "boomerang_crescent":out.push("Hits out and back · 0.75s turn · radius "+s.minR+"→"+s.maxR+" · trail "+R(s.trailDmg)+"/"+F(s.trailTick)+"s");break;

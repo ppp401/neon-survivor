@@ -109,6 +109,10 @@
   // 敌人回血速率随时间成长,与 makeEnemy 的 maxHP 同因子(hpFactor × diff × endless)。
   // 用于血祭司光环/自愈者自回血,使其后期相对暴涨的敌血仍保持存在感。
   function healScaleOf(state) { const t = (state.time || 0) / 60; return CU.hpFactor(t) * diffOf(state).hpMul * endlessMulOf(state); }
+  function healthDropLateFactor(state) {
+    const t = (state.time || 0) / 60;
+    return t <= 10 ? 1 : 1 / (1 + 0.15 * (t - 10));
+  }
 
   function makeEnemy(state, type, x, y) {
     const def = EN[type];
@@ -507,7 +511,8 @@
       if (dropReward) {
         for (let i = 0; i < 8; i++) { const a = U.rand(0, U.TAU), d = U.rand(10, 50); state.gems.push(makeGem(e.x + Math.cos(a) * d, e.y + Math.sin(a) * d, Math.max(1, Math.round(e.xp / 8)))); }
         if (!state.endless) state.pickups.push(makePickup(e.x, e.y, "treasure")); // 无尽模式 Boss 不掉宝箱
-        state.pickups.push(makePickup(e.x + 30, e.y, "health"));
+        const periodic = e.bossSource === "late" || e.bossSource === "endless";
+        if (!periodic || Math.random() < healthDropLateFactor(state)) state.pickups.push(makePickup(e.x + 30, e.y, "health"));
       }
       SV.Effects.shake(12, 0.5);
       if (e.bossType === "wraith") {
@@ -535,7 +540,7 @@
         const luckF = 1 + mods(state).luck;
         const eDf = 1 / (1 + 0.25 * Math.max(0, state.time / 60 - 8));
         const eMul = diffOf(state).dropMul;
-        if (Math.random() < 0.20 * eMul * eDf * luckF) state.pickups.push(makePickup(e.x, e.y, "health"));
+        if (Math.random() < 0.20 * eMul * eDf * luckF * healthDropLateFactor(state)) state.pickups.push(makePickup(e.x, e.y, "health"));
         if (Math.random() < 0.10 * eMul * eDf * luckF) state.pickups.push(makePickup(e.x, e.y, "magnet"));
         SV.Effects.explosion(e.x, e.y, SV.Config.COLORS.gold, 22);
       } else {
@@ -562,10 +567,10 @@
         const diff = diffOf(state);
         const luckF = 1 + mods(state).luck;
         const df = diff.dropMul / (1 + 0.25 * (state.time / 60)) * luckF;
-        const r = Math.random();
-        if (r < 0.008 * df) state.pickups.push(makePickup(e.x, e.y, "health"));
-        else if (r < 0.01333 * df) state.pickups.push(makePickup(e.x, e.y, "magnet"));
-        else if (r < 0.01467 * df) state.pickups.push(makePickup(e.x, e.y, "bomb"));
+        const r = Math.random(), hpP = 0.008 * df * healthDropLateFactor(state), magnetP = 0.00533 * df, bombP = 0.00134 * df;
+        if (r < hpP) state.pickups.push(makePickup(e.x, e.y, "health"));
+        else if (r < hpP + magnetP) state.pickups.push(makePickup(e.x, e.y, "magnet"));
+        else if (r < hpP + magnetP + bombP) state.pickups.push(makePickup(e.x, e.y, "bomb"));
       }
     }
     if (state.gems.length > C.MAX_GEMS) state.gems.splice(0, state.gems.length - C.MAX_GEMS);
@@ -719,8 +724,9 @@
     const picks = state.pickups;
     for (let i = picks.length - 1; i >= 0; i--) {
       const pk = picks[i];
-      if (pk.pulled) {
-        const dx = p.x - pk.x, dy = p.y - pk.y;
+      const dx = p.x - pk.x, dy = p.y - pk.y;
+      const healthPull = pk.kind === "health" && p.hp < p.maxHp && dx * dx + dy * dy < C.HEALTH_PULL_RADIUS * C.HEALTH_PULL_RADIUS;
+      if (pk.pulled || healthPull) {
         const d = Math.hypot(dx, dy) || 1;
         const f = Math.max(spd * 1.35 + 30, 340);
         pk.x += dx / d * f * dt; pk.y += dy / d * f * dt;
@@ -964,6 +970,7 @@
     rootDim: rootDim,
     tid: tid,
     healScale: healScaleOf,
+    healthDropLateFactor: healthDropLateFactor,
     previewEnemy: previewEnemy,
     previewBoss: previewBoss,
     enemyFullyInside: enemyFullyInside,
