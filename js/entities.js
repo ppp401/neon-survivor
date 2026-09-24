@@ -725,10 +725,12 @@
     for (let i = picks.length - 1; i >= 0; i--) {
       const pk = picks[i];
       const dx = p.x - pk.x, dy = p.y - pk.y;
-      const healthPull = pk.kind === "health" && p.hp < p.maxHp && dx * dx + dy * dy < C.HEALTH_PULL_RADIUS * C.HEALTH_PULL_RADIUS;
+      const d2 = dx * dx + dy * dy;
+      const healthPull = pk.kind === "health" && p.hp < p.maxHp && d2 < C.HEALTH_PULL_RADIUS * C.HEALTH_PULL_RADIUS;
+      if (pk.kind === "treasure" && d2 < pr2) pk.pulled = true;
       if (pk.pulled || healthPull) {
         const d = Math.hypot(dx, dy) || 1;
-        const f = Math.max(spd * 1.35 + 30, 340);
+        const f = pk.kind === "treasure" ? Math.max(spd * 1.35 + 30, Math.min(pull, d * C.GEM_PULL_NEAR_K)) : Math.max(spd * 1.35 + 30, 340);
         pk.x += dx / d * f * dt; pk.y += dy / d * f * dt;
       }
       if (U.dist(p.x, p.y, pk.x, pk.y) < p.r + 12) {

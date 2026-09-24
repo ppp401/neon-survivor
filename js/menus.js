@@ -431,11 +431,14 @@
         const w = state.weapons[i], def = SV.Config.weaponDef(w.id);
         const dm = weaponDmg(state, w.id);
         const trait = SV.Upgrades.traitLabel(w.id);
+        const evo = SV.Config.EVOLUTIONS[w.id];
+        const req = evo && SV.Config.PASSIVES[evo.reqPassive];
         html += '<div class="ars-row">' + SV.Config.weaponIconHTML(w.id, "ars-ic") +
           '<span class="ars-name">' + def.name + (w.evolved ? ' <i class="evo-star">★</i>' : "") + "</span>" +
           (trait ? '<span class="ars-trait">' + trait + "</span>" : "") +
           '<span class="ars-lv">Lv ' + w.level + "/" + def.max + "</span>" +
           '<span class="ars-eff">' + SV.Upgrades.summary(w, state) + "</span>" +
+          (req ? '<span class="ars-eff">' + L("Evolution requirement: ", "进化条件：") + req.name + " Lv5</span>" : "") +
           (dm.total > 0 ? '<span class="ars-dmg">⚔ ' + L("Total ", "总") + fmtNum(dm.total) + L(", ", "，") + fmtNum(dm.perMin) + "/min" + (dm.recent == null ? "" : L(", recent ", "，最近") + fmtNum(dm.recent) + "/min") + "</span>" : "") +
           "</div>";
       }

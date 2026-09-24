@@ -23,6 +23,29 @@
     const vals = (def.attacks && def.attacks[kind]) || [0];
     return vals[Math.min(index || 0, vals.length - 1)] || 0;
   }
+  function bossMech(e) { return SV.Config.BOSSES[e.bossType].mechanics; }
+  function shotAngle(st, e, x, y, angle, speed, dmg, radius) {
+    if (!E.canEnemyRanged(st, e)) return;
+    E.addEShot(st, x, y, Math.cos(angle) * speed, Math.sin(angle) * speed,
+      dmg * dmgScale(st, e), e.color, radius || 6, e.bossType);
+  }
+  function aimedFrom(st, e, x, y, tx, ty, count, spread, speed, dmg) {
+    const angle = U.angleTo(x, y, tx, ty);
+    for (let i = 0; i < count; i++) shotAngle(st, e, x, y, angle + (i - (count - 1) / 2) * spread, speed, dmg, 6);
+  }
+  function attackPulse(e, x, y, radius) {
+    SV.Effects.ring(x, y, e.color, 6, radius, 0.3, 3);
+    SV.Effects.hit(x, y, e.color);
+  }
+  function eclipseRing(st, e, gapAngle) {
+    const m = bossMech(e), count = m.ringShots, dmg = bossAttack(e, "projectile", 1);
+    for (let i = 0; i < count; i++) {
+      const angle = i * U.TAU / count;
+      if (Math.abs(Math.atan2(Math.sin(angle - gapAngle), Math.cos(angle - gapAngle))) < m.gapHalf) continue;
+      shotAngle(st, e, e.x, e.y, angle, m.ringSpeed, dmg, 7);
+    }
+    attackPulse(e, e.x, e.y, 115);
+  }
 
   const Beh = {
     chase: function (e, p, dt) { toPlayer(e, p, e.speed); },
@@ -193,8 +216,191 @@
         const a = U.angleTo(e.x, e.y, tx, ty);
         e.vx = Math.cos(a) * e.speed; e.vy = Math.sin(a) * e.speed;
         e.t1 -= dt;
-        const rate = enraged ? 0.8 : 1.6;
+        const rate = enraged ? 1.2 : 2.1;
         if (e.t1 <= 0) { e.t1 = rate; aimedSpread(st, e, p, 3, 0.32, 260, bossAttack(e, "projectile", 0)); }
+      } else if (e.bossType === "scavenger") {
+        // 短程预警冲刺:锁定玩家当时的位置,冲完后停顿供反击。
+        const m = bossMech(e);
+        e.t1 -= dt;
+        if (e.cstate === "tele") {
+          e.vx = 0; e.vy = 0; e.ct -= dt; e.flash = 0.18;
+          if (e.ct <= 0) { e.cstate = "charge"; e.ct = 0.45; }
+        } else if (e.cstate === "charge") {
+          e.vx = Math.cos(e.cdir) * m.chargeSpeed; e.vy = Math.sin(e.cdir) * m.chargeSpeed;
+          e.ct -= dt;
+          if (e.ct <= 0) { e.cstate = "cool"; e.ct = 0.9; }
+        } else if (e.cstate === "cool") {
+          e.vx = 0; e.vy = 0; e.ct -= dt;
+          if (e.ct <= 0) e.cstate = "walk";
+        } else {
+          toPlayer(e, p, e.speed);
+          if (e.t1 <= 0) { e.t1 = 5; e.cdir = U.angleTo(e.x, e.y, p.x, p.y); e.cstate = "tele"; e.ct = m.warn; }
+        }
+      } else if (e.bossType === "frostwarden") {
+        const m = bossMech(e);
+        if (e.cstate === "ice_warn" || e.cstate === "ice_follow") {
+          e.vx = 0; e.vy = 0; e.ct -= dt;
+          if (e.ct <= 0 && e.cstate === "ice_warn") {
+            const a = U.angleTo(e.x, e.y, e.markX, e.markY);
+            shotAngle(st, e, e.x, e.y, a - m.flankAngle, m.flankSpeed, bossAttack(e, "projectile", 0));
+            shotAngle(st, e, e.x, e.y, a + m.flankAngle, m.flankSpeed, bossAttack(e, "projectile", 0));
+            attackPulse(e, e.x, e.y, 55);
+            e.cstate = "ice_follow"; e.ct = m.follow;
+          } else if (e.ct <= 0) {
+            shotAngle(st, e, e.x, e.y, U.angleTo(e.x, e.y, e.markX, e.markY), m.centerSpeed, bossAttack(e, "projectile", 0));
+            attackPulse(e, e.x, e.y, 38);
+            e.cstate = "walk"; e.t1 = m.interval;
+          }
+        } else {
+          toPlayer(e, p, e.speed); e.t1 -= dt;
+          if (e.t1 <= 0) { e.cstate = "ice_warn"; e.ct = m.warn; e.markX = p.x; e.markY = p.y; }
+        }
+      } else if (e.bossType === "bloodhunter") {
+        const m = bossMech(e);
+        const a = U.angleTo(e.x, e.y, p.x, p.y), d = U.dist(e.x, e.y, p.x, p.y);
+        const move = d > m.range ? a : a + Math.PI / 2 + Math.sin((e.t3 = (e.t3 || 0) + dt * m.swayRate)) * m.swayAngle;
+        e.vx = Math.cos(move) * e.speed; e.vy = Math.sin(move) * e.speed;
+        if (e.cstate === "blood_mark") {
+          e.ct -= dt;
+          if (e.ct <= 0) {
+            const side = U.angleTo(e.x, e.y, e.markX, e.markY) + Math.PI / 2;
+            for (const sign of [-1, 1]) {
+              const x = e.x + Math.cos(side) * m.flankDist * sign, y = e.y + Math.sin(side) * m.flankDist * sign;
+              aimedFrom(st, e, x, y, e.markX, e.markY, 2, m.spread, m.shotSpeed, bossAttack(e, "projectile", 0));
+              attackPulse(e, x, y, 30);
+            }
+            e.cstate = "walk"; e.t1 = m.interval;
+          }
+        } else {
+          e.t1 -= dt;
+          if (e.t1 <= 0) { e.cstate = "blood_mark"; e.ct = m.warn; e.markX = p.x; e.markY = p.y; }
+        }
+      } else if (e.bossType === "riftsentry") {
+        const m = bossMech(e);
+        toPlayer(e, p, e.speed);
+        if (e.cstate === "rift_open") {
+          e.vx = 0; e.vy = 0; e.ct -= dt;
+          if (e.ct <= 0) {
+            for (const sign of [-1, 1]) {
+              const x = e.x + Math.cos(e.cdir) * m.portalDist * sign, y = e.y + Math.sin(e.cdir) * m.portalDist * sign;
+              aimedFrom(st, e, x, y, e.markX, e.markY, 2, m.spread, m.shotSpeed, bossAttack(e, "projectile", 0));
+              attackPulse(e, x, y, 42);
+            }
+            e.cstate = "walk"; e.t1 = m.interval;
+          }
+        } else {
+          e.t1 -= dt;
+          if (e.t1 <= 0) { e.cstate = "rift_open"; e.ct = m.warn; e.cdir += Math.PI / 2; e.markX = p.x; e.markY = p.y; }
+        }
+      } else if (e.bossType === "thornwarden") {
+        const m = bossMech(e);
+        if (e.cstate === "tele") {
+          e.vx = 0; e.vy = 0; e.ct -= dt; e.flash = 0.15;
+          if (e.ct <= 0) {
+            for (let i = -1; i <= 1; i++) shotAngle(st, e, e.x, e.y, e.cdir + i * m.spread, m.shotSpeed, bossAttack(e, "projectile", 0));
+            attackPulse(e, e.x, e.y, 68);
+            e.dr = 0; e.cstate = "thorn_cool"; e.ct = m.recovery;
+          }
+        } else if (e.cstate === "thorn_cool") {
+          e.vx = 0; e.vy = 0; e.ct -= dt;
+          if (e.ct <= 0) { e.cstate = "walk"; e.t1 = m.interval; }
+        } else {
+          toPlayer(e, p, e.speed);
+          e.t1 -= dt;
+          if (e.t1 <= 0) { e.cstate = "tele"; e.ct = m.warn; e.cdir = U.angleTo(e.x, e.y, p.x, p.y); e.dr = m.armor; }
+        }
+      } else if (e.bossType === "stormherald") {
+        const m = bossMech(e);
+        const a = U.angleTo(e.x, e.y, p.x, p.y), d = U.dist(e.x, e.y, p.x, p.y);
+        const move = d > m.range ? a : a + Math.PI / 2;
+        e.vx = Math.cos(move) * e.speed; e.vy = Math.sin(move) * e.speed;
+        if (e.cstate === "storm_sweep") {
+          e.ct -= dt; e.t2 -= dt;
+          if (e.t2 <= 0 && e.ct > 0) {
+            e.t2 = m.shotInterval;
+            shotAngle(st, e, e.x, e.y, e.cdir + (m.sweep - e.ct) * m.sweepAngle / m.sweep, m.shotSpeed, bossAttack(e, "projectile", 0));
+          }
+          if (e.ct <= 0) { e.cstate = "walk"; e.t1 = m.interval; }
+        } else {
+          e.t1 -= dt;
+          if (e.t1 <= 0) { e.cstate = "storm_sweep"; e.ct = m.sweep; e.t2 = 0; e.cdir = a - m.sweepAngle / 2; }
+        }
+      } else if (e.bossType === "bloodoracle") {
+        const m = bossMech(e);
+        toPlayer(e, p, e.speed);
+        if (e.cstate === "ritual") {
+          e.vx = 0; e.vy = 0; e.ct -= dt;
+          if (e.ct <= 0) {
+            for (const id of e.ritualMinionIds || []) {
+              const o = st.enemies.find(function (other) { return other.id === id && other.hp > 0; });
+              if (o) { aimedFrom(st, e, o.x, o.y, p.x, p.y, m.ritualShots, m.ritualSpread, m.shotSpeed, bossAttack(e, "projectile", 0)); attackPulse(e, o.x, o.y, 45); }
+            }
+            e.ritualMinionIds = null; e.cstate = "walk"; e.t2 = m.ritualInterval;
+          }
+        } else {
+          e.t1 -= dt; e.t2 -= dt;
+          if (e.t1 <= 0) { e.t1 = m.boltInterval; aimedSpread(st, e, p, m.boltShots, m.boltSpread, m.shotSpeed, bossAttack(e, "projectile", 0)); }
+          if (e.t2 <= 0) {
+            e.cstate = "ritual"; e.ct = m.ritualWarn; e.ritualMinionIds = [];
+            if (st.enemies.length < C.MAX_ENEMIES - 2) for (let i = 0; i < 2; i++) {
+              const o = E.addEnemy(st, "runner", e.x + (i ? 32 : -32), e.y + 24);
+              if (o) e.ritualMinionIds.push(o.id);
+            }
+          }
+        }
+      } else if (e.bossType === "furnace") {
+        toPlayer(e, p, e.speed);
+        e.t1 -= dt; e.t2 -= dt;
+        if (e.t1 <= 0) { e.t1 = 4.5; spiralBurst(st, e, 10, 160, bossAttack(e, "projectile", 0), 7); }
+        if (e.t2 <= 0) {
+          e.t2 = 6;
+          if (st.hazards.length < C.MAX_HAZARDS) st.hazards.push({ x: p.x, y: p.y, r: 76, dmg: bossAttack(e, "projectile", 0) * dmgScale(st, e), life: 3, max: 3, color: e.color, kind: "burn", tick: 0.5, warm: 1, srcType: e.bossType });
+        }
+      } else if (e.bossType === "voidseer") {
+        const m = bossMech(e);
+        if (e.cstate === "seer_warn" || e.cstate === "seer_echo") {
+          e.vx = 0; e.vy = 0; e.ct -= dt;
+          if (e.ct <= 0 && e.cstate === "seer_warn") {
+            e.echoX = e.x; e.echoY = e.y;
+            e.x = e.markX; e.y = e.markY; e.flash = 0.3;
+            SV.Effects.hit(e.x, e.y, e.color);
+            e.cstate = "seer_echo"; e.ct = m.echoDelay;
+          } else if (e.ct <= 0) {
+            for (let i = 0; i < m.echoShots; i++) shotAngle(st, e, e.echoX, e.echoY, Math.PI / 4 + i * U.TAU / m.echoShots, m.echoSpeed, bossAttack(e, "projectile", 0));
+            attackPulse(e, e.echoX, e.echoY, 75);
+            e.cstate = "walk"; e.t1 = m.interval;
+          }
+        } else {
+          toPlayer(e, p, e.speed);
+          e.t1 -= dt; e.t2 -= dt;
+          if (e.t1 <= 0) {
+            const a = U.rand(0, U.TAU);
+            const edge = ((st.stage && st.stage.half) || 2000) - e.r;
+            e.markX = U.clamp(p.x + Math.cos(a) * m.teleportDist, -edge, edge);
+            e.markY = U.clamp(p.y + Math.sin(a) * m.teleportDist, -edge, edge);
+            e.cstate = "seer_warn"; e.ct = m.warn;
+          }
+          if (e.t2 <= 0) { e.t2 = m.boltInterval; aimedSpread(st, e, p, m.boltShots, m.boltSpread, m.boltSpeed, bossAttack(e, "projectile", 0)); }
+        }
+      } else if (e.bossType === "eclipseeye") {
+        const m = bossMech(e);
+        e.cdir += m.orbitSpeed * dt;
+        const tx = p.x + Math.cos(e.cdir) * m.orbitRadius, ty = p.y + Math.sin(e.cdir) * m.orbitRadius;
+        const a = U.angleTo(e.x, e.y, tx, ty);
+        e.vx = Math.cos(a) * e.speed; e.vy = Math.sin(a) * e.speed;
+        if (e.cstate === "eclipse_charge" || e.cstate === "eclipse_second") {
+          e.ct -= dt;
+          if (e.ct <= 0 && e.cstate === "eclipse_charge") {
+            eclipseRing(st, e, e.gapAngle);
+            e.cstate = "eclipse_second"; e.ct = m.secondDelay;
+          } else if (e.ct <= 0) {
+            eclipseRing(st, e, e.gapAngle);
+            e.cstate = "walk"; e.t1 = m.interval;
+          }
+        } else {
+          e.t1 -= dt;
+          if (e.t1 <= 0) { e.cstate = "eclipse_charge"; e.ct = m.warn; e.gapAngle = U.angleTo(e.x, e.y, p.x, p.y) + Math.PI / 3; }
+        }
       } else if (e.bossType === "architect") {
         toPlayer(e, p, e.speed);
         e.t1 -= dt; e.t2 -= dt;

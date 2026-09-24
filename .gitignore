@@ -5,8 +5,6 @@
 ._*
 
 # 文档(开发备忘,不入仓库)
-AGENTS.md
-DEPLOY.md
 note.md
 
 # Node / 测试(若以后引入)
@@ -28,8 +26,12 @@ ehthumbs.db
 Desktop.ini
 
 # test
-tests/
 test_audio/
 test_audio_ext/
-test_audio_ext_glm/
 test_figure/
+tests/*.ndjson
+tests/*.tsv
+tests/*.png
+
+# trailer
+trailer/

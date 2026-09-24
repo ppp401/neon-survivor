@@ -21,7 +21,7 @@
     PLAYER_BASE_SPEED: 165, // 略快于一切追逐者
     PLAYER_RADIUS: 14,
     PICKUP_RADIUS: 72,
-    HEALTH_PULL_RADIUS: 140, // 血未满时血包的固定吸引范围(不吃磁吸属性)
+    HEALTH_PULL_RADIUS: 72, // 血未满时血包的固定吸引范围(不吃磁吸属性)
     GEM_COLLECT_RADIUS: 20, // 经验球拾取半径(中心距)
     GEM_PULL_BASE: 540,     // 经验球远场牵引速度上限(受磁吸属性放大)
     GEM_PULL_NEAR_K: 10,    // 经验球近场牵引速度系数(速度 = d * K,随距离线性衰减防过冲)
@@ -39,13 +39,8 @@
     // 无尽模式
     ENDLESS_BOSS_EVERY: 60, // 无尽模式 Boss 波间隔(秒)= 1min(且 Boss 不掉宝箱)
     ENDLESS_HP_PER_MIN: 0.18, // 无尽模式每分钟额外敌血倍率
-    // 14min 后周期多 Boss 波:分档加密(非无尽)。每波 2-3 只随机 Boss 同台
-    LATE_BOSS_AFTER: 14 * 60, // 周期波起始时间(秒)
-    LATE_BOSS_TIERS: [         // 时间→间隔(秒)分档:14-17min@1.5min,17-19min@1min,19min+@30s
-      { after: 14 * 60, every: 90 },
-      { after: 17 * 60, every: 60 },
-      { after: 19 * 60, every: 30 }
-    ],
+    // 通关前的三次周期多 Boss 波;无尽从 21min 起每 60s 一波
+    LATE_BOSS_TIMES: [16.5 * 60, 18 * 60, 19.5 * 60],
     // 空间网格
     CELL: 48,
     // 定点轰炸索敌(时停/陨石):避开玩家近旁的最小距离(让出近战范围,索敌中远敌群)
@@ -212,7 +207,7 @@
       tags: ["ranged"],
       stats: function (lv) {
         // 最优贯穿线提高了稳定命中数，以约 -10% 单发伤害平衡。
-        return { damage: (27 + (lv - 1) * 12) * 0.9, cooldown: Math.max(1.7, 2.06 + (8 - lv) * 0.3), speed: 900 };
+        return { damage: (27 + (lv - 1) * 12) * (0.78 + (lv - 1) * 0.12 / 7), cooldown: Math.max(1.7, 2.06 + (8 - lv) * 0.3), speed: 900 };
       }
     },
     poison: {
@@ -245,7 +240,7 @@
       desc: "锁定附近敌群最密集处,天降陨石,延迟爆炸。",
       tags: ["spell"],
       stats: function (lv) {
-        return { damage: 21 + (lv - 1) * 4.5, radius: 52 + (lv - 1) * 6, cooldown: Math.max(3.4, 4.2 - (lv - 1) * 0.1), arm: 0.55, count: 1 + (lv >= 4 ? 1 : 0) + (lv >= 7 ? 1 : 0), burn: 0, burnDur: 0 };
+        return { damage: 27 + (lv - 1) * (25.5 / 7), radius: 60 + (lv - 1) * (34 / 7), cooldown: Math.max(3.4, 4.0 - (lv - 1) * (0.5 / 7)), arm: 0.55, count: 1 + (lv >= 4 ? 1 : 0) + (lv >= 7 ? 1 : 0), burn: 0, burnDur: 0 };
       }
     },
     shockwave: {
@@ -306,6 +301,16 @@
       }
     }
   };
+
+  // 基础武器统一微调；进化/融合中引用基础 stats 的字段自然继承。
+  for (const id in WEAPONS) {
+    const rawStats = WEAPONS[id].stats;
+    WEAPONS[id].stats = function (lv) {
+      const s = rawStats(lv);
+      for (const key of ["damage", "dot", "explodeDmg"]) if (typeof s[key] === "number") s[key] *= 1.03;
+      return s;
+    };
+  }
 
   // 进化(16 对)。reqPassive 必须满级,武器满级,则在升级时以高优先级出现。
   const EVOLUTIONS = {
@@ -543,17 +548,27 @@
     slimer: { name: "腐泥", hp: 28, speed: 58, dmg: 10, xp: 5, r: 14, color: "#9bff5a", ai: "slime", shape: "blob", trailInterval: 0.30, trailDur: 3.5, trailDmg: 8, skill: "摇摆追击,路径留下连续毒径" }
   };
 
-  // ── Boss(8 种)。tier:难度级(每关按 5/10/15min 依 T1→T2→T3 递增出)。skill 为图鉴文案。
+  // ── Boss。tier:难度级(每关按 5/10/14min 依 T1→T2→T3 递增出)。skill 为图鉴文案。
   // shotStyle:Boss 弹幕专属视觉风格(ring 空心魔环 / bolt 高速光矛 / rune 符文菱形),普通敌弹不受影响
   const BOSSES = {
-    duke: { name: "肥胖公爵", icon: "☠", hp: 900, speed: 35, dmg: 32, attacks: { projectile: [12] }, r: 40, color: "#d65a8a", xp: 60, tier: 1, shape: "hex", pattern: "crown", shotStyle: "ring", skill: "召唤僵尸 + 环形弹幕" },
-    wraith: { name: "双生怨灵", icon: "☾", hp: 680, speed: 110, dmg: 15, attacks: { projectile: [12] }, r: 24, color: "#9b6bff", xp: 50, tier: 1, count: 2, shape: "diamond", pattern: "crescent", shotStyle: "bolt", skill: "环绕飞行 + 扇形弹幕(同伴死则狂暴加速)" },
+    duke: { name: "肥胖公爵", icon: "☠", hp: 850, speed: 35, dmg: 25, attacks: { projectile: [9] }, r: 40, color: "#d65a8a", xp: 60, tier: 1, shape: "hex", pattern: "crown", shotStyle: "ring", skill: "召唤僵尸 + 环形弹幕" },
+    wraith: { name: "双生怨灵", icon: "☾", hp: 680, speed: 100, dmg: 15, attacks: { projectile: [12] }, r: 24, color: "#9b6bff", xp: 50, tier: 2, count: 2, shape: "diamond", pattern: "crescent", shotStyle: "bolt", skill: "环绕飞行 + 扇形弹幕(同伴死则狂暴加速)" },
+    scavenger: { name: "拾荒机兵", icon: "⚙", hp: 760, speed: 62, dmg: 21, attacks: { projectile: [9] }, mechanics: { warn: 0.9, chargeSpeed: 250 }, r: 35, color: "#f1ad62", xp: 55, tier: 1, shape: "square", pattern: "nodes", shotStyle: "bolt", skill: "追击 + 预警冲刺" },
+    frostwarden: { name: "霜壳守卫", icon: "❄", hp: 900, speed: 38, dmg: 22, attacks: { projectile: [8] }, mechanics: { warn: 0.7, follow: 0.5, interval: 3.8, flankAngle: 0.34, flankSpeed: 155, centerSpeed: 170 }, r: 39, color: "#8ddfff", xp: 65, tier: 1, shape: "hex", pattern: "double_hex", shotStyle: "rune", skill: "锁定方位，先射两侧冰弹，再补中路冰弹" },
+    bloodhunter: { name: "血棘猎手", icon: "✦", hp: 780, speed: 62, dmg: 20, attacks: { projectile: [8] }, mechanics: { range: 245, swayRate: 3, swayAngle: 0.38, warn: 0.75, interval: 4.0, flankDist: 58, spread: 0.16, shotSpeed: 185 }, r: 32, color: "#ff5278", xp: 60, tier: 1, shape: "triangle", pattern: "bloodthorn", shotStyle: "bolt", skill: "标记玩家位置，从两侧发射交汇棘弹" },
+    riftsentry: { name: "裂隙哨兵", icon: "◇", hp: 860, speed: 40, dmg: 22, attacks: { projectile: [7, 8] }, mechanics: { warn: 0.8, interval: 4.7, portalDist: 75, spread: 0.22, shotSpeed: 160 }, r: 38, color: "#a58bff", xp: 65, tier: 1, shape: "diamond", pattern: "rift", shotStyle: "rune", skill: "打开成对裂隙，从两侧交叉射击" },
+    thornwarden: { name: "铁棘卫士", icon: "✥", hp: 870, speed: 43, dmg: 22, attacks: { projectile: [8] }, mechanics: { warn: 0.8, recovery: 0.9, interval: 4.0, armor: 0.25, spread: 0.38, shotSpeed: 190 }, r: 37, color: "#c47a9b", xp: 65, tier: 1, shape: "hex", pattern: "shield", shotStyle: "bolt", skill: "展开护甲蓄力扇形弹幕，射后短暂硬直" },
     queen: { name: "蜂后", icon: "☼", hp: 2200, speed: 30, dmg: 28, attacks: { projectile: [13] }, r: 46, color: "#ff6ab0", xp: 100, tier: 2, shape: "hex", pattern: "honey", shotStyle: "ring", skill: "召唤蜂群 + 环形/螺旋弹幕" },
     magnetwarper: { name: "磁暴行者", icon: "⚡", hp: 1500, speed: 45, dmg: 20, attacks: { projectile: [13], shock: [11] }, r: 36, color: "#8e7bff", xp: 90, tier: 2, shape: "star", pattern: "poles", shotStyle: "rune", skill: "引力波把玩家吸向自身 + 贴身电击圈" },
     twins: { name: "镜像双子", icon: "◐", hp: 1050, speed: 60, dmg: 15, attacks: { projectile: [12, 13] }, r: 28, color: "#7df9ff", xp: 80, tier: 2, count: 2, shape: "triangle", pattern: "split", shotStyle: "bolt", skill: "追击 + 周期换位(杀其一,本体反噬 25% 并狂暴)" },
+    stormherald: { name: "雷暴使徒", icon: "⚡", hp: 1550, speed: 52, dmg: 22, attacks: { projectile: [12] }, mechanics: { range: 260, sweep: 0.82, shotInterval: 0.16, interval: 2.7, sweepAngle: 1, shotSpeed: 290 }, r: 34, color: "#aaa0ff", xp: 95, tier: 2, shape: "star", pattern: "storm", shotStyle: "bolt", skill: "侧向游走 + 扫角电弹连射" },
+    bloodoracle: { name: "血谕祭司", icon: "✧", hp: 1650, speed: 42, dmg: 24, attacks: { projectile: [12] }, mechanics: { ritualWarn: 0.8, ritualInterval: 7, ritualShots: 3, ritualSpread: 0.2, shotSpeed: 230, boltInterval: 3.2, boltShots: 2, boltSpread: 0.28 }, r: 38, color: "#ff718e", xp: 100, tier: 2, shape: "cross", pattern: "trident", shotStyle: "ring", skill: "召唤仪式随从，从存活随从位置发射弹幕" },
     architect: { name: "架构师", icon: "⌬", hp: 1800, speed: 50, dmg: 38, attacks: { projectile: [13, 14] }, r: 44, color: "#5ad1ff", xp: 120, tier: 3, shape: "square", pattern: "nodes", shotStyle: "rune", skill: "环形弹幕 + 召唤炮台(炮台亦会射击)" },
     inquisitor: { name: "审判者", icon: "✠", hp: 1650, speed: 60, dmg: 26, attacks: { projectile: [13, 14] }, r: 30, color: "#b06bff", xp: 90, tier: 3, shape: "cross", pattern: "judge", shotStyle: "bolt", skill: "传送贴脸 + 环形/扇形连射" },
-    colossus: { name: "弹幕巨像", icon: "◎", hp: 2700, speed: 0, dmg: 33, attacks: { projectile: [14], laser: [13] }, r: 50, color: "#ff6b4d", xp: 140, tier: 3, shape: "circle", pattern: "reactor", shotStyle: "ring", skill: "不动 + 旋转扫射激光 + 召唤僵尸 + 螺旋弹幕" }
+    colossus: { name: "弹幕巨像", icon: "◎", hp: 2700, speed: 0, dmg: 33, attacks: { projectile: [14], laser: [13] }, r: 50, color: "#ff6b4d", xp: 140, tier: 3, shape: "circle", pattern: "reactor", shotStyle: "ring", skill: "不动 + 旋转扫射激光 + 召唤僵尸 + 螺旋弹幕" },
+    furnace: { name: "熔炉核心", icon: "✸", hp: 2450, speed: 24, dmg: 32, attacks: { projectile: [13] }, r: 46, color: "#ff8b46", xp: 130, tier: 3, shape: "hex", pattern: "reactor", shotStyle: "ring", skill: "预警灼烧区 + 火环弹幕" },
+    voidseer: { name: "虚空观测者", icon: "◈", hp: 2100, speed: 58, dmg: 27, attacks: { projectile: [14] }, mechanics: { warn: 0.7, echoDelay: 0.48, interval: 4.5, teleportDist: 300, echoShots: 8, echoSpeed: 170, boltInterval: 2.3, boltShots: 3, boltSpread: 0.24, boltSpeed: 260 }, r: 36, color: "#b782ff", xp: 125, tier: 3, shape: "diamond", pattern: "seer", shotStyle: "rune", skill: "预示换位落点，旧位置延迟放出交叉弹幕" },
+    eclipseeye: { name: "蚀界之眼", icon: "◉", hp: 2250, speed: 48, dmg: 30, attacks: { projectile: [14, 15] }, mechanics: { orbitSpeed: 0.8, orbitRadius: 270, warn: 0.9, secondDelay: 0.55, interval: 4.7, ringShots: 16, ringSpeed: 175, gapHalf: 0.43 }, r: 42, color: "#de6bca", xp: 130, tier: 3, shape: "circle", pattern: "eclipse", shotStyle: "rune", skill: "环绕游走，蓄力释放两轮带安全缺口的脉冲弹环" }
   };
 
   // ── 难度曲线(t=分钟)。目标:开局轻松→5min Boss有压→5-10渐增→~10min峰值→10min+玩家成型反杀
@@ -658,12 +673,12 @@
     return w;
   }
 
-  // ── 关卡(全部直接可选,无需解锁)。bosses=[[type,min秒]],finale=终局Boss组,bgm=BGM 曲目 id(audio.js 播 audio/<id>_loop.mp3)
+  // ── 关卡(全部直接可选,无需解锁)。bosses=[[候选池,min秒]],bgm=BGM 曲目 id
   const STAGES = {
-    ruins: { name: "霓虹废墟", goalMin: 20 * 60, half: 1700, palette: PAL.ruins, weights: wRuins, bosses: [["duke", 300], ["magnetwarper", 600], ["architect", 840]], finale: null, envField: null, bgm: "ruins" },
-    crimson: { name: "血色荒原", goalMin: 20 * 60, half: 1500, palette: PAL.crimson, weights: wCrimson, bosses: [["wraith", 300], ["queen", 600], ["inquisitor", 840]], finale: null, envField: { type: "burn", interval: 12, dur: 4, r: 90, dps: 14, warm: 2 }, bgm: "crimson" },
-    frozen: { name: "冰封核心", goalMin: 20 * 60, half: 1600, palette: PAL.frozen, weights: wFrozen, bosses: [["duke", 300], ["twins", 600], ["colossus", 840]], finale: null, envField: { type: "freeze", interval: 15, dur: 1.5, slowF: 0.35 }, bgm: "frozen" },
-    void: { name: "虚空深渊", goalMin: 20 * 60, half: 1900, palette: PAL.void, weights: wVoid, bosses: [["wraith", 300], ["magnetwarper", 600], ["colossus", 840]], finale: ["duke", "wraith", "inquisitor"], finaleMin: 18 * 60, envField: { type: "gravity", interval: 18, dur: 1.0, pull: CONST.PLAYER_BASE_SPEED * 0.7 }, bgm: "void" }
+    ruins: { name: "霓虹废墟", goalMin: 20 * 60, half: 1700, palette: PAL.ruins, weights: wRuins, bosses: [[['scavenger', 'duke', 'riftsentry'], 300], [['wraith', 'stormherald', 'magnetwarper'], 600], [['furnace', 'architect', 'inquisitor'], 840]], envField: null, bgm: "ruins" },
+    crimson: { name: "血色荒原", goalMin: 20 * 60, half: 1500, palette: PAL.crimson, weights: wCrimson, bosses: [[['scavenger', 'thornwarden', 'bloodhunter'], 300], [['wraith', 'queen', 'bloodoracle'], 600], [['furnace', 'colossus', 'eclipseeye'], 840]], envField: { type: "burn", interval: 12, dur: 4, r: 90, dps: 14, warm: 2 }, bgm: "crimson" },
+    frozen: { name: "冰封核心", goalMin: 20 * 60, half: 1600, palette: PAL.frozen, weights: wFrozen, bosses: [[['duke', 'thornwarden', 'frostwarden'], 300], [['stormherald', 'queen', 'twins'], 600], [['architect', 'colossus', 'voidseer'], 840]], envField: { type: "freeze", interval: 15, dur: 1.5, slowF: 0.35 }, bgm: "frozen" },
+    void: { name: "虚空深渊", goalMin: 20 * 60, half: 1900, palette: PAL.void, weights: wVoid, bosses: [[['riftsentry', 'bloodhunter', 'frostwarden'], 300], [['magnetwarper', 'bloodoracle', 'twins'], 600], [['inquisitor', 'eclipseeye', 'voidseer'], 840]], envField: { type: "gravity", interval: 18, dur: 1.0, pull: CONST.PLAYER_BASE_SPEED * 0.7 }, bgm: "void" }
   };
   const STAGE_ORDER = ["ruins", "crimson", "frozen", "void"];
 

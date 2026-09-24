@@ -135,6 +135,12 @@
     else if(pattern==="nodes"){for(let k=0;k<4;k++){const a=Math.PI/4+k*Math.PI/2;line(0,0,Math.cos(a)*.46,Math.sin(a)*.46);dot(Math.cos(a)*.46,Math.sin(a)*.46,.075);}}
     else if(pattern==="judge"){line(-.38,0,.38,0);line(0,-.46,0,.46);g.beginPath();g.ellipse(0,0,r*.2,r*.11,0,0,U.TAU);g.stroke();dot(0,0,.055);}
     else if(pattern==="reactor"){g.beginPath();g.arc(0,0,r*.22,0,U.TAU);g.stroke();g.beginPath();g.arc(0,0,r*.45,0,U.TAU);g.stroke();for(let k=0;k<6;k++){const a=k*U.TAU/6;line(Math.cos(a)*.25,Math.sin(a)*.25,Math.cos(a)*.42,Math.sin(a)*.42);}}
+    else if(pattern==="bloodthorn"){line(0,-.5,0,.42);for(let k=-1;k<=1;k++){const y=-.3+k*.25;line(0,y,-.28,y+.16);line(0,y,.28,y+.16);}}
+    else if(pattern==="rift"){poly(4,.43,Math.PI/4);line(-.12,-.5,.12,.5);line(.12,-.5,-.12,.5);}
+    else if(pattern==="shield"){poly(6,.48,0);line(-.25,-.05,0,.3);line(0,.3,.3,-.35);}
+    else if(pattern==="storm"){line(-.35,-.3,.06,-.04);line(.06,-.04,-.08,.16);line(-.08,.16,.36,.34);dot(-.35,-.3,.07);dot(.36,.34,.07);}
+    else if(pattern==="seer"){poly(4,.48,Math.PI/4);dot(0,0,.1);line(-.44,0,-.22,0);line(.22,0,.44,0);}
+    else if(pattern==="eclipse"){g.beginPath();g.arc(0,0,r*.42,.35,U.TAU-.35);g.stroke();dot(0,0,.2);}
     g.restore();
   }
 
@@ -287,6 +293,7 @@
 
       // ── 实体核心(普通混合)
       this._drawEnemyCores(state);
+      this._drawBossCues(state);
       this._drawChargeWarnings(state);
       this._drawBlinkWarnings(state);
       this._drawProjectileCores(state);
@@ -491,6 +498,124 @@
         ctx.drawImage(glow(e.elite ? "#ffd86b" : (e.frozen > 0 ? "#bdf0ff" : e.color)), e.x - e.r * (e.elite ? 2.8 : 2.2), e.y - e.r * (e.elite ? 2.8 : 2.2), e.r * (e.elite ? 5.6 : 4.4), e.r * (e.elite ? 5.6 : 4.4));
       }
       ctx.globalAlpha = 1;
+    },
+    _drawBossCues: function (state) {
+      const bosses = state.enemies, tm = state.time || 0, reduced = SV.Effects.isReduced();
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineWidth = 2;
+      function line(x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+      function ring(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, U.TAU); ctx.stroke(); }
+      function aura(x, y, r, color, alpha) { ctx.globalAlpha = alpha; ctx.drawImage(glow(color), x - r, y - r, r * 2, r * 2); }
+      function shard(x, y, a, len) {
+        ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+        ctx.lineTo(x + Math.cos(a + 2.4) * len * 0.42, y + Math.sin(a + 2.4) * len * 0.42);
+        ctx.lineTo(x + Math.cos(a - 2.4) * len * 0.42, y + Math.sin(a - 2.4) * len * 0.42);
+        ctx.closePath(); ctx.fill();
+      }
+      for (let i = 0; i < bosses.length; i++) {
+        const e = bosses[i];
+        if (!e.isBoss || e.x < view.l - 300 || e.x > view.r + 300 || e.y < view.t - 300 || e.y > view.b + 300) continue;
+        ctx.save();
+        const mech = (SV.Config.BOSSES[e.bossType] && SV.Config.BOSSES[e.bossType].mechanics) || {};
+        const tier = SV.Config.BOSSES[e.bossType].tier;
+        const phase = e.cstate, pulse = 0.65 + 0.25 * Math.sin(tm * 12);
+        ctx.strokeStyle = e.color; ctx.globalAlpha = pulse;
+        ctx.globalAlpha = 0.28 + 0.08 * Math.sin(tm * 3 + e.id); ctx.lineWidth = tier === 3 ? 3.5 : 2.5;
+        for (let k = 0; k < tier + 3; k++) {
+          const a = tm * 0.22 + k * U.TAU / (tier + 3);
+          ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 8 + tier * 2, a, a + 0.42); ctx.stroke();
+        }
+        ctx.globalAlpha = pulse;
+        if (phase && phase !== "walk") {
+          aura(e.x, e.y, e.r * 2.7, e.color, 0.28 + pulse * 0.12);
+          ctx.globalAlpha = pulse * 0.75; ctx.lineWidth = 2.5; ring(e.x, e.y, e.r + 10);
+          ctx.fillStyle = e.color; ctx.globalAlpha = pulse * 0.72;
+          const sparks = reduced ? 3 : 6;
+          for (let k = 0; k < sparks; k++) {
+            const a = tm * 1.8 + k * U.TAU / sparks, rr = e.r + 20 + 3 * Math.sin(tm * 8 + k);
+            shard(e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr, a, 6);
+          }
+          ctx.globalAlpha = pulse; ctx.strokeStyle = e.color; ctx.lineWidth = 2;
+        }
+        if (phase === "ice_warn" || phase === "ice_follow") {
+          const a = U.angleTo(e.x, e.y, e.markX, e.markY);
+          for (const off of [-mech.flankAngle, mech.flankAngle]) {
+            const ang = a + off, dx = Math.cos(ang), dy = Math.sin(ang);
+            ctx.globalAlpha = 0.13; ctx.fillStyle = "#a6eaff"; ctx.beginPath(); ctx.moveTo(e.x, e.y);
+            ctx.lineTo(e.x + dx * 210 - dy * 14, e.y + dy * 210 + dx * 14);
+            ctx.lineTo(e.x + dx * 210 + dy * 14, e.y + dy * 210 - dx * 14); ctx.closePath(); ctx.fill();
+            ctx.globalAlpha = pulse; ctx.lineWidth = 3; line(e.x, e.y, e.x + dx * 210, e.y + dy * 210);
+            ctx.fillStyle = "#d7f8ff";
+            for (let k = 1; k <= (reduced ? 2 : 3); k++) shard(e.x + dx * k * 55, e.y + dy * k * 55, ang + tm * 2 + k, 8);
+          }
+          if (phase === "ice_follow") { ctx.setLineDash([7, 5]); line(e.x, e.y, e.x + Math.cos(a) * 220, e.y + Math.sin(a) * 220); ctx.setLineDash([]); }
+        } else if (phase === "blood_mark") {
+          const a = U.angleTo(e.x, e.y, e.markX, e.markY) + Math.PI / 2;
+          aura(e.markX, e.markY, 58, e.color, 0.43);
+          ctx.globalAlpha = pulse; ctx.lineWidth = 3; ring(e.markX, e.markY, 22);
+          ctx.fillStyle = "#ffb8cd";
+          const thorns = reduced ? 4 : 8;
+          for (let k = 0; k < thorns; k++) { const q = k * U.TAU / thorns + tm * 0.5; shard(e.markX + Math.cos(q) * 30, e.markY + Math.sin(q) * 30, q, 10); }
+          for (const sign of [-1, 1]) {
+            const x = e.x + Math.cos(a) * mech.flankDist * sign, y = e.y + Math.sin(a) * mech.flankDist * sign;
+            aura(x, y, 34, e.color, 0.4); ctx.globalAlpha = pulse; ctx.lineWidth = 3;
+            ring(x, y, 12); line(x, y, e.markX, e.markY);
+            ctx.fillStyle = e.color; shard(x, y, U.angleTo(x, y, e.markX, e.markY), 16);
+          }
+        } else if (phase === "rift_open") {
+          for (const sign of [-1, 1]) {
+            const x = e.x + Math.cos(e.cdir) * mech.portalDist * sign, y = e.y + Math.sin(e.cdir) * mech.portalDist * sign;
+            aura(x, y, 54, e.color, 0.48); ctx.globalAlpha = 0.65; ctx.fillStyle = "#271246";
+            ctx.beginPath(); ctx.ellipse(x, y, 14, 29, e.cdir, 0, U.TAU); ctx.fill();
+            ctx.globalAlpha = pulse; ctx.lineWidth = 3.5; ctx.strokeStyle = "#d5afff";
+            ctx.beginPath(); ctx.ellipse(x, y, 18, 34, e.cdir + Math.sin(tm * 4) * 0.12, 0, U.TAU); ctx.stroke();
+            ctx.strokeStyle = e.color; ctx.lineWidth = 2; line(x, y, e.markX, e.markY);
+            ctx.fillStyle = "#e8c8ff";
+            const motes = reduced ? 2 : 4;
+            for (let k = 0; k < motes; k++) { const q = tm * 2 + k * U.TAU / motes; shard(x + Math.cos(q) * 30, y + Math.sin(q) * 30, q, 6); }
+          }
+        } else if (phase === "tele" && e.bossType === "thornwarden") {
+          ctx.globalAlpha = 0.3; ctx.fillStyle = e.color; ctx.beginPath(); ctx.moveTo(e.x, e.y);
+          ctx.arc(e.x, e.y, 150, e.cdir - mech.spread - 0.07, e.cdir + mech.spread + 0.07); ctx.closePath(); ctx.fill();
+          ctx.globalAlpha = pulse; ctx.strokeStyle = "#ffe2ed"; ctx.lineWidth = 4; ring(e.x, e.y, e.r + 12);
+          ctx.strokeStyle = e.color; ctx.lineWidth = 4;
+          for (let k = 0; k < 6; k++) { const q = k * U.TAU / 6; ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 20, q + 0.1, q + 0.75); ctx.stroke(); }
+          ctx.fillStyle = "#ffe2ed";
+          for (let k = 0; k < 3; k++) { const q = e.cdir + (k - 1) * mech.spread; shard(e.x + Math.cos(q) * 92, e.y + Math.sin(q) * 92, q, 14); }
+        } else if (phase === "storm_sweep") {
+          ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(e.x, e.y, 150, e.cdir, e.cdir + mech.sweepAngle); ctx.stroke();
+          const a = e.cdir + (mech.sweep - e.ct) * mech.sweepAngle / mech.sweep;
+          ctx.strokeStyle = "#e5dcff"; ctx.beginPath(); ctx.moveTo(e.x, e.y);
+          for (let k = 1; k <= 6; k++) { const d = k * 28; ctx.lineTo(e.x + Math.cos(a) * d + Math.sin(a) * (k & 1 ? 8 : -8), e.y + Math.sin(a) * d - Math.cos(a) * (k & 1 ? 8 : -8)); }
+          ctx.stroke();
+        } else if (phase === "ritual") {
+          for (const id of e.ritualMinionIds || []) {
+            const o = state.enemies.find(function (other) { return other.id === id && other.hp > 0; });
+            if (o) { aura(o.x, o.y, o.r * 3.2, e.color, 0.35); ctx.globalAlpha = pulse; ctx.lineWidth = 4; ring(o.x, o.y, o.r + 9); line(e.x, e.y, o.x, o.y); }
+          }
+        } else if (phase === "seer_warn") {
+          aura(e.markX, e.markY, 72, e.color, 0.4); ctx.globalAlpha = pulse; ctx.lineWidth = 3;
+          ring(e.markX, e.markY, 25); ring(e.markX, e.markY, 38); line(e.x, e.y, e.markX, e.markY);
+          ctx.fillStyle = "#dbc6ff"; for (let k = 0; k < 6; k++) { const q = k * U.TAU / 6 - tm; shard(e.markX + Math.cos(q) * 42, e.markY + Math.sin(q) * 42, q, 7); }
+        } else if (phase === "seer_echo") {
+          aura(e.echoX, e.echoY, 65, e.color, 0.4); ctx.globalAlpha = pulse; ctx.lineWidth = 3; ring(e.echoX, e.echoY, 28);
+          for (let k = 0; k < 4; k++) { const a = Math.PI / 4 + k * Math.PI / 2; line(e.echoX - Math.cos(a) * 48, e.echoY - Math.sin(a) * 48, e.echoX + Math.cos(a) * 48, e.echoY + Math.sin(a) * 48); }
+        } else if (phase === "eclipse_charge" || phase === "eclipse_second") {
+          ctx.globalAlpha = 0.38; ctx.fillStyle = "#280d36"; ctx.beginPath(); ctx.arc(e.x, e.y, 85, 0, U.TAU); ctx.fill();
+          ctx.globalAlpha = pulse; ctx.strokeStyle = "#ffc3f2"; ctx.lineWidth = 8;
+          ctx.beginPath(); ctx.arc(e.x, e.y, 115, e.gapAngle + mech.gapHalf, e.gapAngle + U.TAU - mech.gapHalf); ctx.stroke();
+          ctx.strokeStyle = e.color; ctx.lineWidth = 2.5; ring(e.x, e.y, 86);
+          for (const off of [-mech.gapHalf, mech.gapHalf]) line(e.x, e.y, e.x + Math.cos(e.gapAngle + off) * 115, e.y + Math.sin(e.gapAngle + off) * 115);
+          ctx.fillStyle = "#ffe1f7";
+          const ticks = reduced ? 8 : 16;
+          for (let k = 0; k < ticks; k++) {
+            const q = k * U.TAU / ticks + tm * 0.4;
+            if (Math.abs(Math.atan2(Math.sin(q - e.gapAngle), Math.cos(q - e.gapAngle))) < mech.gapHalf) continue;
+            shard(e.x + Math.cos(q) * 108, e.y + Math.sin(q) * 108, q, 7);
+          }
+        }
+        ctx.restore();
+      }
+      ctx.restore();
     },
     _drawEnemyCores: function (state) {
       const arr = state.enemies;
@@ -787,6 +912,15 @@
         const s = list[i];
         if (s.x < view.l || s.x > view.r || s.y < view.t || s.y > view.b) continue;
         const R = s.r + (s.boss ? 1.5 : 0);
+        if (s.boss) {
+          const len = Math.hypot(s.vx, s.vy) || 1, dx = s.vx / len, dy = s.vy / len;
+          ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = s.color;
+          ctx.globalAlpha = 0.52; ctx.lineWidth = Math.max(2, R * 0.7); ctx.lineCap = "round";
+          ctx.beginPath(); ctx.moveTo(s.x - dx * R, s.y - dy * R); ctx.lineTo(s.x - dx * R * 3.7, s.y - dy * R * 3.7); ctx.stroke();
+          ctx.globalAlpha = 0.72; ctx.lineWidth = 1.3; ctx.strokeStyle = "#fff";
+          ctx.beginPath(); ctx.moveTo(s.x - dx * R * 0.4, s.y - dy * R * 0.4); ctx.lineTo(s.x - dx * R * 2.1, s.y - dy * R * 2.1); ctx.stroke();
+          ctx.restore();
+        }
         if (s.style === "ring") {
           // 空心魔环:彩色粗描边 + 细白内环(无实芯),弹幕游戏经典轮廓
           ctx.strokeStyle = s.color; ctx.lineWidth = Math.max(2.5, R * 0.38);

@@ -1,0 +1,106 @@
+// Repeatable combat benchmark for all fusion weapons. Ratios are diagnostics, not targets.
+"use strict";
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+const assert = require("assert");
+const root = path.resolve(__dirname, "..");
+let seed = 123456789;
+const rng = Object.create(Math);
+rng.random = () => { seed = (1664525 * seed + 1013904223) >>> 0; return seed / 4294967296; };
+const ctx = { Math: rng, console, window: null };
+ctx.window = ctx;
+ctx.SV = {};
+vm.createContext(ctx);
+for (const name of ["util", "config", "pool", "spatial", "effects", "entities", "weapons"]) {
+  vm.runInContext(fs.readFileSync(path.join(root, "js", name + ".js"), "utf8"), ctx, { filename: name + ".js" });
+}
+const SV = ctx.SV;
+SV.Audio = { shoot() {}, hit() {}, die() {}, evolve() {}, hurt() {}, bossWarn() {} };
+SV.AI = { update(_s, e, _dt) { e.vx = 0; e.vy = 0; } };
+SV.Game = { state: null, onPlayerDeath() {} };
+SV.Input = { axis: { x: 0, y: 0 } };
+SV.Renderer = { cam: { x: 0, y: 0, zoom: 1 }, cssSize: () => ({ w: 800, h: 600 }) };
+
+const dt = 1 / 30;
+const frames = 1800; // 60 simulated seconds; count the last 55 seconds.
+function makeState(id) {
+  const s = {
+    difficulty: "normal", endless: false, time: 600, level: 30,
+    stage: { half: 2000, goalMin: 1200 }, player: SV.Entities.makePlayer(),
+    enemies: [], gems: [], pickups: [], eshots: [], hazards: [],
+    weapons: [], passives: {}, charMods: {}, special: null, _mods: null,
+    weaponDamage: {}, weaponActive: {}, weaponRecent: {}, enemyDamage: {},
+    kills: 0, bossFlags: { count: 0 }, encountered: { enemy: {}, boss: {} }
+  };
+  SV.Game.state = s;
+  SV.Weapons.init(s, id);
+  s.weapons[0].level = 8;
+  return s;
+}
+function spawn(s, scene, index, bossDistance) {
+  let e;
+  if (scene === "boss") {
+    e = SV.Entities.makeBoss(s, "colossus", bossDistance, 0);
+    e.hp = e.maxHp = 7500;
+  } else {
+    const a = index * Math.PI * 2 / 24;
+    const r = 90 + (index % 5) * 31;
+    e = SV.Entities.makeEnemy(s, index % 3 === 0 ? "brute" : "zombie", Math.cos(a) * r, Math.sin(a) * r);
+    e.hp = e.maxHp = index % 3 === 0 ? 420 : 240;
+  }
+  e.dmg = e.boomDmg = e.projDmg = 0;
+  e.speed = e.regenRate = 0;
+  s.enemies.push(e);
+}
+function measure(id, scene, bossDistance) {
+  seed = 123456789;
+  const s = makeState(id);
+  const n = scene === "boss" ? 1 : 24;
+  for (let i = 0; i < n; i++) spawn(s, scene, i, bossDistance);
+  let warm = 0;
+  for (let frame = 0; frame < frames; frame++) {
+    const t = frame * dt;
+    s.player.x = 28 * Math.sin(t * 0.47);
+    s.player.y = 24 * Math.sin(t * 0.32);
+    s.player.facing = 0;
+    SV.Entities.rebuildGrid(s);
+    SV.Weapons.updateAll(s, dt);
+    SV.Entities.updatePlayer(s, dt);
+    SV.Entities.updateEnemies(s, dt);
+    while (s.enemies.length < n) spawn(s, scene, scene === "boss" ? 0 : (frame + s.enemies.length) % 24, bossDistance);
+    s.gems.length = s.pickups.length = s.eshots.length = 0;
+    if (frame === 149) warm = s.weaponDamage[SV.Entities.tid(id)] || 0;
+  }
+  return ((s.weaponDamage[SV.Entities.tid(id)] || 0) - warm) / 55;
+}
+// Poison shortening the last fraction of a hex fuse must trigger the explosion.
+{
+  const s = makeState("hex_poison");
+  s.weapons.length = 0;
+  spawn(s, "swarm", 0);
+  const e = s.enemies[0];
+  e.hex = 0.1; e.hexDmg = 25; e.hexFrac = 0; e.hexWid = "hex_poison";
+  e.poison = 1; e.poisonTick = 0; e.poisonDmg = 0; e.poisonWid = "hex_poison"; e.poisonHexCut = 0.15;
+  SV.Entities.rebuildGrid(s);
+  SV.Entities.updateEnemies(s, dt);
+  assert.strictEqual(e.hex, 0);
+  assert.strictEqual(s.weaponDamage.hex_poison, 25);
+}
+const ids = [...new Set(SV.Config.FUSIONS.flatMap(f => [f.w1, f.w2, f.to]))];
+const values = {};
+for (const id of ids) values[id] = {
+  boss: [135, 175, 210].reduce((sum, distance) => sum + measure(id, "boss", distance), 0) / 3,
+  swarm: measure(id, "swarm")
+};
+const rows = SV.Config.FUSIONS.map(f => {
+  const bossBase = Math.max(values[f.w1].boss, values[f.w2].boss);
+  const swarmBase = Math.max(values[f.w1].swarm, values[f.w2].swarm);
+  return { id: f.to, boss: values[f.to].boss / bossBase, swarm: values[f.to].swarm / swarmBase,
+    fusionBoss: values[f.to].boss, bossBase, fusionSwarm: values[f.to].swarm, swarmBase };
+});
+for (const r of rows) console.log(`${r.id.padEnd(22)} boss ${r.boss.toFixed(2)} (${r.fusionBoss.toFixed(0)}/${r.bossBase.toFixed(0)})  swarm ${r.swarm.toFixed(2)} (${r.fusionSwarm.toFixed(0)}/${r.swarmBase.toFixed(0)})`);
+if (process.argv.includes("--check")) {
+  const bad = rows.filter(r => !Number.isFinite(r.boss) || !Number.isFinite(r.swarm) || r.boss <= 0 || r.swarm <= 0);
+  if (bad.length) { console.error(`${bad.length} fusion weapons produced invalid output`); process.exitCode = 1; }
+}

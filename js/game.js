@@ -150,6 +150,9 @@
     s.charMods = ch.charMods || {};
     s.special = ch.special || null;
     s.hudAccum = 0; s.ended = false; s._mods = null;
+    // 旧存档没有绝对时间波次游标；已过的波次不在读档时补刷。
+    if (!Number.isInteger(s.lateBossIndex)) s.lateBossIndex = C.LATE_BOSS_TIMES.filter(function (at) { return at <= s.time; }).length;
+    if (!Number.isFinite(s.endlessBossNext)) s.endlessBossNext = Math.max(21 * 60, (Math.floor(s.time / 60) + 1) * 60);
     if (!s.player.blades) s.player.blades = [];
     if (!s.player.sentries) s.player.sentries = [];
     SV.Weapons.restoreRuntime(s, save.runtime);

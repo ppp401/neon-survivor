@@ -52,23 +52,22 @@
     for (const k in w) arr.push({ type: k, weight: w[k] });
     return U.weighted(arr).type;
   }
-  // 14min 后周期 Boss 波的分档间隔:按当前时间取所在档 every(14-17min@90s,17-19min@60s,19min+@30s)
-  function lateBossEvery(time) {
-    const tiers = C.LATE_BOSS_TIERS;
-    let every = tiers[0].every;
-    for (let i = 0; i < tiers.length; i++) if (time >= tiers[i].after) every = tiers[i].every;
-    return every;
+  function stageBossPool(stage) {
+    const pool = new Set();
+    for (let i = 0; i < stage.bosses.length; i++) {
+      const tier = stage.bosses[i][0];
+      for (let j = 0; j < tier.length; j++) pool.add(tier[j]);
+    }
+    return Array.from(pool);
   }
-
   const Waves = {
     reset: function (state) {
       state.spawnAccum = 0;
       state.swarmTimer = C.SWARM_EVERY;
       state.spawnPause = 0;
       state.bossSpawned = [];   // 按关卡 bosses 下标记录是否已刷
-      state.finalSpawned = false;
-      state.endlessBossTimer = C.ENDLESS_BOSS_EVERY;
-      state.bossWaveTimer = C.LATE_BOSS_TIERS[0].every; // 14min 后周期多 Boss 波倒计时(首波≈15.5min)
+      state.lateBossIndex = 0;
+      state.endlessBossNext = 20 * 60 + C.ENDLESS_BOSS_EVERY;
     },
 
     update: function (state, dt) {
@@ -102,33 +101,25 @@
         const pair = bosses[i];
         if (!state.bossSpawned[i] && state.time >= pair[1]) {
           state.bossSpawned[i] = true;
-          bossQueue.push({ type: pair[0], source: "story" });
+          bossQueue.push({ type: U.choice(pair[0]), source: "story" });
         }
       }
-      // 终局 Boss 组(虚空深渊等)
-      if (state.stage.finale && !state.finalSpawned && state.time >= state.stage.finaleMin) {
-        state.finalSpawned = true;
-        for (let i = 0; i < state.stage.finale.length; i++) bossQueue.push({ type: state.stage.finale[i], source: "finale" });
-      }
-
-      // 14min 后周期性多 Boss 波(分档加密:14-17min@1.5min,17-19min@1min,19min+@30s;每波 2-3 只随机 Boss 同台)。非无尽:提供后期压力与宝箱
-      if (!state.endless && state.time >= C.LATE_BOSS_AFTER) {
-        state.bossWaveTimer -= dt;
-        if (state.bossWaveTimer <= 0) {
-          state.bossWaveTimer = lateBossEvery(state.time);
-          const pool = Object.keys(CFG.BOSSES);
+      // 通关前固定三个多 Boss 波；暂停/升级时 state.time 不前进。
+      if (!state.endless) {
+        const pool = state.lateBossIndex < C.LATE_BOSS_TIMES.length && state.time >= C.LATE_BOSS_TIMES[state.lateBossIndex] ? stageBossPool(state.stage) : null;
+        while (state.lateBossIndex < C.LATE_BOSS_TIMES.length && state.time >= C.LATE_BOSS_TIMES[state.lateBossIndex]) {
+          state.lateBossIndex++;
           const n = U.randInt(2, 3);
           for (let i = 0; i < n; i++) bossQueue.push({ type: U.choice(pool), source: "late" });
         }
       }
 
-      // 无尽模式:定时 Boss 波(随机 1-3 只同台)
+      // 无尽模式:从 21:00 起每分钟一波(随机 1-3 只同台)
       if (state.endless) {
-        state.endlessBossTimer -= dt;
-        if (state.endlessBossTimer <= 0) {
-          state.endlessBossTimer = C.ENDLESS_BOSS_EVERY;
+        const pool = state.time >= state.endlessBossNext ? stageBossPool(state.stage) : null;
+        while (state.time >= state.endlessBossNext) {
+          state.endlessBossNext += C.ENDLESS_BOSS_EVERY;
           const n = U.randInt(1, 3);
-          const pool = Object.keys(CFG.BOSSES);
           for (let i = 0; i < n; i++) bossQueue.push({ type: U.choice(pool), source: "endless" });
         }
       }
