@@ -38,14 +38,14 @@ function makeState(id) {
   s.weapons[0].level = 8;
   return s;
 }
-function spawn(s, scene, index, bossDistance) {
+function spawn(s, scene, index, distance) {
   let e;
   if (scene === "boss") {
-    e = SV.Entities.makeBoss(s, "colossus", bossDistance, 0);
+    e = SV.Entities.makeBoss(s, "colossus", distance, 0);
     e.hp = e.maxHp = 7500;
   } else {
     const a = index * Math.PI * 2 / 24;
-    const r = 90 + (index % 5) * 31;
+    const r = distance + (index % 5) * 18;
     e = SV.Entities.makeEnemy(s, index % 3 === 0 ? "brute" : "zombie", Math.cos(a) * r, Math.sin(a) * r);
     e.hp = e.maxHp = index % 3 === 0 ? 420 : 240;
   }
@@ -74,6 +74,22 @@ function measure(id, scene, bossDistance) {
   }
   return ((s.weaponDamage[SV.Entities.tid(id)] || 0) - warm) / 55;
 }
+// Arc fields from one weapon resolve independently, so overlapping Full-Moon Slash trails stack.
+{
+  const s = makeState("crescent_evo");
+  s.weapons.length = 0;
+  const e = SV.Entities.makeEnemy(s, "brute", 100, 0);
+  e.hp = e.maxHp = 1e9; e.speed = e.dmg = 0;
+  s.enemies = [e]; s.time = 600;
+  SV.Weapons.arcFields.push(
+    { fieldId: 9001, kind:"sector", x:0, y:0, dir:0, arc:1, inner:70, outer:130, damage:10, life:1, max:1, every:0.4, tick:0, color:"#fff", wid:"crescent_evo" },
+    { fieldId: 9002, kind:"sector", x:0, y:0, dir:0, arc:1, inner:70, outer:130, damage:10, life:1, max:1, every:0.4, tick:0, color:"#fff", wid:"crescent_evo" }
+  );
+  SV.Entities.rebuildGrid(s);
+  SV.Weapons.updateAll(s, dt);
+  assert.strictEqual(s.weaponDamage.crescent, 20, "overlapping Full-Moon Slash trails stack");
+  SV.Weapons.arcFields.length = 0;
+}
 // Poison shortening the last fraction of a hex fuse must trigger the explosion.
 {
   const s = makeState("hex_poison");
@@ -87,11 +103,12 @@ function measure(id, scene, bossDistance) {
   assert.strictEqual(e.hex, 0);
   assert.strictEqual(s.weaponDamage.hex_poison, 25);
 }
-const ids = [...new Set(SV.Config.FUSIONS.flatMap(f => [f.w1, f.w2, f.to]))];
+const evolutionPairs = Object.entries(SV.Config.EVOLUTIONS).map(([base, evo]) => ({ base, evo: evo.to }));
+const ids = [...new Set([...evolutionPairs.flatMap(pair => [pair.base, pair.evo]), ...SV.Config.FUSIONS.flatMap(f => [f.w1, f.w2, f.to])])];
 const values = {};
 for (const id of ids) values[id] = {
-  boss: [135, 175, 210].reduce((sum, distance) => sum + measure(id, "boss", distance), 0) / 3,
-  swarm: measure(id, "swarm")
+  boss: Math.max(...[60, 95, 135, 175, 210].map(distance => measure(id, "boss", distance))),
+  swarm: Math.max(...[65, 105, 145, 185].map(distance => measure(id, "swarm", distance)))
 };
 const rows = SV.Config.FUSIONS.map(f => {
   const bossBase = Math.max(values[f.w1].boss, values[f.w2].boss);
@@ -99,8 +116,15 @@ const rows = SV.Config.FUSIONS.map(f => {
   return { id: f.to, boss: values[f.to].boss / bossBase, swarm: values[f.to].swarm / swarmBase,
     fusionBoss: values[f.to].boss, bossBase, fusionSwarm: values[f.to].swarm, swarmBase };
 });
+function ratio(next, base) { return base > 0 ? next / base : next > 0 ? Infinity : 1; }
+const evoRows = evolutionPairs.map(pair => ({ id: pair.evo,
+  boss: ratio(values[pair.evo].boss, values[pair.base].boss),
+  swarm: ratio(values[pair.evo].swarm, values[pair.base].swarm) }));
+for (const r of evoRows) console.log(`${r.id.padEnd(22)} evo boss ${r.boss.toFixed(2)}  swarm ${r.swarm.toFixed(2)}`);
 for (const r of rows) console.log(`${r.id.padEnd(22)} boss ${r.boss.toFixed(2)} (${r.fusionBoss.toFixed(0)}/${r.bossBase.toFixed(0)})  swarm ${r.swarm.toFixed(2)} (${r.fusionSwarm.toFixed(0)}/${r.swarmBase.toFixed(0)})`);
 if (process.argv.includes("--check")) {
+  const badEvos = evoRows.filter(r => !Number.isFinite(r.boss) || !Number.isFinite(r.swarm) || Math.max(r.boss, r.swarm) < 1.5 || Math.min(r.boss, r.swarm) < 1);
+  if (badEvos.length) { console.error(`Evolution target failed: ${badEvos.map(r => `${r.id} ${r.boss.toFixed(2)}/${r.swarm.toFixed(2)}`).join(", ")}`); process.exitCode = 1; }
   const bad = rows.filter(r => !Number.isFinite(r.boss) || !Number.isFinite(r.swarm) || r.boss <= 0 || r.swarm <= 0);
   if (bad.length) { console.error(`${bad.length} fusion weapons produced invalid output`); process.exitCode = 1; }
 }

@@ -518,6 +518,10 @@
         const mech = (SV.Config.BOSSES[e.bossType] && SV.Config.BOSSES[e.bossType].mechanics) || {};
         const tier = SV.Config.BOSSES[e.bossType].tier;
         const phase = e.cstate, pulse = 0.65 + 0.25 * Math.sin(tm * 12);
+        const projectileCue = phase === "ice_warn" || phase === "ice_follow" || phase === "blood_mark" || phase === "rift_open" ||
+          (phase === "tele" && e.bossType === "thornwarden") || phase === "storm_sweep" || phase === "ritual" ||
+          phase === "eclipse_charge" || phase === "eclipse_second";
+        if (projectileCue) { ctx.restore(); continue; }
         ctx.strokeStyle = e.color; ctx.globalAlpha = pulse;
         ctx.globalAlpha = 0.28 + 0.08 * Math.sin(tm * 3 + e.id); ctx.lineWidth = tier === 3 ? 3.5 : 2.5;
         for (let k = 0; k < tier + 3; k++) {

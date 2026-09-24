@@ -154,7 +154,7 @@
       else if (d > 420) { e.vx = Math.cos(a) * e.speed * 0.6; e.vy = Math.sin(a) * e.speed * 0.6; }
       else { e.vx *= 0.82; e.vy *= 0.82; }
       e.t1 -= dt;
-      if (e.t1 <= 0 && d < 480) { e.t1 = 3.4; e.flash = 0.2; const spd = 420; if (E.canEnemyRanged(SV.Game.state, e)) E.addEShot(SV.Game.state, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, e.projDmg, e.color, 7, "sniper"); }
+      if (e.t1 <= 0 && d < 480) { e.t1 = 3.4; e.flash = 0.2; const spd = 380; if (E.canEnemyRanged(SV.Game.state, e)) E.addEShot(SV.Game.state, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, e.projDmg, e.color, 7, "sniper"); }
     },
     regen: function (e, p, dt) {
       toPlayer(e, p, e.speed);

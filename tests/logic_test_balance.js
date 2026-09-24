@@ -39,10 +39,20 @@ assert.equal(Object.values(SV.Config.BOSSES).filter(b => b.tier === 3).length, 6
 for (const [id, def] of Object.entries(SV.Config.BOSSES).filter(([, b]) => b.tier === 1)) {
   const scale = SV.Config.DIFFICULTY.normal.bossDmgMul * SV.Config.CURVES.dmgFactor(5);
   assert(def.dmg * scale <= 36, `${id} T1 normal contact damage`);
-  if (def.attacks.projectile) assert(Math.max(...def.attacks.projectile) * scale <= 13, `${id} T1 normal projectile damage`);
+  if (def.attacks.projectile) {
+    assert(Math.max(...def.attacks.projectile) * scale <= 15, `${id} T1 normal projectile damage`);
+    const sniperShot = SV.Config.ENEMIES.sniper.projDmg * SV.Config.DIFFICULTY.normal.dmgMul * SV.Config.CURVES.dmgFactor(5);
+    assert(Math.min(...def.attacks.projectile) * scale > sniperShot, `${id} T1 projectile exceeds sniper damage`);
+  }
   assert(def.hp <= 900, `${id} T1 base HP`);
   if (def.mechanics && def.mechanics.warn) assert(def.mechanics.warn >= 0.7, `${id} readable T1 warning`);
 }
+assert.deepEqual(Array.from(SV.Config.BOSSES.duke.attacks.projectile), [10]);
+assert.deepEqual(Array.from(SV.Config.BOSSES.scavenger.attacks.projectile), [10]);
+assert.deepEqual(Array.from(SV.Config.BOSSES.frostwarden.attacks.projectile), [9]);
+assert.deepEqual(Array.from(SV.Config.BOSSES.bloodhunter.attacks.projectile), [9]);
+assert.deepEqual(Array.from(SV.Config.BOSSES.riftsentry.attacks.projectile), [8, 9]);
+assert.deepEqual(Array.from(SV.Config.BOSSES.thornwarden.attacks.projectile), [9]);
 const tierOnePools = new Set();
 for (const stage of Object.values(SV.Config.STAGES)) {
   assert.equal(stage.bosses.length, 3);
@@ -124,6 +134,12 @@ SV.Entities.damagePlayer = () => {};
 SV.Effects.hit = () => {}; SV.Effects.ring = () => {};
 SV.Game = { state: { player: { x: 0, y: 0, r: 14 }, enemies: [], eshots: [], hazards: [], time: 600, difficulty: 'normal', endless: false, stage: SV.Config.STAGES.ruins } };
 load('ai.js');
+{
+  const sniper = { ai: 'sniper', x: 300, y: 0, speed: 60, projDmg: 11, color: '#fff', t1: 0, vx: 0, vy: 0 };
+  shots.length = 0;
+  SV.AI.update(SV.Game.state, sniper, 1 / 60);
+  assert.equal(Math.hypot(shots[0].vx, shots[0].vy), 380, 'sniper projectile speed');
+}
 for (const id of newBosses) {
   const def = SV.Config.BOSSES[id];
   const boss = { bossType: id, ai: 'boss', x: 160, y: 0, r: def.r, speed: def.speed, t1: 0, t2: 0, ct: 0, cdir: 0, cstate: 'walk', color: def.color, hp: 100 };

@@ -48,6 +48,8 @@
   const beams = []; // {pts,life,max,color,width}
   const swings = []; // 扇形挥砍视觉 {x,y,dir,arc,radius,life,max,color}
   const arcFields = []; // 满月斩环扇地带 + 月轮残迹
+  let arcFieldSeq = 0;
+  function addArcField(field) { field.fieldId = ++arcFieldSeq; arcFields.push(field); }
 
   // 硬上限:满则回收最旧再取,保证始终返回非空,避免子弹爆炸性增长卡死
   // 回收策略:跳过返航中的回旋镖(shape=star 且已过半程),它必须回到玩家
@@ -824,7 +826,7 @@
     for (let k = 0; k < (s.count || 1); k++) {
       const dir = (s.count || 1) > 1 ? base + (k - ((s.count || 1) - 1) / 2) * 0.6 : base;
       swingOnce(state, w, def, s, dir, opts);
-      if (def.evo && s.leaveTrail) arcFields.push({ kind:"sector", x:p.x, y:p.y, dir:dir, arc:s.arc, inner:s.radius*0.7, outer:s.radius, damage:s.damage*0.25, life:1.2, max:1.2, every:0.5, tick:0, color:def.color, wid:w.id });
+      if (def.evo && s.leaveTrail) addArcField({ kind:"sector", x:p.x, y:p.y, dir:dir, arc:s.arc, inner:s.radius*0.7, outer:s.radius, damage:s.damage*0.30, life:1.2, max:1.2, every:0.4, tick:0, color:def.color, wid:w.id });
     }
     SV.Audio.shoot();
   }
@@ -1010,7 +1012,7 @@
         pr.moonTrail -= dt;
         if (pr.moonTrail <= 0) {
           pr.moonTrail += pr.moonTrailEvery;
-          arcFields.push({ kind:"moon", x:pr.x, y:pr.y, dir:Math.atan2(pr.vy,pr.vx), inner:pr.r*0.42, outer:pr.r, damage:pr.moonTrailDmg, life:pr.moonTrailLife, max:pr.moonTrailLife, every:pr.moonTrailTick, tick:0, color:pr.color, wid:pr.weaponId });
+          addArcField({ kind:"moon", x:pr.x, y:pr.y, dir:Math.atan2(pr.vy,pr.vx), inner:pr.r*0.42, outer:pr.r, damage:pr.moonTrailDmg, life:pr.moonTrailLife, max:pr.moonTrailLife, every:pr.moonTrailTick, tick:0, color:pr.color, wid:pr.weaponId });
         }
       }
       // 贯星长矛光栅:静止的短时横向切割线,每 tick 对线上每敌至多结算一次。
@@ -1740,9 +1742,9 @@
           const d2 = U.dist2(f.x, f.y, e.x, e.y);
           if (d2 < f.inner * f.inner || d2 > f.outer * f.outer) continue;
           if (f.kind === "sector") { const a=U.angleTo(f.x,f.y,e.x,e.y),diff=Math.abs(Math.atan2(Math.sin(a-f.dir),Math.cos(a-f.dir))); if(diff>f.arc/2)continue; }
-          const hits=e._arcFieldHits||(e._arcFieldHits={}),last=hits[f.wid];
+          const hits=e._arcFieldHits||(e._arcFieldHits={}),key=f.wid+":"+f.fieldId,last=hits[key];
           if(last!=null&&(state.time||0)-last<f.every-0.02)continue;
-          hits[f.wid]=state.time||0; dmgEnemy(e,f.damage,f.wid);
+          hits[key]=state.time||0; dmgEnemy(e,f.damage,f.wid);
         }
       }
       if (f.life > 0) { if (out !== i) arcFields[out] = f; out++; }
@@ -1776,6 +1778,7 @@
 
   function restoreRuntime(state, saved) {
     proj.clear(); beams.length = 0; swings.length = 0; arcFields.length = 0;
+    arcFieldSeq = 0;
     const byId = {};
     for (let i = 0; i < state.enemies.length; i++) byId[state.enemies[i].id] = state.enemies[i];
     const ps = saved && Array.isArray(saved.projectiles) ? saved.projectiles : [];
@@ -1789,7 +1792,12 @@
       }
     }
     const fields = saved && Array.isArray(saved.arcFields) ? saved.arcFields : [];
-    for (let i = 0; i < fields.length; i++) arcFields.push(fields[i]);
+    for (let i = 0; i < fields.length; i++) {
+      const field = fields[i];
+      if (!(field.fieldId > 0)) field.fieldId = ++arcFieldSeq;
+      else arcFieldSeq = Math.max(arcFieldSeq, field.fieldId);
+      arcFields.push(field);
+    }
     state.player.blades = [];
     state.player.sentries = [];
   }
