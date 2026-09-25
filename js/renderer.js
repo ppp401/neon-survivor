@@ -511,6 +511,24 @@
         ctx.lineTo(x + Math.cos(a - 2.4) * len * 0.42, y + Math.sin(a - 2.4) * len * 0.42);
         ctx.closePath(); ctx.fill();
       }
+      function flankPoints(e, angle, distance) {
+        if ([e.flankAX, e.flankAY, e.flankBX, e.flankBY].every(Number.isFinite)) {
+          return [[e.flankAX, e.flankAY], [e.flankBX, e.flankBY]];
+        }
+        const edge = Math.max(0, ((state.stage && state.stage.half) || 2000) - 8);
+        const dx = Math.cos(angle) * distance, dy = Math.sin(angle) * distance;
+        return [
+          [U.clamp(e.markX - dx, -edge, edge), U.clamp(e.markY - dy, -edge, edge)],
+          [U.clamp(e.markX + dx, -edge, edge), U.clamp(e.markY + dy, -edge, edge)]
+        ];
+      }
+      function fanLines(x, y, tx, ty, spread) {
+        const base = U.angleTo(x, y, tx, ty), len = Math.max(90, U.dist(x, y, tx, ty) + 55);
+        for (const off of [-spread / 2, spread / 2]) {
+          const a = base + off;
+          line(x, y, x + Math.cos(a) * len, y + Math.sin(a) * len);
+        }
+      }
       for (let i = 0; i < bosses.length; i++) {
         const e = bosses[i];
         if (!e.isBoss || e.x < view.l - 300 || e.x > view.r + 300 || e.y < view.t - 300 || e.y > view.b + 300) continue;
@@ -521,24 +539,28 @@
         const projectileCue = phase === "ice_warn" || phase === "ice_follow" || phase === "blood_mark" || phase === "rift_open" ||
           (phase === "tele" && e.bossType === "thornwarden") || phase === "storm_sweep" || phase === "ritual" ||
           phase === "eclipse_charge" || phase === "eclipse_second";
-        if (projectileCue) { ctx.restore(); continue; }
-        ctx.strokeStyle = e.color; ctx.globalAlpha = pulse;
-        ctx.globalAlpha = 0.28 + 0.08 * Math.sin(tm * 3 + e.id); ctx.lineWidth = tier === 3 ? 3.5 : 2.5;
-        for (let k = 0; k < tier + 3; k++) {
-          const a = tm * 0.22 + k * U.TAU / (tier + 3);
-          ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 8 + tier * 2, a, a + 0.42); ctx.stroke();
-        }
-        ctx.globalAlpha = pulse;
-        if (phase && phase !== "walk") {
-          aura(e.x, e.y, e.r * 2.7, e.color, 0.28 + pulse * 0.12);
-          ctx.globalAlpha = pulse * 0.75; ctx.lineWidth = 2.5; ring(e.x, e.y, e.r + 10);
-          ctx.fillStyle = e.color; ctx.globalAlpha = pulse * 0.72;
-          const sparks = reduced ? 3 : 6;
-          for (let k = 0; k < sparks; k++) {
-            const a = tm * 1.8 + k * U.TAU / sparks, rr = e.r + 20 + 3 * Math.sin(tm * 8 + k);
-            shard(e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr, a, 6);
+        const pincerCue = phase === "blood_mark" || phase === "rift_open";
+        // 普通弹幕仍不显示蓄力预警；夹击弹幕必须展示实际来源和扇面，才能公平躲避。
+        if (projectileCue && !pincerCue) { ctx.restore(); continue; }
+        if (!projectileCue) {
+          ctx.strokeStyle = e.color; ctx.globalAlpha = pulse;
+          ctx.globalAlpha = 0.28 + 0.08 * Math.sin(tm * 3 + e.id); ctx.lineWidth = tier === 3 ? 3.5 : 2.5;
+          for (let k = 0; k < tier + 3; k++) {
+            const a = tm * 0.22 + k * U.TAU / (tier + 3);
+            ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 8 + tier * 2, a, a + 0.42); ctx.stroke();
           }
-          ctx.globalAlpha = pulse; ctx.strokeStyle = e.color; ctx.lineWidth = 2;
+          ctx.globalAlpha = pulse;
+          if (phase && phase !== "walk") {
+            aura(e.x, e.y, e.r * 2.7, e.color, 0.28 + pulse * 0.12);
+            ctx.globalAlpha = pulse * 0.75; ctx.lineWidth = 2.5; ring(e.x, e.y, e.r + 10);
+            ctx.fillStyle = e.color; ctx.globalAlpha = pulse * 0.72;
+            const sparks = reduced ? 3 : 6;
+            for (let k = 0; k < sparks; k++) {
+              const a = tm * 1.8 + k * U.TAU / sparks, rr = e.r + 20 + 3 * Math.sin(tm * 8 + k);
+              shard(e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr, a, 6);
+            }
+            ctx.globalAlpha = pulse; ctx.strokeStyle = e.color; ctx.lineWidth = 2;
+          }
         }
         if (phase === "ice_warn" || phase === "ice_follow") {
           const a = U.angleTo(e.x, e.y, e.markX, e.markY);
@@ -553,26 +575,24 @@
           }
           if (phase === "ice_follow") { ctx.setLineDash([7, 5]); line(e.x, e.y, e.x + Math.cos(a) * 220, e.y + Math.sin(a) * 220); ctx.setLineDash([]); }
         } else if (phase === "blood_mark") {
-          const a = U.angleTo(e.x, e.y, e.markX, e.markY) + Math.PI / 2;
+          const a = Number.isFinite(e.cdir) ? e.cdir : U.angleTo(e.x, e.y, e.markX, e.markY) + Math.PI / 2;
           aura(e.markX, e.markY, 58, e.color, 0.43);
           ctx.globalAlpha = pulse; ctx.lineWidth = 3; ring(e.markX, e.markY, 22);
           ctx.fillStyle = "#ffb8cd";
           const thorns = reduced ? 4 : 8;
           for (let k = 0; k < thorns; k++) { const q = k * U.TAU / thorns + tm * 0.5; shard(e.markX + Math.cos(q) * 30, e.markY + Math.sin(q) * 30, q, 10); }
-          for (const sign of [-1, 1]) {
-            const x = e.x + Math.cos(a) * mech.flankDist * sign, y = e.y + Math.sin(a) * mech.flankDist * sign;
+          for (const [x, y] of flankPoints(e, a, mech.flankDist)) {
             aura(x, y, 34, e.color, 0.4); ctx.globalAlpha = pulse; ctx.lineWidth = 3;
-            ring(x, y, 12); line(x, y, e.markX, e.markY);
+            ring(x, y, 12); fanLines(x, y, e.markX, e.markY, mech.spread);
             ctx.fillStyle = e.color; shard(x, y, U.angleTo(x, y, e.markX, e.markY), 16);
           }
         } else if (phase === "rift_open") {
-          for (const sign of [-1, 1]) {
-            const x = e.x + Math.cos(e.cdir) * mech.portalDist * sign, y = e.y + Math.sin(e.cdir) * mech.portalDist * sign;
+          for (const [x, y] of flankPoints(e, e.cdir, mech.portalDist)) {
             aura(x, y, 54, e.color, 0.48); ctx.globalAlpha = 0.65; ctx.fillStyle = "#271246";
             ctx.beginPath(); ctx.ellipse(x, y, 14, 29, e.cdir, 0, U.TAU); ctx.fill();
             ctx.globalAlpha = pulse; ctx.lineWidth = 3.5; ctx.strokeStyle = "#d5afff";
             ctx.beginPath(); ctx.ellipse(x, y, 18, 34, e.cdir + Math.sin(tm * 4) * 0.12, 0, U.TAU); ctx.stroke();
-            ctx.strokeStyle = e.color; ctx.lineWidth = 2; line(x, y, e.markX, e.markY);
+            ctx.strokeStyle = e.color; ctx.lineWidth = 2; fanLines(x, y, e.markX, e.markY, mech.spread);
             ctx.fillStyle = "#e8c8ff";
             const motes = reduced ? 2 : 4;
             for (let k = 0; k < motes; k++) { const q = tm * 2 + k * U.TAU / motes; shard(x + Math.cos(q) * 30, y + Math.sin(q) * 30, q, 6); }

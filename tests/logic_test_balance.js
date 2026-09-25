@@ -18,6 +18,9 @@ load('util.js'); load('config.js');
 const SV = ctx.SV, C = SV.Config.CONST, W = SV.Config.WEAPONS;
 assert.equal(C.HEALTH_PULL_RADIUS, C.PICKUP_RADIUS);
 assert.deepEqual(Array.from(C.LATE_BOSS_TIMES), [990, 1080, 1170]);
+assert.equal(C.BOSS_AIM_LEAD_FACTOR, 0.45);
+assert.equal(C.BOSS_AIM_LEAD_MAX_TIME, 0.45);
+assert.equal(C.BOSS_AIM_LEAD_MAX_DIST, 90);
 assert(W.meteor.stats(1).damage > 21 * 1.2);
 assert(W.meteor.stats(1).radius > 52);
 assert(W.railgun.stats(1).damage < 24.3);
@@ -56,7 +59,7 @@ assert.deepEqual(Array.from(SV.Config.BOSSES.riftsentry.attacks.projectile), [8,
 assert.deepEqual(Array.from(SV.Config.BOSSES.thornwarden.attacks.projectile), [9]);
 assert.equal(SV.Config.BOSSES.wraith.tier, 2);
 assert.equal(SV.Config.BOSSES.wraith.hp, 800);
-assert.equal(SV.Config.BOSSES.wraith.dmg, 18);
+assert.equal(SV.Config.BOSSES.wraith.dmg, 15);
 assert.deepEqual(Array.from(SV.Config.BOSSES.wraith.attacks.projectile), [13]);
 let previousBossDifficulty = null;
 for (const id of SV.Config.DIFFICULTY_ORDER) {
@@ -68,6 +71,15 @@ for (const id of SV.Config.DIFFICULTY_ORDER) {
 for (const tier of [1, 2, 3]) {
   const groupHp = Object.values(SV.Config.BOSSES).filter(b => b.tier === tier).map(b => b.hp * (b.count || 1));
   assert(Math.max(...groupHp) / Math.min(...groupHp) < 1.7, `T${tier} group HP has no extreme outlier`);
+}
+const firstBossMinute = { 1: 5, 2: 10, 3: 14 };
+for (const [bossId, def] of Object.entries(SV.Config.BOSSES)) {
+  for (const difficultyId of SV.Config.DIFFICULTY_ORDER) {
+    const difficulty = SV.Config.DIFFICULTY[difficultyId], minute = firstBossMinute[def.tier];
+    const tierMul = def.tier === 3 ? C.T3_BOSS_DAMAGE_MUL : 1;
+    const contact = def.dmg * difficulty.bossDmgMul * SV.Config.CURVES.dmgFactor(minute) * tierMul;
+    assert(contact < C.PLAYER_BASE_HP, `${bossId} ${difficultyId} first scheduled contact does not one-shot (${contact})`);
+  }
 }
 const tierOnePools = new Set();
 for (const stage of Object.values(SV.Config.STAGES)) {
@@ -194,12 +206,17 @@ assert(Math.abs(Math.hypot(shots[2].vx, shots[2].vy) - 195) < 1e-6, 'frostwarden
 
 sig = signatureBoss('bloodhunter');
 frames(sig, 1); assert.equal(sig.cstate, 'blood_mark'); assert.equal(shots.length, 0);
+assert(Math.abs((sig.flankAX + sig.flankBX) / 2 - sig.markX) < 1e-9 && Math.abs((sig.flankAY + sig.flankBY) / 2 - sig.markY) < 1e-9, 'bloodhunter flanks center on marked player position');
+assert(Math.abs(Math.hypot(sig.flankAX - sig.markX, sig.flankAY - sig.markY) - SV.Config.BOSSES.bloodhunter.mechanics.flankDist) < 1e-9, 'bloodhunter flank distance');
 frames(sig, Math.ceil(SV.Config.BOSSES.bloodhunter.mechanics.warn * 60) + 1); assert.equal(shots.length, 4);
 assert.equal(new Set(shots.map(s => `${s.x},${s.y}`)).size, 2, 'bloodhunter fires from both flanks');
+assert(shots.every(s => Math.abs(s.x - sig.markX) < 1e-9), 'bloodhunter flank axis counters circular movement');
 assertShotSpeed(215, 'bloodhunter flank');
 
 sig = signatureBoss('riftsentry');
 frames(sig, 1); assert.equal(sig.cstate, 'rift_open'); assert.equal(shots.length, 0);
+assert(Math.abs((sig.flankAX + sig.flankBX) / 2 - sig.markX) < 1e-9 && Math.abs((sig.flankAY + sig.flankBY) / 2 - sig.markY) < 1e-9, 'riftsentry portals center on marked player position');
+assert(Math.abs(Math.hypot(sig.flankAX - sig.markX, sig.flankAY - sig.markY) - SV.Config.BOSSES.riftsentry.mechanics.portalDist) < 1e-9, 'riftsentry portal distance');
 frames(sig, Math.ceil(SV.Config.BOSSES.riftsentry.mechanics.warn * 60) + 1); assert.equal(shots.length, 4);
 assert.equal(new Set(shots.map(s => `${s.x},${s.y}`)).size, 2, 'riftsentry fires from paired rifts');
 assertShotSpeed(190, 'riftsentry crossfire');
@@ -248,6 +265,16 @@ assert(shots.every(s => Math.abs(Math.atan2(Math.sin(Math.atan2(s.vy, s.vx) - si
 sig = signatureBoss('eclipseeye'); sig.t1 = 99; sig.t2 = 0;
 frames(sig, 1); assert.equal(shots.length, 3, 'eclipseeye fires between pulse rings');
 assertShotSpeed(280, 'eclipseeye aimed fan');
+
+SV.Game.state.player.x = 0; SV.Game.state.player.y = 0; SV.Game.state.player.vx = 0; SV.Game.state.player.vy = 1000;
+sig = signatureBoss('voidseer'); sig.t1 = 99; sig.t2 = 0;
+frames(sig, 1); assert.equal(shots.length, 3, 'voidseer predictive fan emits three shots');
+const predictedCenter = shots[1], predictedAngle = Math.atan2(predictedCenter.vy, predictedCenter.vx);
+const cappedAngle = Math.atan2(C.BOSS_AIM_LEAD_MAX_DIST, -160);
+assert(Math.abs(predictedAngle - cappedAngle) < 1e-9, 'T3 prediction caps lead displacement');
+SV.Game.state.player.vx = 0; SV.Game.state.player.vy = 0;
+sig = signatureBoss('voidseer'); sig.t1 = 99; sig.t2 = 0;
+frames(sig, 1); assert(Math.abs(shots[1].vy) < 1e-9 && shots[1].vx < 0, 'T3 prediction falls back to current aim when player is still');
 
 sig = signatureBoss('wraith'); sig.enrage = true; sig.t1 = 99; sig.t3 = 0;
 frames(sig, 1); assert.equal(shots.length, 8, 'enraged wraith adds a radial barrage');

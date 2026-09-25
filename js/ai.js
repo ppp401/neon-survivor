@@ -38,6 +38,15 @@
     const angle = U.angleTo(x, y, tx, ty);
     for (let i = 0; i < count; i++) shotAngle(st, e, x, y, angle + (i - (count - 1) / 2) * spread, speed, dmg, 6);
   }
+  function setFlankOrigins(st, e, angle, distance) {
+    const edge = Math.max(0, ((st.stage && st.stage.half) || 2000) - 8);
+    const dx = Math.cos(angle) * distance, dy = Math.sin(angle) * distance;
+    e.flankAX = U.clamp(e.markX - dx, -edge, edge); e.flankAY = U.clamp(e.markY - dy, -edge, edge);
+    e.flankBX = U.clamp(e.markX + dx, -edge, edge); e.flankBY = U.clamp(e.markY + dy, -edge, edge);
+  }
+  function ensureFlankOrigins(st, e, angle, distance) {
+    if (![e.flankAX, e.flankAY, e.flankBX, e.flankBY].every(Number.isFinite)) setFlankOrigins(st, e, angle, distance);
+  }
   function attackPulse(e, x, y, radius) {
     SV.Effects.ring(x, y, e.color, 6, radius, 0.3, 3);
     SV.Effects.hit(x, y, e.color);
@@ -278,11 +287,10 @@
         const moveSpeed = bossMove(st, e.speed);
         e.vx = Math.cos(move) * moveSpeed; e.vy = Math.sin(move) * moveSpeed;
         if (e.cstate === "blood_mark") {
+          ensureFlankOrigins(st, e, e.cdir, m.flankDist);
           e.ct -= dt;
           if (e.ct <= 0) {
-            const side = U.angleTo(e.x, e.y, e.markX, e.markY) + Math.PI / 2;
-            for (const sign of [-1, 1]) {
-              const x = e.x + Math.cos(side) * m.flankDist * sign, y = e.y + Math.sin(side) * m.flankDist * sign;
+            for (const [x, y] of [[e.flankAX, e.flankAY], [e.flankBX, e.flankBY]]) {
               aimedFrom(st, e, x, y, e.markX, e.markY, 2, m.spread, m.shotSpeed, bossAttack(e, "projectile", 0));
               attackPulse(e, x, y, 30);
             }
@@ -290,16 +298,20 @@
           }
         } else {
           e.t1 -= dt;
-          if (e.t1 <= 0) { e.cstate = "blood_mark"; e.ct = m.warn; e.markX = p.x; e.markY = p.y; }
+          if (e.t1 <= 0) {
+            e.cstate = "blood_mark"; e.ct = m.warn; e.markX = p.x; e.markY = p.y;
+            e.cdir = U.angleTo(e.x, e.y, p.x, p.y) + Math.PI / 2;
+            setFlankOrigins(st, e, e.cdir, m.flankDist);
+          }
         }
       } else if (e.bossType === "riftsentry") {
         const m = bossMech(e);
         toPlayer(e, p, bossMove(st, e.speed));
         if (e.cstate === "rift_open") {
+          ensureFlankOrigins(st, e, e.cdir, m.portalDist);
           e.vx = 0; e.vy = 0; e.ct -= dt;
           if (e.ct <= 0) {
-            for (const sign of [-1, 1]) {
-              const x = e.x + Math.cos(e.cdir) * m.portalDist * sign, y = e.y + Math.sin(e.cdir) * m.portalDist * sign;
+            for (const [x, y] of [[e.flankAX, e.flankAY], [e.flankBX, e.flankBY]]) {
               aimedFrom(st, e, x, y, e.markX, e.markY, 2, m.spread, m.shotSpeed, bossAttack(e, "projectile", 0));
               attackPulse(e, x, y, 42);
             }
@@ -307,7 +319,10 @@
           }
         } else {
           e.t1 -= dt;
-          if (e.t1 <= 0) { e.cstate = "rift_open"; e.ct = m.warn; e.cdir += Math.PI / 2; e.markX = p.x; e.markY = p.y; }
+          if (e.t1 <= 0) {
+            e.cstate = "rift_open"; e.ct = m.warn; e.cdir += Math.PI / 2; e.markX = p.x; e.markY = p.y;
+            setFlankOrigins(st, e, e.cdir, m.portalDist);
+          }
         }
       } else if (e.bossType === "thornwarden") {
         const m = bossMech(e);
@@ -407,7 +422,7 @@
             e.markY = U.clamp(p.y + Math.sin(a) * m.teleportDist, -edge, edge);
             e.cstate = "seer_warn"; e.ct = m.warn;
           }
-          if (e.t2 <= 0) { e.t2 = bossInterval(st, m.boltInterval); aimedSpread(st, e, p, m.boltShots, m.boltSpread, m.boltSpeed, bossAttack(e, "projectile", 0)); }
+          if (e.t2 <= 0) { e.t2 = bossInterval(st, m.boltInterval); aimedSpread(st, e, p, m.boltShots, m.boltSpread, m.boltSpeed, bossAttack(e, "projectile", 0), true); }
         }
       } else if (e.bossType === "eclipseeye") {
         const m = bossMech(e);
@@ -428,7 +443,7 @@
         } else {
           e.t1 -= dt; e.t2 -= dt;
           if (e.t1 <= 0) { e.cstate = "eclipse_charge"; e.ct = m.warn; e.gapAngle = U.angleTo(e.x, e.y, p.x, p.y) + Math.PI / 3; }
-          if (e.t2 <= 0) { e.t2 = bossInterval(st, m.boltInterval); aimedSpread(st, e, p, m.boltShots, m.boltSpread, m.boltSpeed, bossAttack(e, "projectile", 0)); }
+          if (e.t2 <= 0) { e.t2 = bossInterval(st, m.boltInterval); aimedSpread(st, e, p, m.boltShots, m.boltSpread, m.boltSpeed, bossAttack(e, "projectile", 0), true); }
         }
       } else if (e.bossType === "architect") {
         const m = bossMech(e);
@@ -466,7 +481,7 @@
           ringFrom(st, ox, oy, 10, 150, bossAttack(e, "projectile", 1), e.color, 6, "inquisitor", e);
           spiralBurst(st, e, 12, 160, bossAttack(e, "projectile", 1), 7);
         }
-        if (e.t2 <= 0) { e.t2 = bossInterval(st, 1.4); aimedSpread(st, e, p, 3, 0.3, 280, bossAttack(e, "projectile", 0)); }
+        if (e.t2 <= 0) { e.t2 = bossInterval(st, 1.4); aimedSpread(st, e, p, 3, 0.3, 280, bossAttack(e, "projectile", 0), true); }
       } else if (e.bossType === "magnetwarper") {
         // 磁暴行者:缓慢追敌 + 周期引力波(把玩家吸向自己)+ 贴身电击圈
         const m = bossMech(e);
@@ -558,10 +573,19 @@
     const d = dmg * dmgScale(st, e), src = e.bossType || e.type;
     for (let k = 0; k < n; k++) { const a = off + k / n * U.TAU; E.addEShot(st, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, d, e.color, r, src); }
   }
-  function aimedSpread(st, e, p, n, spreadRad, spd, dmg) {
+  function aimedSpread(st, e, p, n, spreadRad, spd, dmg, lead) {
     if (!E.canEnemyRanged(st, e)) return;
     spd = bossShotSpeed(st, spd);
-    const base = U.angleTo(e.x, e.y, p.x, p.y);
+    let tx = p.x, ty = p.y;
+    if (lead) {
+      const flight = U.dist(e.x, e.y, p.x, p.y) / Math.max(1, spd);
+      const leadT = Math.min(C.BOSS_AIM_LEAD_MAX_TIME, flight * C.BOSS_AIM_LEAD_FACTOR);
+      let lx = (p.vx || 0) * leadT, ly = (p.vy || 0) * leadT;
+      const lm = Math.hypot(lx, ly), maxLead = C.BOSS_AIM_LEAD_MAX_DIST;
+      if (lm > maxLead) { lx *= maxLead / lm; ly *= maxLead / lm; }
+      tx += lx; ty += ly;
+    }
+    const base = U.angleTo(e.x, e.y, tx, ty);
     const d = dmg * dmgScale(st, e), src = e.bossType || e.type;
     for (let k = 0; k < n; k++) { const a = base + (k - (n - 1) / 2) * spreadRad; E.addEShot(st, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, d, e.color, 6, src); }
   }
