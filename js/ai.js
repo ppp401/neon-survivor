@@ -24,8 +24,13 @@
     return vals[Math.min(index || 0, vals.length - 1)] || 0;
   }
   function bossMech(e) { return SV.Config.BOSSES[e.bossType].mechanics; }
+  function bossDiff(st) { return SV.Config.DIFFICULTY[st.difficulty] || SV.Config.DIFFICULTY.normal; }
+  function bossMove(st, speed) { return speed * (bossDiff(st).bossSpeedMul || 1); }
+  function bossShotSpeed(st, speed) { return speed * (bossDiff(st).bossShotSpeedMul || 1); }
+  function bossInterval(st, seconds) { return seconds / (bossDiff(st).bossTempoMul || 1); }
   function shotAngle(st, e, x, y, angle, speed, dmg, radius) {
     if (!E.canEnemyRanged(st, e)) return;
+    speed = bossShotSpeed(st, speed);
     E.addEShot(st, x, y, Math.cos(angle) * speed, Math.sin(angle) * speed,
       dmg * dmgScale(st, e), e.color, radius || 6, e.bossType);
   }
@@ -204,37 +209,48 @@
     boss: function (e, p, dt) {
       const st = SV.Game.state;
       if (e.bossType === "duke") {
-        toPlayer(e, p, e.speed);
+        const m = bossMech(e);
+        toPlayer(e, p, bossMove(st, e.speed));
         e.t1 -= dt; e.t2 -= dt;
-        if (e.t1 <= 0) { e.t1 = 5; for (let i = 0; i < 3; i++) { const a = U.rand(0, U.TAU); E.addEnemy(st, "zombie", e.x + Math.cos(a) * 24, e.y + Math.sin(a) * 24); } }
-        if (e.t2 <= 0) { e.t2 = 3.5; spiralBurst(st, e, 12, 140, bossAttack(e, "projectile", 0), 7); }
+        if (e.t1 <= 0) { e.t1 = bossInterval(st, m.summonInterval); for (let i = 0; i < m.summonCount; i++) { const a = U.rand(0, U.TAU); E.addEnemy(st, "zombie", e.x + Math.cos(a) * 24, e.y + Math.sin(a) * 24); } }
+        if (e.t2 <= 0) { e.t2 = bossInterval(st, m.ringInterval); spiralBurst(st, e, m.ringShots, m.ringSpeed, bossAttack(e, "projectile", 0), 7); }
       } else if (e.bossType === "wraith") {
+        const m = bossMech(e);
         const enraged = !!e.enrage;
-        const R = 250, sp = 1.3 * (enraged ? 1.6 : 1);
+        const R = m.orbitRadius, sp = m.orbitRate * (enraged ? m.enragedOrbitMul : 1);
         e.cdir += sp * dt;
         const tx = p.x + Math.cos(e.cdir) * R, ty = p.y + Math.sin(e.cdir) * R;
         const a = U.angleTo(e.x, e.y, tx, ty);
-        e.vx = Math.cos(a) * e.speed; e.vy = Math.sin(a) * e.speed;
+        const moveSpeed = bossMove(st, e.speed);
+        e.vx = Math.cos(a) * moveSpeed; e.vy = Math.sin(a) * moveSpeed;
         e.t1 -= dt;
-        const rate = enraged ? 1.2 : 2.1;
-        if (e.t1 <= 0) { e.t1 = rate; aimedSpread(st, e, p, 3, 0.32, 260, bossAttack(e, "projectile", 0)); }
+        if (e.t1 <= 0) { e.t1 = bossInterval(st, enraged ? m.enragedInterval : m.attackInterval); aimedSpread(st, e, p, 3, 0.32, m.shotSpeed, bossAttack(e, "projectile", 0)); }
+        if (enraged) {
+          e.t3 = (e.t3 || 0) - dt;
+          if (e.t3 <= 0) { e.t3 = bossInterval(st, m.enrageRingInterval); spiralBurst(st, e, m.enrageRingShots, m.enrageRingSpeed, bossAttack(e, "projectile", 0), 6); }
+        }
       } else if (e.bossType === "scavenger") {
         // 短程预警冲刺:锁定玩家当时的位置,冲完后停顿供反击。
         const m = bossMech(e);
         e.t1 -= dt;
         if (e.cstate === "tele") {
           e.vx = 0; e.vy = 0; e.ct -= dt; e.flash = 0.18;
-          if (e.ct <= 0) { e.cstate = "charge"; e.ct = 0.45; }
+          if (e.ct <= 0) { e.cstate = "charge"; e.ct = m.chargeDuration; }
         } else if (e.cstate === "charge") {
-          e.vx = Math.cos(e.cdir) * m.chargeSpeed; e.vy = Math.sin(e.cdir) * m.chargeSpeed;
+          const chargeSpeed = bossMove(st, m.chargeSpeed);
+          e.vx = Math.cos(e.cdir) * chargeSpeed; e.vy = Math.sin(e.cdir) * chargeSpeed;
           e.ct -= dt;
-          if (e.ct <= 0) { e.cstate = "cool"; e.ct = 0.9; }
+          if (e.ct <= 0) {
+            for (let i = 0; i < m.exitShots; i++) shotAngle(st, e, e.x, e.y, e.cdir + (i - (m.exitShots - 1) / 2) * m.exitSpread, m.shotSpeed, bossAttack(e, "projectile", 0));
+            attackPulse(e, e.x, e.y, 55);
+            e.cstate = "cool"; e.ct = m.recovery;
+          }
         } else if (e.cstate === "cool") {
           e.vx = 0; e.vy = 0; e.ct -= dt;
           if (e.ct <= 0) e.cstate = "walk";
         } else {
-          toPlayer(e, p, e.speed);
-          if (e.t1 <= 0) { e.t1 = 5; e.cdir = U.angleTo(e.x, e.y, p.x, p.y); e.cstate = "tele"; e.ct = m.warn; }
+          toPlayer(e, p, bossMove(st, e.speed));
+          if (e.t1 <= 0) { e.t1 = bossInterval(st, m.interval); e.cdir = U.angleTo(e.x, e.y, p.x, p.y); e.cstate = "tele"; e.ct = m.warn; }
         }
       } else if (e.bossType === "frostwarden") {
         const m = bossMech(e);
@@ -249,17 +265,18 @@
           } else if (e.ct <= 0) {
             shotAngle(st, e, e.x, e.y, U.angleTo(e.x, e.y, e.markX, e.markY), m.centerSpeed, bossAttack(e, "projectile", 0));
             attackPulse(e, e.x, e.y, 38);
-            e.cstate = "walk"; e.t1 = m.interval;
+            e.cstate = "walk"; e.t1 = bossInterval(st, m.interval);
           }
         } else {
-          toPlayer(e, p, e.speed); e.t1 -= dt;
+          toPlayer(e, p, bossMove(st, e.speed)); e.t1 -= dt;
           if (e.t1 <= 0) { e.cstate = "ice_warn"; e.ct = m.warn; e.markX = p.x; e.markY = p.y; }
         }
       } else if (e.bossType === "bloodhunter") {
         const m = bossMech(e);
         const a = U.angleTo(e.x, e.y, p.x, p.y), d = U.dist(e.x, e.y, p.x, p.y);
         const move = d > m.range ? a : a + Math.PI / 2 + Math.sin((e.t3 = (e.t3 || 0) + dt * m.swayRate)) * m.swayAngle;
-        e.vx = Math.cos(move) * e.speed; e.vy = Math.sin(move) * e.speed;
+        const moveSpeed = bossMove(st, e.speed);
+        e.vx = Math.cos(move) * moveSpeed; e.vy = Math.sin(move) * moveSpeed;
         if (e.cstate === "blood_mark") {
           e.ct -= dt;
           if (e.ct <= 0) {
@@ -269,7 +286,7 @@
               aimedFrom(st, e, x, y, e.markX, e.markY, 2, m.spread, m.shotSpeed, bossAttack(e, "projectile", 0));
               attackPulse(e, x, y, 30);
             }
-            e.cstate = "walk"; e.t1 = m.interval;
+            e.cstate = "walk"; e.t1 = bossInterval(st, m.interval);
           }
         } else {
           e.t1 -= dt;
@@ -277,7 +294,7 @@
         }
       } else if (e.bossType === "riftsentry") {
         const m = bossMech(e);
-        toPlayer(e, p, e.speed);
+        toPlayer(e, p, bossMove(st, e.speed));
         if (e.cstate === "rift_open") {
           e.vx = 0; e.vy = 0; e.ct -= dt;
           if (e.ct <= 0) {
@@ -286,7 +303,7 @@
               aimedFrom(st, e, x, y, e.markX, e.markY, 2, m.spread, m.shotSpeed, bossAttack(e, "projectile", 0));
               attackPulse(e, x, y, 42);
             }
-            e.cstate = "walk"; e.t1 = m.interval;
+            e.cstate = "walk"; e.t1 = bossInterval(st, m.interval);
           }
         } else {
           e.t1 -= dt;
@@ -303,9 +320,9 @@
           }
         } else if (e.cstate === "thorn_cool") {
           e.vx = 0; e.vy = 0; e.ct -= dt;
-          if (e.ct <= 0) { e.cstate = "walk"; e.t1 = m.interval; }
+          if (e.ct <= 0) { e.cstate = "walk"; e.t1 = bossInterval(st, m.interval); }
         } else {
-          toPlayer(e, p, e.speed);
+          toPlayer(e, p, bossMove(st, e.speed));
           e.t1 -= dt;
           if (e.t1 <= 0) { e.cstate = "tele"; e.ct = m.warn; e.cdir = U.angleTo(e.x, e.y, p.x, p.y); e.dr = m.armor; }
         }
@@ -313,21 +330,22 @@
         const m = bossMech(e);
         const a = U.angleTo(e.x, e.y, p.x, p.y), d = U.dist(e.x, e.y, p.x, p.y);
         const move = d > m.range ? a : a + Math.PI / 2;
-        e.vx = Math.cos(move) * e.speed; e.vy = Math.sin(move) * e.speed;
+        const moveSpeed = bossMove(st, e.speed);
+        e.vx = Math.cos(move) * moveSpeed; e.vy = Math.sin(move) * moveSpeed;
         if (e.cstate === "storm_sweep") {
           e.ct -= dt; e.t2 -= dt;
           if (e.t2 <= 0 && e.ct > 0) {
-            e.t2 = m.shotInterval;
+            e.t2 = bossInterval(st, m.shotInterval);
             shotAngle(st, e, e.x, e.y, e.cdir + (m.sweep - e.ct) * m.sweepAngle / m.sweep, m.shotSpeed, bossAttack(e, "projectile", 0));
           }
-          if (e.ct <= 0) { e.cstate = "walk"; e.t1 = m.interval; }
+          if (e.ct <= 0) { e.cstate = "walk"; e.t1 = bossInterval(st, m.interval); }
         } else {
           e.t1 -= dt;
           if (e.t1 <= 0) { e.cstate = "storm_sweep"; e.ct = m.sweep; e.t2 = 0; e.cdir = a - m.sweepAngle / 2; }
         }
       } else if (e.bossType === "bloodoracle") {
         const m = bossMech(e);
-        toPlayer(e, p, e.speed);
+        toPlayer(e, p, bossMove(st, e.speed));
         if (e.cstate === "ritual") {
           e.vx = 0; e.vy = 0; e.ct -= dt;
           if (e.ct <= 0) {
@@ -335,11 +353,11 @@
               const o = st.enemies.find(function (other) { return other.id === id && other.hp > 0; });
               if (o) { aimedFrom(st, e, o.x, o.y, p.x, p.y, m.ritualShots, m.ritualSpread, m.shotSpeed, bossAttack(e, "projectile", 0)); attackPulse(e, o.x, o.y, 45); }
             }
-            e.ritualMinionIds = null; e.cstate = "walk"; e.t2 = m.ritualInterval;
+            e.ritualMinionIds = null; e.cstate = "walk"; e.t2 = bossInterval(st, m.ritualInterval);
           }
         } else {
           e.t1 -= dt; e.t2 -= dt;
-          if (e.t1 <= 0) { e.t1 = m.boltInterval; aimedSpread(st, e, p, m.boltShots, m.boltSpread, m.shotSpeed, bossAttack(e, "projectile", 0)); }
+          if (e.t1 <= 0) { e.t1 = bossInterval(st, m.boltInterval); aimedSpread(st, e, p, m.boltShots, m.boltSpread, m.shotSpeed, bossAttack(e, "projectile", 0)); }
           if (e.t2 <= 0) {
             e.cstate = "ritual"; e.ct = m.ritualWarn; e.ritualMinionIds = [];
             if (st.enemies.length < C.MAX_ENEMIES - 2) for (let i = 0; i < 2; i++) {
@@ -349,12 +367,20 @@
           }
         }
       } else if (e.bossType === "furnace") {
-        toPlayer(e, p, e.speed);
+        const m = bossMech(e);
+        toPlayer(e, p, bossMove(st, e.speed));
         e.t1 -= dt; e.t2 -= dt;
-        if (e.t1 <= 0) { e.t1 = 4.5; spiralBurst(st, e, 10, 160, bossAttack(e, "projectile", 0), 7); }
+        if (e.t1 <= 0) { e.t1 = bossInterval(st, m.ringInterval); spiralBurst(st, e, m.ringShots, m.ringSpeed, bossAttack(e, "projectile", 0), 7); }
         if (e.t2 <= 0) {
-          e.t2 = 6;
-          if (st.hazards.length < C.MAX_HAZARDS) st.hazards.push({ x: p.x, y: p.y, r: 76, dmg: bossAttack(e, "projectile", 0) * dmgScale(st, e), life: 3, max: 3, color: e.color, kind: "burn", tick: 0.5, warm: 1, srcType: e.bossType });
+          e.t2 = bossInterval(st, m.hazardInterval);
+          const leadX = p.x + (p.vx || 0) * 0.45, leadY = p.y + (p.vy || 0) * 0.45;
+          const side = U.angleTo(e.x, e.y, leadX, leadY) + Math.PI / 2;
+          for (let i = 0; i < m.hazardCount && st.hazards.length < C.MAX_HAZARDS; i++) {
+            const sign = i % 2 ? 1 : -1, band = Math.floor(i / 2) + 1;
+            const x = leadX + Math.cos(side) * m.hazardOffset * sign * band;
+            const y = leadY + Math.sin(side) * m.hazardOffset * sign * band;
+            st.hazards.push({ x: x, y: y, r: m.hazardRadius, dmg: bossAttack(e, "projectile", 0) * dmgScale(st, e), life: m.hazardDuration, max: m.hazardDuration, color: e.color, kind: "burn", tick: 0.5, warm: m.hazardWarm, srcType: e.bossType });
+          }
         }
       } else if (e.bossType === "voidseer") {
         const m = bossMech(e);
@@ -364,14 +390,15 @@
             e.echoX = e.x; e.echoY = e.y;
             e.x = e.markX; e.y = e.markY; e.flash = 0.3;
             SV.Effects.hit(e.x, e.y, e.color);
+            ringFrom(st, e.x, e.y, m.arrivalShots, m.arrivalSpeed, bossAttack(e, "projectile", 0), e.color, 6, "voidseer", e);
             e.cstate = "seer_echo"; e.ct = m.echoDelay;
           } else if (e.ct <= 0) {
             for (let i = 0; i < m.echoShots; i++) shotAngle(st, e, e.echoX, e.echoY, Math.PI / 4 + i * U.TAU / m.echoShots, m.echoSpeed, bossAttack(e, "projectile", 0));
             attackPulse(e, e.echoX, e.echoY, 75);
-            e.cstate = "walk"; e.t1 = m.interval;
+            e.cstate = "walk"; e.t1 = bossInterval(st, m.interval);
           }
         } else {
-          toPlayer(e, p, e.speed);
+          toPlayer(e, p, bossMove(st, e.speed));
           e.t1 -= dt; e.t2 -= dt;
           if (e.t1 <= 0) {
             const a = U.rand(0, U.TAU);
@@ -380,14 +407,15 @@
             e.markY = U.clamp(p.y + Math.sin(a) * m.teleportDist, -edge, edge);
             e.cstate = "seer_warn"; e.ct = m.warn;
           }
-          if (e.t2 <= 0) { e.t2 = m.boltInterval; aimedSpread(st, e, p, m.boltShots, m.boltSpread, m.boltSpeed, bossAttack(e, "projectile", 0)); }
+          if (e.t2 <= 0) { e.t2 = bossInterval(st, m.boltInterval); aimedSpread(st, e, p, m.boltShots, m.boltSpread, m.boltSpeed, bossAttack(e, "projectile", 0)); }
         }
       } else if (e.bossType === "eclipseeye") {
         const m = bossMech(e);
         e.cdir += m.orbitSpeed * dt;
         const tx = p.x + Math.cos(e.cdir) * m.orbitRadius, ty = p.y + Math.sin(e.cdir) * m.orbitRadius;
         const a = U.angleTo(e.x, e.y, tx, ty);
-        e.vx = Math.cos(a) * e.speed; e.vy = Math.sin(a) * e.speed;
+        const moveSpeed = bossMove(st, e.speed);
+        e.vx = Math.cos(a) * moveSpeed; e.vy = Math.sin(a) * moveSpeed;
         if (e.cstate === "eclipse_charge" || e.cstate === "eclipse_second") {
           e.ct -= dt;
           if (e.ct <= 0 && e.cstate === "eclipse_charge") {
@@ -395,38 +423,42 @@
             e.cstate = "eclipse_second"; e.ct = m.secondDelay;
           } else if (e.ct <= 0) {
             eclipseRing(st, e, e.gapAngle);
-            e.cstate = "walk"; e.t1 = m.interval;
+            e.cstate = "walk"; e.t1 = bossInterval(st, m.interval);
           }
         } else {
-          e.t1 -= dt;
+          e.t1 -= dt; e.t2 -= dt;
           if (e.t1 <= 0) { e.cstate = "eclipse_charge"; e.ct = m.warn; e.gapAngle = U.angleTo(e.x, e.y, p.x, p.y) + Math.PI / 3; }
+          if (e.t2 <= 0) { e.t2 = bossInterval(st, m.boltInterval); aimedSpread(st, e, p, m.boltShots, m.boltSpread, m.boltSpeed, bossAttack(e, "projectile", 0)); }
         }
       } else if (e.bossType === "architect") {
-        toPlayer(e, p, e.speed);
+        const m = bossMech(e);
+        toPlayer(e, p, bossMove(st, e.speed));
         e.t1 -= dt; e.t2 -= dt;
-        if (e.t1 <= 0) { e.t1 = 2.2; spiralBurst(st, e, 10, 160, bossAttack(e, "projectile", 1), 7); }
+        if (e.t1 <= 0) { e.t1 = bossInterval(st, m.ringInterval); spiralBurst(st, e, m.ringShots, m.ringSpeed, bossAttack(e, "projectile", 1), 7); }
         if (e.t2 <= 0) {
           let turrets = 0; for (let i = 0; i < st.enemies.length; i++) if (st.enemies[i].type === "shooter") turrets++;
-          if (turrets < 3) { e.t2 = 9; const a = U.rand(0, U.TAU); E.addEnemy(st, "shooter", e.x + Math.cos(a) * 60, e.y + Math.sin(a) * 60); }
-          else e.t2 = 3;
+          if (turrets < 3) { e.t2 = bossInterval(st, m.turretInterval); const a = U.rand(0, U.TAU); E.addEnemy(st, "shooter", e.x + Math.cos(a) * 60, e.y + Math.sin(a) * 60); }
+          else e.t2 = bossInterval(st, 3);
         }
         // 偶发:从两个偏移点各射一环(弹幕来源脱离体心)
         e.t3 = (e.t3 || 0) - dt;
-        if (e.t3 <= 0) { e.t3 = 4.5; const d = bossAttack(e, "projectile", 0); ringFrom(st, e.x - 50, e.y, 6, 150, d, e.color, 6, "architect", e); ringFrom(st, e.x + 50, e.y, 6, 150, d, e.color, 6, "architect", e); }
+        if (e.t3 <= 0) { e.t3 = bossInterval(st, m.offsetInterval); const d = bossAttack(e, "projectile", 0); ringFrom(st, e.x - 50, e.y, m.offsetShots, m.offsetSpeed, d, e.color, 6, "architect", e); ringFrom(st, e.x + 50, e.y, m.offsetShots, m.offsetSpeed, d, e.color, 6, "architect", e); }
       } else if (e.bossType === "queen") {
-        toPlayer(e, p, e.speed);
+        const m = bossMech(e);
+        toPlayer(e, p, bossMove(st, e.speed));
         e.t1 -= dt; e.t2 -= dt;
-        if (e.t1 <= 0) { e.t1 = 5; for (let i = 0; i < 4; i++) { const a = U.rand(0, U.TAU); E.addEnemy(st, "swarmer", e.x + Math.cos(a) * 22, e.y + Math.sin(a) * 22); } }
-        if (e.t2 <= 0) { e.t2 = 3; spiralBurst(st, e, 14, 150, bossAttack(e, "projectile", 0), 6); }
+        if (e.t1 <= 0) { e.t1 = bossInterval(st, m.summonInterval); for (let i = 0; i < m.summonCount; i++) { const a = U.rand(0, U.TAU); E.addEnemy(st, "swarmer", e.x + Math.cos(a) * 22, e.y + Math.sin(a) * 22); } }
+        if (e.t2 <= 0) { e.t2 = bossInterval(st, m.ringInterval); spiralBurst(st, e, m.ringShots, m.ringSpeed, bossAttack(e, "projectile", 0), 6); }
       } else if (e.bossType === "inquisitor") {
         e.t1 -= dt; e.t2 -= dt;
         const d = U.dist(e.x, e.y, p.x, p.y);
         const a = U.angleTo(e.x, e.y, p.x, p.y);
-        if (d > 320) { e.vx = Math.cos(a) * e.speed; e.vy = Math.sin(a) * e.speed; }
-        else if (d < 200) { e.vx = -Math.cos(a) * e.speed; e.vy = -Math.sin(a) * e.speed; }
+        const moveSpeed = bossMove(st, e.speed);
+        if (d > 320) { e.vx = Math.cos(a) * moveSpeed; e.vy = Math.sin(a) * moveSpeed; }
+        else if (d < 200) { e.vx = -Math.cos(a) * moveSpeed; e.vy = -Math.sin(a) * moveSpeed; }
         else { e.vx *= 0.9; e.vy *= 0.9; }
         if (e.t1 <= 0) {
-          e.t1 = U.rand(2.5, 3.5);
+          e.t1 = bossInterval(st, U.rand(2.5, 3.5));
           const ta = U.rand(0, U.TAU), tr = 260;
           const ox = e.x, oy = e.y; // 传送前位置:留一环(弹幕脱离体心)
           e.x = p.x + Math.cos(ta) * tr; e.y = p.y + Math.sin(ta) * tr;
@@ -434,33 +466,38 @@
           ringFrom(st, ox, oy, 10, 150, bossAttack(e, "projectile", 1), e.color, 6, "inquisitor", e);
           spiralBurst(st, e, 12, 160, bossAttack(e, "projectile", 1), 7);
         }
-        if (e.t2 <= 0) { e.t2 = 1.4; aimedSpread(st, e, p, 3, 0.3, 280, bossAttack(e, "projectile", 0)); }
+        if (e.t2 <= 0) { e.t2 = bossInterval(st, 1.4); aimedSpread(st, e, p, 3, 0.3, 280, bossAttack(e, "projectile", 0)); }
       } else if (e.bossType === "magnetwarper") {
         // 磁暴行者:缓慢追敌 + 周期引力波(把玩家吸向自己)+ 贴身电击圈
+        const m = bossMech(e);
         const pulling = e.cstate === "pull";
-        if (!pulling) toPlayer(e, p, e.speed * 0.7);
+        if (!pulling) toPlayer(e, p, bossMove(st, e.speed * m.moveMul));
         e.t1 -= dt; e.t2 -= dt;
-        if (e.t1 <= 0) { e.t1 = 6; e.cstate = "pull"; e.ct = 1.2; ringFrom(st, e.x, e.y, 12, 150, bossAttack(e, "projectile", 0), e.color, 6, "magnetwarper", e); }
+        if (e.t1 <= 0) { e.t1 = bossInterval(st, m.pullInterval); e.cstate = "pull"; e.ct = m.pullDuration; ringFrom(st, e.x, e.y, m.ringShots, m.ringSpeed, bossAttack(e, "projectile", 0), e.color, 6, "magnetwarper", e); }
         if (e.cstate === "pull") {
           e.ct -= dt;
           e.vx = 0; e.vy = 0;
           if (e.ct > 0) {
             const a = U.angleTo(p.x, p.y, e.x, e.y); // 玩家 → Boss 方向
-            p.x += Math.cos(a) * 120 * dt; p.y += Math.sin(a) * 120 * dt;
+            p.x += Math.cos(a) * m.pullForce * dt; p.y += Math.sin(a) * m.pullForce * dt;
             SV.Effects.ring(e.x, e.y, e.color, 50, 95, 0.3, 2);
-          } else e.cstate = "walk";
+          } else {
+            ringFrom(st, e.x, e.y, m.releaseShots, m.releaseSpeed, bossAttack(e, "projectile", 0), e.color, 6, "magnetwarper", e);
+            e.cstate = "walk";
+          }
         }
         if (e.t2 <= 0) {
-          e.t2 = 0.9;
-          if (U.dist(e.x, e.y, p.x, p.y) < 115) E.damagePlayer(st, bossAttack(e, "shock", 0) * dmgScale(st, e), false, "magnetwarper");
+          e.t2 = bossInterval(st, m.shockInterval);
+          if (U.dist(e.x, e.y, p.x, p.y) < m.shockRange) E.damagePlayer(st, bossAttack(e, "shock", 0) * dmgScale(st, e), false, "magnetwarper");
         }
       } else if (e.bossType === "twins") {
         // 镜像双子:追敌 + 周期换位;击杀其一 → 本体反噬 25%(killEnemy 处理)
-        const spd = e.speed * (e.enrage ? 1.5 : 1);
-        toPlayer(e, p, spd);
+        const m = bossMech(e);
+        const spd = e.speed * (e.enrage ? m.enragedSpeedMul : 1);
+        toPlayer(e, p, bossMove(st, spd));
         e.t1 -= dt; e.t2 -= dt;
         if (e.t1 <= 0 && !e.enrage) {
-          e.t1 = 8; e.cstate = "swap"; e.ct = 0.15;
+          e.t1 = bossInterval(st, m.swapInterval); e.cstate = "swap"; e.ct = m.swapWarn;
         }
         if (e.cstate === "swap") {
           e.ct -= dt; e.vx = 0; e.vy = 0;
@@ -474,19 +511,19 @@
                 e.flash = 0.2; o.flash = 0.2;
                 SV.Effects.hit(e.x, e.y, e.color); SV.Effects.hit(o.x, o.y, o.color);
                 const rd = bossAttack(e, "projectile", 1);
-                ringFrom(st, e.x, e.y, 8, 150, rd, e.color, 6, "twins", e); // 换位后两点各开一环
-                ringFrom(st, o.x, o.y, 8, 150, rd, o.color, 6, "twins", o);
+                ringFrom(st, e.x, e.y, m.ringShots, m.ringSpeed, rd, e.color, 6, "twins", e); // 换位后两点各开一环
+                ringFrom(st, o.x, o.y, m.ringShots, m.ringSpeed, rd, o.color, 6, "twins", o);
                 break;
               }
             }
           }
         }
-        if (e.t2 <= 0) { e.t2 = 2.2; aimedSpread(st, e, p, 3, 0.3, 240, bossAttack(e, "projectile", 0)); }
+        if (e.t2 <= 0) { e.t2 = bossInterval(st, m.shotInterval); aimedSpread(st, e, p, 3, 0.3, m.shotSpeed, bossAttack(e, "projectile", 0)); }
       } else if (e.bossType === "colossus") {
         // 弹幕巨像:不动 + 周期旋转扫射激光(期间召唤小怪)
         e.vx = 0; e.vy = 0;
         e.t1 -= dt;
-        if (e.t1 <= 0) { e.t1 = 9; e.cstate = "sweep"; e.ct = 6; e.cdir = U.rand(0, U.TAU); spiralBurst(st, e, 14, 150, bossAttack(e, "projectile", 0), 7); }
+        if (e.t1 <= 0) { e.t1 = bossInterval(st, 9); e.cstate = "sweep"; e.ct = 6; e.cdir = U.rand(0, U.TAU); spiralBurst(st, e, 14, 150, bossAttack(e, "projectile", 0), 7); }
         if (e.cstate === "sweep") {
           e.ct -= dt;
           e.cdir += 1.5 * dt;
@@ -501,27 +538,29 @@
           if (e.ct <= 0) e.cstate = "walk";
           e.t2 -= dt;
           if (e.t2 <= 0) {
-            e.t2 = 2;
+            e.t2 = bossInterval(st, 2);
             for (let i = 0; i < 3; i++) { const a = U.rand(0, U.TAU); E.addEnemy(st, "zombie", e.x + Math.cos(a) * 80, e.y + Math.sin(a) * 80); }
           }
         } else {
           e.t2 -= dt;
-          if (e.t2 <= 0) { e.t2 = 3; spiralBurst(st, e, 10, 150, bossAttack(e, "projectile", 0), 8); }
+          if (e.t2 <= 0) { e.t2 = bossInterval(st, 3); spiralBurst(st, e, 10, 150, bossAttack(e, "projectile", 0), 8); }
         }
       } else {
-        toPlayer(e, p, e.speed);
+        toPlayer(e, p, bossMove(st, e.speed));
       }
     }
   };
 
   function burst(st, e, n, spd, dmg, r) {
     if (!E.canEnemyRanged(st, e)) return;
+    spd = bossShotSpeed(st, spd);
     const off = U.rand(0, U.TAU);
     const d = dmg * dmgScale(st, e), src = e.bossType || e.type;
     for (let k = 0; k < n; k++) { const a = off + k / n * U.TAU; E.addEShot(st, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, d, e.color, r, src); }
   }
   function aimedSpread(st, e, p, n, spreadRad, spd, dmg) {
     if (!E.canEnemyRanged(st, e)) return;
+    spd = bossShotSpeed(st, spd);
     const base = U.angleTo(e.x, e.y, p.x, p.y);
     const d = dmg * dmgScale(st, e), src = e.bossType || e.type;
     for (let k = 0; k < n; k++) { const a = base + (k - (n - 1) / 2) * spreadRad; E.addEShot(st, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, d, e.color, 6, src); }
@@ -529,6 +568,7 @@
   // 从任意点发射环形弹幕(非体心,增加弹幕来源多样性)。srcType 由调用方传入(Boss 体内或换位点等)
   function ringFrom(st, x, y, n, spd, dmg, color, r, srcType, attacker) {
     if (attacker && !E.canEnemyRanged(st, attacker)) return;
+    spd = bossShotSpeed(st, spd);
     const off = U.rand(0, U.TAU);
     const d = dmg * dmgScale(st, { bossType: srcType });
     for (let k = 0; k < n; k++) { const a = off + k / n * U.TAU; E.addEShot(st, x, y, Math.cos(a) * spd, Math.sin(a) * spd, d, color, r || 6, srcType || null); }
@@ -536,6 +576,7 @@
   // 螺旋弹幕:每次发射旋转相位(e.sp 专用字段),多次发射绘出螺旋。n=每圈弹数
   function spiralBurst(st, e, n, spd, dmg, r) {
     if (!E.canEnemyRanged(st, e)) return;
+    spd = bossShotSpeed(st, spd);
     const ph = e.sp || 0;
     const d = dmg * dmgScale(st, e), src = e.bossType || e.type;
     for (let k = 0; k < n; k++) { const a = ph + k / n * U.TAU; E.addEShot(st, e.x, e.y, Math.cos(a) * spd, Math.sin(a) * spd, d, e.color, r || 6, src); }

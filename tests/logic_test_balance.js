@@ -36,6 +36,7 @@ for (const id of Object.keys(W)) {
 }
 assert.equal(Object.values(SV.Config.BOSSES).filter(b => b.tier === 1).length, 6);
 assert.equal(Object.values(SV.Config.BOSSES).filter(b => b.tier === 3).length, 6);
+const expectedT1Hp = { duke: 980, scavenger: 875, frostwarden: 1035, bloodhunter: 900, riftsentry: 990, thornwarden: 1000 };
 for (const [id, def] of Object.entries(SV.Config.BOSSES).filter(([, b]) => b.tier === 1)) {
   const scale = SV.Config.DIFFICULTY.normal.bossDmgMul * SV.Config.CURVES.dmgFactor(5);
   assert(def.dmg * scale <= 36, `${id} T1 normal contact damage`);
@@ -44,7 +45,7 @@ for (const [id, def] of Object.entries(SV.Config.BOSSES).filter(([, b]) => b.tie
     const sniperShot = SV.Config.ENEMIES.sniper.projDmg * SV.Config.DIFFICULTY.normal.dmgMul * SV.Config.CURVES.dmgFactor(5);
     assert(Math.min(...def.attacks.projectile) * scale > sniperShot, `${id} T1 projectile exceeds sniper damage`);
   }
-  assert(def.hp <= 900, `${id} T1 base HP`);
+  assert.equal(def.hp, expectedT1Hp[id], `${id} T1 reinforced base HP`);
   if (def.mechanics && def.mechanics.warn) assert(def.mechanics.warn >= 0.7, `${id} readable T1 warning`);
 }
 assert.deepEqual(Array.from(SV.Config.BOSSES.duke.attacks.projectile), [10]);
@@ -53,6 +54,21 @@ assert.deepEqual(Array.from(SV.Config.BOSSES.frostwarden.attacks.projectile), [9
 assert.deepEqual(Array.from(SV.Config.BOSSES.bloodhunter.attacks.projectile), [9]);
 assert.deepEqual(Array.from(SV.Config.BOSSES.riftsentry.attacks.projectile), [8, 9]);
 assert.deepEqual(Array.from(SV.Config.BOSSES.thornwarden.attacks.projectile), [9]);
+assert.equal(SV.Config.BOSSES.wraith.tier, 2);
+assert.equal(SV.Config.BOSSES.wraith.hp, 800);
+assert.equal(SV.Config.BOSSES.wraith.dmg, 18);
+assert.deepEqual(Array.from(SV.Config.BOSSES.wraith.attacks.projectile), [13]);
+let previousBossDifficulty = null;
+for (const id of SV.Config.DIFFICULTY_ORDER) {
+  const d = SV.Config.DIFFICULTY[id];
+  for (const key of ['bossHpMul', 'bossDmgMul', 'bossSpeedMul', 'bossShotSpeedMul', 'bossTempoMul']) assert(Number.isFinite(d[key]) && d[key] > 0, `${id} ${key}`);
+  if (previousBossDifficulty) for (const key of ['bossHpMul', 'bossDmgMul', 'bossSpeedMul', 'bossShotSpeedMul', 'bossTempoMul']) assert(d[key] > previousBossDifficulty[key], `${key} rises at ${id}`);
+  previousBossDifficulty = d;
+}
+for (const tier of [1, 2, 3]) {
+  const groupHp = Object.values(SV.Config.BOSSES).filter(b => b.tier === tier).map(b => b.hp * (b.count || 1));
+  assert(Math.max(...groupHp) / Math.min(...groupHp) < 1.7, `T${tier} group HP has no extreme outlier`);
+}
 const tierOnePools = new Set();
 for (const stage of Object.values(SV.Config.STAGES)) {
   assert.equal(stage.bosses.length, 3);
@@ -74,7 +90,6 @@ for (let a = 0; a < maps.length; a++) for (let b = a + 1; b < maps.length; b++) 
     assert(shared.length <= 1, `${maps[a].name} and ${maps[b].name} T${tier + 1} overlap at most once`);
   }
 }
-assert.equal(SV.Config.BOSSES.wraith.tier, 2);
 const newBosses = ['scavenger', 'frostwarden', 'bloodhunter', 'riftsentry', 'thornwarden', 'stormherald', 'bloodoracle', 'furnace', 'voidseer', 'eclipseeye'];
 for (const id of newBosses) assert(SV.Config.BOSSES[id]);
 
@@ -161,28 +176,42 @@ function signatureBoss(id) {
   return boss;
 }
 function frames(boss, count) { for (let i = 0; i < count; i++) SV.AI.update(SV.Game.state, boss, 1 / 60); }
-let sig = signatureBoss('frostwarden');
+function assertShotSpeed(expected, label) {
+  assert(shots.length > 0, `${label} emits shots`);
+  for (const shot of shots) assert(Math.abs(Math.hypot(shot.vx, shot.vy) - expected) < 1e-6, `${label} projectile speed`);
+}
+let sig = signatureBoss('scavenger');
+frames(sig, 1); assert.equal(sig.cstate, 'tele');
+frames(sig, Math.ceil(SV.Config.BOSSES.scavenger.mechanics.warn * 60) + Math.ceil(SV.Config.BOSSES.scavenger.mechanics.chargeDuration * 60) + 2);
+assert.equal(shots.length, SV.Config.BOSSES.scavenger.mechanics.exitShots);
+assertShotSpeed(220, 'scavenger exit fan');
+sig = signatureBoss('frostwarden');
 frames(sig, 1); assert.equal(sig.cstate, 'ice_warn'); assert.equal(shots.length, 0);
 frames(sig, Math.ceil(SV.Config.BOSSES.frostwarden.mechanics.warn * 60) + 1); assert.equal(shots.length, 2); assert.equal(sig.cstate, 'ice_follow');
+assertShotSpeed(180, 'frostwarden flank');
 frames(sig, Math.ceil(SV.Config.BOSSES.frostwarden.mechanics.follow * 60) + 1); assert.equal(shots.length, 3); assert.equal(sig.cstate, 'walk');
+assert(Math.abs(Math.hypot(shots[2].vx, shots[2].vy) - 195) < 1e-6, 'frostwarden center projectile speed');
 
 sig = signatureBoss('bloodhunter');
 frames(sig, 1); assert.equal(sig.cstate, 'blood_mark'); assert.equal(shots.length, 0);
 frames(sig, Math.ceil(SV.Config.BOSSES.bloodhunter.mechanics.warn * 60) + 1); assert.equal(shots.length, 4);
 assert.equal(new Set(shots.map(s => `${s.x},${s.y}`)).size, 2, 'bloodhunter fires from both flanks');
+assertShotSpeed(215, 'bloodhunter flank');
 
 sig = signatureBoss('riftsentry');
 frames(sig, 1); assert.equal(sig.cstate, 'rift_open'); assert.equal(shots.length, 0);
 frames(sig, Math.ceil(SV.Config.BOSSES.riftsentry.mechanics.warn * 60) + 1); assert.equal(shots.length, 4);
 assert.equal(new Set(shots.map(s => `${s.x},${s.y}`)).size, 2, 'riftsentry fires from paired rifts');
+assertShotSpeed(190, 'riftsentry crossfire');
 
 sig = signatureBoss('thornwarden');
 frames(sig, 1); assert.equal(sig.dr, SV.Config.BOSSES.thornwarden.mechanics.armor); assert.equal(shots.length, 0);
 frames(sig, Math.ceil(SV.Config.BOSSES.thornwarden.mechanics.warn * 60) + 1); assert.equal(shots.length, 3); assert.equal(sig.dr, 0); assert.equal(sig.cstate, 'thorn_cool');
+assertShotSpeed(215, 'thornwarden fan');
 
 sig = signatureBoss('stormherald');
 frames(sig, 1); assert.equal(sig.cstate, 'storm_sweep'); assert.equal(shots.length, 0);
-frames(sig, 50); assert(shots.length >= 4 && shots.length <= 6);
+frames(sig, 64); assert(shots.length >= 7 && shots.length <= 9);
 assert(new Set(shots.map(s => Math.atan2(s.vy, s.vx).toFixed(2))).size > 2, 'stormherald sweeps angles');
 
 sig = signatureBoss('bloodoracle');
@@ -193,18 +222,46 @@ sig = SV.Game.state.enemies.find(e => e.bossType === 'bloodoracle');
 SV.Game.state.enemies.find(e => e.id === sig.ritualMinionIds[0]).hp = 0;
 frames(sig, 49); assert.equal(shots.length, 3, 'killing a ritual follower removes its volley');
 
+sig = signatureBoss('magnetwarper'); sig.t2 = 99;
+frames(sig, 1); assert.equal(sig.cstate, 'pull'); assert.equal(shots.length, 12, 'magnetwarper opens with a pull ring');
+frames(sig, Math.ceil(SV.Config.BOSSES.magnetwarper.mechanics.pullDuration * 60) + 1);
+assert.equal(shots.length, 20, 'magnetwarper releases a second ring after the pull');
+
+SV.Game.state.hazards = [];
+sig = signatureBoss('furnace'); sig.t1 = 99; sig.t2 = 0;
+frames(sig, 1); assert.equal(SV.Game.state.hazards.length, 2, 'furnace creates paired warned burn zones');
+assert(SV.Game.state.hazards.every(h => h.warm === 1 && h.srcType === 'furnace'));
+
 sig = signatureBoss('voidseer');
 frames(sig, 1); assert.equal(sig.cstate, 'seer_warn'); assert.equal(shots.length, 0);
-frames(sig, 42); assert.equal(sig.cstate, 'seer_echo'); assert.equal(shots.length, 0);
+frames(sig, 42); assert.equal(sig.cstate, 'seer_echo'); assert.equal(shots.length, 6, 'voidseer arrival ring');
 const oldX = sig.echoX, oldY = sig.echoY;
-frames(sig, 29); assert.equal(shots.length, 8);
-assert(shots.every(s => s.x === oldX && s.y === oldY), 'voidseer echo fires from old position');
+frames(sig, 29); assert.equal(shots.length, 14);
+assert(shots.slice(6).every(s => s.x === oldX && s.y === oldY), 'voidseer echo fires from old position');
 
 sig = signatureBoss('eclipseeye');
 frames(sig, 1); assert.equal(sig.cstate, 'eclipse_charge'); assert.equal(shots.length, 0);
 frames(sig, 55); const firstRing = shots.length; assert(firstRing >= 12 && firstRing < 16);
 frames(sig, 34); assert.equal(shots.length, firstRing * 2);
 assert(shots.every(s => Math.abs(Math.atan2(Math.sin(Math.atan2(s.vy, s.vx) - sig.gapAngle), Math.cos(Math.atan2(s.vy, s.vx) - sig.gapAngle))) >= 0.43), 'eclipse rings keep their safe gap');
+
+sig = signatureBoss('eclipseeye'); sig.t1 = 99; sig.t2 = 0;
+frames(sig, 1); assert.equal(shots.length, 3, 'eclipseeye fires between pulse rings');
+assertShotSpeed(280, 'eclipseeye aimed fan');
+
+sig = signatureBoss('wraith'); sig.enrage = true; sig.t1 = 99; sig.t3 = 0;
+frames(sig, 1); assert.equal(shots.length, 8, 'enraged wraith adds a radial barrage');
+assertShotSpeed(190, 'enraged wraith ring');
+
+SV.Game.state.difficulty = 'hard';
+sig = signatureBoss('bloodhunter');
+frames(sig, 1 + Math.ceil(SV.Config.BOSSES.bloodhunter.mechanics.warn * 60));
+assertShotSpeed(215 * SV.Config.DIFFICULTY.hard.bossShotSpeedMul, 'hard difficulty Boss shot scaling');
+assert(Math.abs(sig.t1 - SV.Config.BOSSES.bloodhunter.mechanics.interval / SV.Config.DIFFICULTY.hard.bossTempoMul) < 0.05, 'hard difficulty Boss cadence scaling');
+sig = signatureBoss('riftsentry'); sig.t1 = 99;
+frames(sig, 1);
+assert(Math.abs(Math.hypot(sig.vx, sig.vy) - sig.speed * SV.Config.DIFFICULTY.hard.bossSpeedMul) < 1e-6, 'hard difficulty Boss movement scaling');
+SV.Game.state.difficulty = 'normal';
 
 // Render the actual pause weapon rows, including evolved and fusion weapons.
 SV.Audio = null; SV.Effects = null;
